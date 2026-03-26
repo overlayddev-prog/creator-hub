@@ -109,6 +109,13 @@ if (tray) tray.setContextMenu(tray.getContextMenu ? tray.getContextMenu() : unde
   });
 
   mainWin.loadURL(`http://127.0.0.1:${port}`);
+  mainWin.webContents.on('before-input-event', (_e, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      mainWin.webContents.isDevToolsOpened()
+        ? mainWin.webContents.closeDevTools()
+        : mainWin.webContents.openDevTools();
+    }
+  });
   createTray(mainWin);
 }
 
