@@ -12,6 +12,16 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.6.0': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Patch notes</b> — fixed popup not showing after login',
+        ],
+      },
+    ],
+  },
   '0.5.0': {
     sections: [
       {
@@ -132,6 +142,68 @@ function authHeaders() {
   return h;
 }
 
+// ── Studio overlay panel ──────────────────────────────────────────────────────
+function renderStudioOverlays() {
+  const list = $('studio-overlay-list');
+  if (!list) return;
+  if (!overlays.length) {
+    list.innerHTML = '<div class="studio-audio-empty">No overlays — create one at overlayd.gg</div>';
+    return;
+  }
+  list.innerHTML = '';
+  overlays.forEach(o => {
+    const item = document.createElement('div');
+    item.className = 'studio-ov-item';
+    item.innerHTML = `
+      <div class="studio-ov-hdr">
+        <span class="studio-ov-arrow">▶</span>
+        <span class="studio-ov-name">${o.name}</span>
+      </div>
+      <div class="studio-ov-sources" style="display:none;">
+        <div class="studio-ov-src-row" data-url="${baseUrl}/overlay/${o.token}" data-label="${o.name} — Alerts">
+          <span class="studio-ov-src-icon">🔔</span><span class="studio-ov-src-name">Alerts / Overlay</span>
+          <button class="studio-overlay-addbtn">Add</button>
+        </div>
+        <div class="studio-ov-src-row" data-url="${baseUrl}/background/${o.token}" data-label="${o.name} — Background">
+          <span class="studio-ov-src-icon">🖼️</span><span class="studio-ov-src-name">Background</span>
+          <button class="studio-overlay-addbtn">Add</button>
+        </div>
+        <div class="studio-ov-src-row" data-url="${baseUrl}/goals/${o.token}" data-label="${o.name} — Goals">
+          <span class="studio-ov-src-icon">🎯</span><span class="studio-ov-src-name">Goals</span>
+          <button class="studio-overlay-addbtn">Add</button>
+        </div>
+      </div>`;
+    const hdr     = item.querySelector('.studio-ov-hdr');
+    const sources = item.querySelector('.studio-ov-sources');
+    const arrow   = item.querySelector('.studio-ov-arrow');
+    hdr.addEventListener('click', () => {
+      const open = sources.style.display !== 'none';
+      sources.style.display = open ? 'none' : 'block';
+      arrow.textContent = open ? '▶' : '▼';
+    });
+    item.querySelectorAll('.studio-ov-src-row').forEach(row => {
+      row.querySelector('.studio-overlay-addbtn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = '…';
+        try {
+          const src = await engine.addBrowserSource(row.dataset.url, row.dataset.label);
+          renderLayerList();
+          selectSource(src.id);
+          btn.textContent = '✓';
+          setTimeout(() => { btn.textContent = 'Add'; btn.disabled = false; }, 1500);
+        } catch (err) {
+          console.error('browser source failed', err);
+          btn.textContent = 'Add';
+          btn.disabled = false;
+        }
+      });
+    });
+    list.appendChild(item);
+  });
+}
+
 // ── Load user data ────────────────────────────────────────────────────────────
 async function loadUserData() {
   if (!sessionToken) return false;
@@ -169,7 +241,7 @@ function showMainApp() {
   if (!localStorage.getItem('creatorhub_onboarded')) {
     setTimeout(() => showOnboarding(), 600);
   }
-  setTimeout(() => checkPatchNotes('0.5.0'), 2500);
+  setTimeout(() => checkPatchNotes('0.6.0'), 2500);
 }
 
 // ── Source URLs ───────────────────────────────────────────────────────────────
@@ -1060,66 +1132,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Studio overlay panel ──────────────────────────────────────────────────
-  function renderStudioOverlays() {
-    const list = $('studio-overlay-list');
-    if (!list) return;
-    if (!overlays.length) {
-      list.innerHTML = '<div class="studio-audio-empty">No overlays — create one at overlayd.gg</div>';
-      return;
-    }
-    list.innerHTML = '';
-    overlays.forEach(o => {
-      const item = document.createElement('div');
-      item.className = 'studio-ov-item';
-      item.innerHTML = `
-        <div class="studio-ov-hdr">
-          <span class="studio-ov-arrow">▶</span>
-          <span class="studio-ov-name">${o.name}</span>
-        </div>
-        <div class="studio-ov-sources" style="display:none;">
-          <div class="studio-ov-src-row" data-url="${baseUrl}/overlay/${o.token}" data-label="${o.name} — Alerts">
-            <span class="studio-ov-src-icon">🔔</span><span class="studio-ov-src-name">Alerts / Overlay</span>
-            <button class="studio-overlay-addbtn">Add</button>
-          </div>
-          <div class="studio-ov-src-row" data-url="${baseUrl}/background/${o.token}" data-label="${o.name} — Background">
-            <span class="studio-ov-src-icon">🖼️</span><span class="studio-ov-src-name">Background</span>
-            <button class="studio-overlay-addbtn">Add</button>
-          </div>
-          <div class="studio-ov-src-row" data-url="${baseUrl}/goals/${o.token}" data-label="${o.name} — Goals">
-            <span class="studio-ov-src-icon">🎯</span><span class="studio-ov-src-name">Goals</span>
-            <button class="studio-overlay-addbtn">Add</button>
-          </div>
-        </div>`;
-      const hdr     = item.querySelector('.studio-ov-hdr');
-      const sources = item.querySelector('.studio-ov-sources');
-      const arrow   = item.querySelector('.studio-ov-arrow');
-      hdr.addEventListener('click', () => {
-        const open = sources.style.display !== 'none';
-        sources.style.display = open ? 'none' : 'block';
-        arrow.textContent = open ? '▶' : '▼';
-      });
-      item.querySelectorAll('.studio-ov-src-row').forEach(row => {
-        row.querySelector('.studio-overlay-addbtn').addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const btn = e.currentTarget;
-          btn.disabled = true;
-          btn.textContent = '…';
-          try {
-            const src = await engine.addBrowserSource(row.dataset.url, row.dataset.label);
-            renderLayerList();
-            selectSource(src.id);
-            btn.textContent = '✓';
-            setTimeout(() => { btn.textContent = 'Add'; btn.disabled = false; }, 1500);
-          } catch (err) {
-            console.error('browser source failed', err);
-            btn.textContent = 'Add';
-            btn.disabled = false;
-          }
-        });
-      });
-      list.appendChild(item);
-    });
-  }
 
   // ── Layer list click ──────────────────────────────────────────────────────
   const studioLayerList = $('studio-layer-list');
