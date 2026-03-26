@@ -253,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('pn-ok').addEventListener('click', closePn);
   $('pn-backdrop').addEventListener('click', closePn);
 
-  window.creatorhub.app.getVersion().then(v => checkPatchNotes(v));
+  checkPatchNotes('0.2.0');
 
   // Auth
   $('sign-in-btn').addEventListener('click', () => {
