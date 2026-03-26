@@ -10,6 +10,63 @@ let currentToken  = '';
 let selectedPreset = null;
 let baseUrl       = 'https://overlayd.gg';
 
+// ── Patch Notes ───────────────────────────────────────────────────────────────
+const PATCH_NOTES = {
+  '0.2.0': {
+    sections: [
+      {
+        title: 'New',
+        items: [
+          '<b>Patch notes popup</b> — you\'ll now see what changed every time the app updates',
+        ],
+      },
+    ],
+  },
+  '0.1.0': {
+    sections: [
+      {
+        title: 'Editor',
+        items: [
+          '<b>Clip split</b> — press S or the ✂ button to split clips at the playhead',
+          '<b>V1 gaps</b> — drag V1 clips apart to create blank space; clips snap back together',
+          '<b>V1 on top</b> — V1 track now renders above all overlay layers',
+          '<b>Blank screen in gaps</b> — no more frozen last frame when nothing is playing',
+          '<b>V1 resizing</b> — resize V1 clips on the canvas just like overlay layers',
+          '<b>Timeline padding</b> — 25% empty space at the right edge when zoomed out',
+        ],
+      },
+      {
+        title: 'App',
+        items: [
+          '<b>Desktop installer</b> — CreatorHub now ships as a proper Windows installer',
+          '<b>Auto-updater</b> — the app will automatically download and apply updates',
+        ],
+      },
+    ],
+  },
+};
+
+function showPatchNotes(version) {
+  const notes = PATCH_NOTES[version];
+  if (!notes) return;
+  $('pn-version').textContent = 'v' + version;
+  $('pn-body').innerHTML = notes.sections.map(s => `
+    <div class="pn-section">
+      <div class="pn-section-title">${s.title}</div>
+      <ul>${s.items.map(i => `<li>${i}</li>`).join('')}</ul>
+    </div>
+  `).join('');
+  $('patchnotes-modal').style.display = 'flex';
+}
+
+function checkPatchNotes(version) {
+  const seen = localStorage.getItem('creatorhub_seen_version');
+  if (seen !== version) {
+    setTimeout(() => showPatchNotes(version), 800);
+    localStorage.setItem('creatorhub_seen_version', version);
+  }
+}
+
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 
@@ -189,6 +246,14 @@ async function boot() {
 
 // ── Wire up all events ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+
+  // Patch notes
+  const closePn = () => { $('patchnotes-modal').style.display = 'none'; };
+  $('pn-close').addEventListener('click', closePn);
+  $('pn-ok').addEventListener('click', closePn);
+  $('pn-backdrop').addEventListener('click', closePn);
+
+  window.creatorhub.app.getVersion().then(v => checkPatchNotes(v));
 
   // Auth
   $('sign-in-btn').addEventListener('click', () => {

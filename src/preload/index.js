@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('creatorhub', {
     readFile:        (fp)      => ipcRenderer.invoke('assets:read-file', fp),
     scanRecordings:  (dir)     => ipcRenderer.invoke('recordings:scan-dir', dir),
     openFolder:     (path)   => ipcRenderer.invoke('app:open-folder', path),
+    getVersion:     ()       => ipcRenderer.invoke('app:get-version'),
   },
 
   // ── Video Editor ───────────────────────────────────────────────────────────

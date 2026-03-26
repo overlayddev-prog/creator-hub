@@ -2414,3 +2414,42 @@ body {
 .ve-kf-ob-dots { display: flex; gap: 6px; }
 .ve-kf-ob-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.15); transition: background 0.2s; }
 .ve-kf-ob-dot.active { background: #00e5ff; }
+
+/* ── Patch Notes Modal ───────────────────────────────────────────────────────── */
+#patchnotes-modal {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.patchnotes-box {
+  position: relative; z-index: 1001;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; width: 460px; max-width: 90vw;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.patchnotes-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--border);
+}
+.patchnotes-title { font-size: 16px; font-weight: 700; color: var(--text); flex: 1; }
+.patchnotes-version {
+  font-size: 11px; font-weight: 600; color: #00e5ff;
+  background: rgba(0,229,255,0.12); border-radius: 20px;
+  padding: 2px 10px;
+}
+.patchnotes-body {
+  padding: 18px 20px; max-height: 360px; overflow-y: auto;
+  font-size: 13px; color: var(--muted); line-height: 1.75;
+}
+.patchnotes-body .pn-section { margin-bottom: 16px; }
+.patchnotes-body .pn-section-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: #00e5ff; margin-bottom: 8px;
+}
+.patchnotes-body ul { margin: 0; padding-left: 18px; }
+.patchnotes-body li { margin-bottom: 5px; }
+.patchnotes-body li b { color: var(--text); }
+.patchnotes-footer {
+  padding: 14px 20px; border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end;
+}

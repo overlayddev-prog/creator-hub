@@ -233,6 +233,8 @@ ipcMain.handle('app:config', () => ({
   baseUrl:  'https://overlayd.gg',
 }));
 
+ipcMain.handle('app:get-version', () => app.getVersion());
+
 // ── Auto-launch on login ───────────────────────────────────────────────────────
 ipcMain.handle('app:set-autolaunch', (_event, enable) => {
   app.setLoginItemSettings({ openAtLogin: !!enable });
