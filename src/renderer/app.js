@@ -138,6 +138,8 @@ function showMainApp() {
 
   if (!localStorage.getItem('creatorhub_onboarded')) {
     setTimeout(() => showOnboarding(), 600);
+  } else {
+    setTimeout(() => checkPatchNotes('0.2.0'), 800);
   }
 }
 
@@ -252,8 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('pn-close').addEventListener('click', closePn);
   $('pn-ok').addEventListener('click', closePn);
   $('pn-backdrop').addEventListener('click', closePn);
-
-  checkPatchNotes('0.2.0');
 
   // Auth
   $('sign-in-btn').addEventListener('click', () => {
