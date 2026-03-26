@@ -1,0 +1,29 @@
+{
+  "name": "creatorhub",
+  "version": "0.1.0",
+  "description": "CreatorHub - All-in-one creator studio",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/YOUR_REPO_NAME"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@electron-forge/cli": "^6.0.0",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "electron": "^26.0.0"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1",
+    "ffmpeg-static": "^5.3.0",
+    "obs-websocket-js": "^5.0.7",
+    "update-electron-app": "^3.1.2"
+  }
+}

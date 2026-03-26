@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CreatorHub</title>
+  <link rel="stylesheet" href="styles/global.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Auth Screen ─────────────────────────────────────────────────────── -->
+  <div id="auth-screen">
+    <div class="auth-box">
+      <div class="auth-logo">CreatorHub</div>
+      <div class="auth-sub">Sign in with your Overlayd account to get started.</div>
+      <button class="auth-sign-in-btn" id="sign-in-btn">Sign in</button>
+      <div id="auth-status"></div>
+    </div>
+  </div>
+
+  <!-- ── Main App (hidden until signed in) ───────────────────────────────── -->
+  <div id="main-app" style="display:none; width:100%; height:100%; flex-direction:column;">
+
+    <!-- Custom titlebar -->
+    <div class="titlebar">
+      <div class="titlebar-drag"></div>
+      <div class="titlebar-controls">
+        <button class="titlebar-btn" id="win-minimize" title="Minimize">─</button>
+        <button class="titlebar-btn" id="win-maximize" title="Maximize">□</button>
+        <button class="titlebar-btn titlebar-btn-close" id="win-close" title="Close">✕</button>
+      </div>
+    </div>
+
+    <div style="display:flex; flex:1; overflow:hidden; flex-direction:row;">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">CreatorHub</div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" id="nav-stream" data-module="stream">
+          <span class="nav-icon">📡</span>
+          Stream Setup
+        </button>
+        <button class="nav-item" id="nav-recstream" data-module="recstream">
+          <span class="nav-icon">🎬</span>
+          Record / Stream
+        </button>
+        <button class="nav-item" id="nav-editor" data-module="editor">
+          <span class="nav-icon">🎨</span>
+          Overlay Editor
+        </button>
+        <button class="nav-item" id="nav-videoeditor" data-module="videoeditor">
+          <span class="nav-icon">✂️</span>
+          Video Editor
+        </button>
+        <button class="nav-item" id="nav-assets" data-module="assets">
+          <span class="nav-icon">🗂️</span>
+          Assets
+        </button>
+        <button class="nav-item" id="nav-recordings" data-module="recordings">
+          <span class="nav-icon">⏺</span>
+          Recordings
+        </button>
+        <button class="nav-item" disabled>
+          <span class="nav-icon">📊</span>
+          Analytics
+          <span class="coming-soon">Soon</span>
+        </button>
+        <button class="nav-item" disabled>
+          <span class="nav-icon">📅</span>
+          Social
+          <span class="coming-soon">Soon</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div id="sidebar-username">User</div>
+          <span id="sidebar-plan" class="plan-badge free"></span>
+        </div>
+        <label class="autolaunch-toggle">
+          <input type="checkbox" id="autolaunch-checkbox">
+          Launch on startup
+        </label>
+        <button class="sign-out-btn" id="sign-out-btn">Sign out</button>
+      </div>
+    </aside>
+
+    <!-- Content Area -->
+    <div class="content-area">
+
+      <!-- ── Stream Setup Module ─────────────────────────────────────────── -->
+      <div id="module-stream">
+
+        <!-- Overlay selector -->
+        <div class="module-topbar">
+          <select class="overlay-select" id="overlay-select">
+            <option value="">Loading overlays...</option>
+          </select>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="tab-bar">
+          <div class="tab active" data-tab="sources">Sources</div>
+          <div class="tab" data-tab="scenes">Scenes</div>
+          <div class="tab" data-tab="presets">Presets</div>
+          <div class="tab" data-tab="test">Test</div>
+        </div>
+
+        <!-- Tab content -->
+        <div class="tab-content">
+
+          <!-- Sources Tab -->
+          <div class="tab-page active" id="tab-sources">
+            <div class="section-label">Browser Source URLs</div>
+            <div class="source-row" id="row-overlay">
+              <span class="source-dot"></span>
+              <span class="source-name">Alerts</span>
+              <span class="source-url" id="url-overlay">—</span>
+              <span class="source-copy">click to copy</span>
+            </div>
+            <div class="source-row" id="row-background">
+              <span class="source-dot"></span>
+              <span class="source-name">Background</span>
+              <span class="source-url" id="url-background">—</span>
+              <span class="source-copy">click to copy</span>
+            </div>
+            <div class="source-row" id="row-goals">
+              <span class="source-dot"></span>
+              <span class="source-name">Goals</span>
+              <span class="source-url" id="url-goals">—</span>
+              <span class="source-copy">click to copy</span>
+            </div>
+            <div class="sources-actions">
+              <button class="btn-outline" id="btn-copy-all">Copy All 3 URLs</button>
+            </div>
+            <div class="setup-info">Copy the URLs above and add them as browser sources in your streaming software.</div>
+          </div>
+
+          <!-- Scenes Tab -->
+          <div class="tab-page" id="tab-scenes">
+            <div class="section-label">Scenes</div>
+            <div id="scenes-list" class="scenes-list">
+              <div class="scenes-empty">Manage scenes in Record / Stream</div>
+            </div>
+            <button class="btn-outline" id="btn-refresh-scenes" style="margin-top:10px;">Refresh Scenes</button>
+          </div>
+
+          <!-- Presets Tab -->
+          <div class="tab-page" id="tab-presets">
+            <div class="section-label">Choose a Style</div>
+            <div class="preset-grid" id="preset-grid"></div>
+            <button class="btn-primary" id="btn-apply-preset" disabled>Select a preset above</button>
+          </div>
+
+          <!-- Test Tab -->
+          <div class="tab-page" id="tab-test">
+            <div class="section-label">Send Test Alerts</div>
+            <div class="test-grid">
+              <button class="test-btn" data-type="follower"><span class="test-icon">👤</span>Follow<span class="test-label">test</span></button>
+              <button class="test-btn" data-type="subscriber"><span class="test-icon">⭐</span>Subscribe<span class="test-label">test</span></button>
+              <button class="test-btn" data-type="raid"><span class="test-icon">🔥</span>Raid<span class="test-label">test</span></button>
+              <button class="test-btn" data-type="bits"><span class="test-icon">💎</span>Bits<span class="test-label">test</span></button>
+              <button class="test-btn" data-type="giftsub"><span class="test-icon">🎁</span>Gift Sub<span class="test-label">test</span></button>
+              <button class="test-btn" data-type="donation"><span class="test-icon">💰</span>Donation<span class="test-label">test</span></button>
+            </div>
+            <div class="hype-section">
+              <div class="section-label">Hype Control</div>
+              <div class="hype-row">
+                <input type="range" class="hype-slider" id="hype-slider" min="0" max="100" value="0">
+                <span class="hype-val" id="hype-val">0%</span>
+              </div>
+              <div class="hype-actions">
+                <button class="hype-btn" id="btn-set-hype">Set Hype</button>
+                <button class="hype-btn" id="btn-reset-hype">Reset to 0</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- end tab-content -->
+      </div><!-- end module-stream -->
+
+      <!-- ── Studio Module ──────────────────────────────────────────────── -->
+      <div id="module-recstream" class="studio" style="display:none;">
+
+        <!-- Scene tab bar -->
+        <div class="studio-tabbar">
+          <div class="studio-scene-tabs" id="studio-scene-tabs">
+            <div class="studio-scene-tab active" data-scene="Scene 1">
+              <span class="studio-tab-dot"></span>
+              <span class="studio-tab-name">Scene 1</span>
+              <button class="studio-tab-del" tabindex="-1">×</button>
+            </div>
+            <div class="studio-scene-tab" data-scene="Gaming">
+              <span class="studio-tab-dot"></span>
+              <span class="studio-tab-name">Gaming</span>
+              <button class="studio-tab-del" tabindex="-1">×</button>
+            </div>
+            <div class="studio-scene-tab" data-scene="Just Chatting">
+              <span class="studio-tab-dot"></span>
+              <span class="studio-tab-name">Just Chatting</span>
+              <button class="studio-tab-del" tabindex="-1">×</button>
+            </div>
+            <button class="studio-tab-add" id="studio-add-scene" title="New scene">+</button>
+          </div>
+          <div class="studio-tabbar-right">
+            <!-- Transition picker -->
+            <div class="studio-trans-pick">
+              <span class="studio-trans-pick-label">⟶</span>
+              <select class="studio-trans-select" id="studio-trans-type">
+                <option value="cut">Cut</option>
+                <option value="fade" selected>Fade</option>
+                <option value="slide">Slide</option>
+                <option value="zoom">Zoom</option>
+              </select>
+              <input type="number" class="studio-trans-dur-input" id="studio-trans-dur" min="0.1" max="5" step="0.1" value="0.5">
+              <span class="studio-trans-pick-unit">s</span>
+            </div>
+            <div class="studio-tabbar-sep"></div>
+            <span class="studio-badge studio-badge-rec"  id="studio-rec-badge"  style="display:none;">⏺ REC <span id="studio-rec-clock">00:00:00</span></span>
+            <span class="studio-badge studio-badge-live" id="studio-live-badge" style="display:none;">● LIVE <span id="studio-live-clock">00:00:00</span></span>
+          </div>
+        </div>
+
+        <!-- Main body -->
+        <div class="studio-body">
+
+          <!-- LEFT: Layers + Transform -->
+          <div class="studio-left">
+
+            <div class="studio-panel studio-layers-panel">
+              <div class="studio-panel-hdr">
+                <span>Layers</span>
+                <div class="studio-panel-btns">
+                  <button class="studio-icon-btn" id="studio-add-source" title="Add source">+</button>
+                  <button class="studio-icon-btn" id="studio-remove-source" title="Remove selected">−</button>
+                  <button class="studio-icon-btn" id="studio-props-source" title="Properties">⚙</button>
+                </div>
+              </div>
+              <div class="studio-layer-list" id="studio-layer-list"></div>
+              <!-- Source picker (hidden by default) -->
+              <div class="studio-source-picker" id="studio-source-picker" style="display:none;">
+                <div class="studio-picker-label" id="studio-picker-label">Choose type</div>
+                <!-- Step 1: type grid -->
+                <div class="studio-source-types" id="studio-source-types"></div>
+                <!-- Step 2: device list (screens/windows/cameras) -->
+                <div class="studio-device-list" id="studio-device-list" style="display:none;"></div>
+                <input class="studio-input" id="studio-source-name" type="text" placeholder="Source name…" style="display:none;">
+                <div class="studio-picker-actions">
+                  <button class="studio-btn studio-btn-primary" id="studio-confirm-add-source" style="display:none;">Add</button>
+                  <button class="studio-btn" id="studio-cancel-add-source">Cancel</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Transform panel -->
+            <div class="studio-panel studio-transform-panel" id="studio-transform-panel">
+              <div class="studio-panel-hdr">
+                <span>Transform</span>
+                <button class="studio-icon-btn" id="studio-reset-transform" title="Reset">↺</button>
+              </div>
+              <div class="studio-transform-body">
+                <div class="studio-tx-row">
+                  <label>X<input type="number" class="studio-tx-input" id="studio-tx-x" value="0"></label>
+                  <label>Y<input type="number" class="studio-tx-input" id="studio-tx-y" value="0"></label>
+                </div>
+                <div class="studio-tx-row">
+                  <label>W<input type="number" class="studio-tx-input" id="studio-tx-w" value="1920"></label>
+                  <label>H<input type="number" class="studio-tx-input" id="studio-tx-h" value="1080"></label>
+                </div>
+                <div class="studio-tx-row">
+                  <label>Rot<input type="number" class="studio-tx-input" id="studio-tx-rot" value="0">°</label>
+                </div>
+                <button class="studio-btn studio-btn-primary" id="studio-apply-transform" style="width:100%;margin-top:4px;">Apply</button>
+              </div>
+            </div>
+
+          </div><!-- end studio-left -->
+
+          <!-- CENTER: Preview + Transitions + Audio -->
+          <div class="studio-center">
+
+            <!-- Preview: always 16:9, scales with center column width -->
+            <div class="studio-preview-wrap" id="studio-preview-wrap">
+              <video id="studio-preview-video" autoplay muted playsinline></video>
+              <img   id="studio-preview-img" src="" alt="">
+              <canvas id="studio-canvas"></canvas>
+              <div class="studio-preview-ph" id="studio-preview-ph">
+                <div class="studio-ph-icon">🎬</div>
+                <div class="studio-ph-text" id="studio-ph-text">Preview will appear here</div>
+              </div>
+            </div>
+
+            <!-- Audio mixer -->
+            <div class="studio-audio">
+              <div class="studio-audio-hdr">
+                <span>Audio</span>
+                <button class="studio-icon-btn" id="studio-add-audio" title="Add audio source">+</button>
+              </div>
+              <!-- Device picker (shown when + clicked) -->
+              <div id="studio-audio-picker" style="display:none;"></div>
+              <div class="studio-audio-tracks" id="studio-audio-tracks">
+                <div class="studio-audio-empty">No audio — click + to add a mic or input</div>
+              </div>
+            </div>
+
+          </div><!-- end studio-center -->
+
+          <!-- RIGHT: Controls -->
+          <div class="studio-right">
+
+            <!-- Output settings -->
+            <div class="studio-card">
+              <div class="studio-card-hdr">Output</div>
+              <div class="studio-settings-grid">
+                <label>Resolution
+                  <select class="studio-select" id="studio-resolution">
+                    <option>1920 × 1080</option>
+                    <option>1280 × 720</option>
+                    <option>2560 × 1440</option>
+                  </select>
+                </label>
+                <label>Frame Rate
+                  <select class="studio-select" id="studio-fps">
+                    <option>60 FPS</option>
+                    <option selected>30 FPS</option>
+                    <option>24 FPS</option>
+                  </select>
+                </label>
+                <label>Encoder
+                  <select class="studio-select" id="studio-encoder">
+                    <option>H.264 (Software)</option>
+                    <option>H.265 (Software)</option>
+                    <option>NVENC H.264</option>
+                    <option>AMD AMF H.264</option>
+                  </select>
+                </label>
+                <label>Bitrate
+                  <select class="studio-select" id="studio-bitrate">
+                    <option>3000 kbps</option>
+                    <option selected>6000 kbps</option>
+                    <option>8000 kbps</option>
+                    <option>12000 kbps</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <!-- Record -->
+            <div class="studio-card">
+              <div class="studio-card-hdr">
+                <span class="status-dot disconnected" id="studio-rec-dot"></span>
+                <span id="studio-rec-label">Not recording</span>
+                <span class="studio-timer" id="studio-rec-timer"></span>
+              </div>
+              <div class="studio-settings-grid" style="grid-template-columns:1fr 1fr;">
+                <label>Format
+                  <select class="studio-select" id="studio-rec-format">
+                    <option value="mp4" selected>MP4</option>
+                    <option value="mkv">MKV</option>
+                    <option value="mov">MOV</option>
+                    <option value="webm">WebM</option>
+                  </select>
+                </label>
+                <label>Quality
+                  <select class="studio-select" id="studio-rec-quality">
+                    <option value="high" selected>High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </label>
+              </div>
+              <div class="studio-ctrl-row">
+                <button class="studio-btn studio-btn-rec"  id="studio-start-rec">⏺ Record</button>
+                <button class="studio-btn studio-btn-stop" id="studio-stop-rec" disabled>⏹ Stop</button>
+              </div>
+              <div class="studio-folder-row">
+                <span class="studio-folder-lbl" id="studio-rec-dir">📁 Videos</span>
+                <button class="studio-icon-btn" id="studio-change-dir" title="Change folder">⋯</button>
+              </div>
+            </div>
+
+            <!-- Stream -->
+            <div class="studio-card">
+              <div class="studio-card-hdr">
+                <span class="status-dot disconnected" id="studio-stream-dot"></span>
+                <span id="studio-stream-label">Not streaming</span>
+                <span class="studio-timer" id="studio-stream-timer"></span>
+              </div>
+              <div id="studio-destinations">
+                <div class="studio-audio-empty">Sign in to load your stream destinations</div>
+              </div>
+              <button class="studio-dest-add-btn" id="studio-add-destination">+ Add destination</button>
+              <div class="studio-ctrl-row" style="margin-top:6px;">
+                <button class="studio-btn studio-btn-live" id="studio-go-live">🔴 Go Live</button>
+                <button class="studio-btn studio-btn-stop" id="studio-end-stream" disabled>⏹ End</button>
+              </div>
+            </div>
+
+            <!-- Overlayd -->
+            <div class="studio-card">
+              <div class="studio-card-hdr">
+                <span>Overlayd</span>
+                <button class="studio-icon-btn" id="studio-refresh-overlays">↻</button>
+              </div>
+              <div class="studio-overlay-list" id="studio-overlay-list">
+                <div class="studio-audio-empty">Sign in to see your overlays</div>
+              </div>
+              <div class="studio-card-divider"></div>
+              <div class="studio-card-sub-hdr">Test Alerts</div>
+              <div class="studio-test-grid">
+                <button class="studio-test-btn" data-type="follower">👤 Follow</button>
+                <button class="studio-test-btn" data-type="subscriber">⭐ Sub</button>
+                <button class="studio-test-btn" data-type="raid">🔥 Raid</button>
+                <button class="studio-test-btn" data-type="bits">💎 Bits</button>
+                <button class="studio-test-btn" data-type="giftsub">🎁 Gift Sub</button>
+                <button class="studio-test-btn" data-type="donation">💰 Donate</button>
+              </div>
+            </div>
+
+          </div><!-- end studio-right -->
+
+        </div><!-- end studio-body -->
+      </div><!-- end module-recstream -->
+
+      <!-- ── Assets Module ──────────────────────────────────────────────── -->
+      <div id="module-assets" style="display:none; flex:1; flex-direction:column; height:100%; overflow:hidden;">
+
+        <div class="assets-topbar">
+          <div class="assets-topbar-title">Assets <span>Your media library</span></div>
+          <button class="assets-import-btn" id="assets-import-btn">+ Import Files</button>
+        </div>
+
+        <div class="assets-tabs">
+          <button class="assets-tab active" data-assets-tab="images">Images <span class="assets-tab-count" id="assets-count-images">0</span></button>
+          <button class="assets-tab" data-assets-tab="videos">Videos <span class="assets-tab-count" id="assets-count-videos">0</span></button>
+          <button class="assets-tab" data-assets-tab="audio">Audio <span class="assets-tab-count" id="assets-count-audio">0</span></button>
+        </div>
+
+        <div class="assets-filterbar">
+          <input class="assets-search" id="assets-search" placeholder="Search assets…">
+          <select class="assets-sort" id="assets-sort">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name A–Z</option>
+            <option value="size">Largest first</option>
+          </select>
+          <div class="assets-view-toggle">
+            <button class="assets-view-btn active" id="assets-view-grid" title="Grid">⊞</button>
+            <button class="assets-view-btn" id="assets-view-list" title="List">☰</button>
+          </div>
+        </div>
+
+        <div class="assets-body">
+          <div class="assets-grid-wrap" id="assets-grid-wrap">
+            <div class="assets-grid" id="assets-grid"></div>
+          </div>
+          <div class="assets-detail" id="assets-detail" style="display:none;"></div>
+        </div>
+
+      </div>
+
+      <!-- ── Recordings Module ──────────────────────────────────────────── -->
+      <div id="module-recordings" style="display:none; flex:1; flex-direction:column; height:100%; overflow:hidden;">
+
+        <div class="assets-topbar">
+          <div class="assets-topbar-title">Recordings <span>Your recorded sessions</span></div>
+          <button class="assets-import-btn" id="recordings-open-folder">📂 Open Folder</button>
+        </div>
+
+        <div class="assets-filterbar">
+          <input class="assets-search" id="recordings-search" placeholder="Search recordings…">
+          <select class="assets-sort" id="recordings-sort">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name A–Z</option>
+            <option value="size">Largest first</option>
+          </select>
+        </div>
+
+        <div class="assets-body">
+          <div class="assets-grid-wrap" id="recordings-grid-wrap">
+            <div class="assets-list" id="recordings-list"></div>
+          </div>
+          <div class="assets-detail" id="recordings-detail" style="display:none;"></div>
+        </div>
+
+      </div>
+
+      <!-- ── Video Editor Module ────────────────────────────────────────── -->
+      <div id="module-videoeditor" style="display:none; flex:1; flex-direction:column; height:100%; overflow:hidden; position:relative;">
+
+        <!-- Project Dashboard -->
+        <div id="ve-dashboard" class="ve-dashboard">
+          <div class="ve-dash-hdr">
+            <span class="ve-dash-title">Video Editor</span>
+            <button class="ve-btn ve-btn-primary" id="ve-dash-new">+ New Project</button>
+          </div>
+          <div id="ve-dash-grid" class="ve-dash-grid"></div>
+        </div>
+
+        <!-- Name Dialog (overlay) -->
+        <div id="ve-name-dialog" class="ve-name-dialog" style="display:none;">
+          <div class="ve-name-box">
+            <div class="ve-name-title">Name your project</div>
+            <input class="ve-name-input" id="ve-name-input" placeholder="Project name…" maxlength="60">
+            <div class="ve-name-actions">
+              <button class="ve-btn ve-btn-outline" id="ve-name-cancel">Cancel</button>
+              <button class="ve-btn ve-btn-primary" id="ve-name-confirm">Create Project</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor -->
+        <div id="ve-editor" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+
+          <!-- Topbar -->
+          <div class="ve-topbar">
+            <div class="ve-topbar-left">
+              <button class="ve-icon-btn" id="ve-btn-back-dash" title="Back to projects">←</button>
+              <button class="ve-icon-btn" id="ve-btn-undo" title="Undo">↩</button>
+              <button class="ve-icon-btn" id="ve-btn-redo" title="Redo">↪</button>
+              <div class="ve-topbar-title" id="ve-project-name-display">Untitled Project</div>
+            </div>
+            <div class="ve-topbar-actions">
+              <button class="ve-btn ve-btn-outline" id="ve-btn-addclip">+ Add Clip</button>
+              <button class="ve-btn ve-btn-outline" id="ve-btn-fromrec">From Recordings</button>
+              <button class="ve-btn ve-btn-outline" id="ve-btn-save">💾 Save</button>
+              <button class="ve-btn ve-btn-primary" id="ve-btn-export-top">Export</button>
+            </div>
+          </div>
+
+          <!-- Main: preview + tools -->
+          <div class="ve-main">
+
+            <!-- Preview column -->
+            <div class="ve-preview-col">
+
+              <div class="ve-preview-wrap">
+                <div class="ve-video-container" id="ve-video-container">
+                  <!-- Dynamic layer wraps injected by JS -->
+                  <div id="ve-layers-container" style="position:absolute;inset:0;pointer-events:none;overflow:visible;"></div>
+                  <!-- V1 track wrap — rendered after V2+ layers so it paints on top -->
+                  <div id="ve-v1-wrap" style="display:none;position:absolute;overflow:hidden;box-sizing:border-box;cursor:move;">
+                    <video id="ve-video" preload="auto" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;"></video>
+                    <div class="ve-ov-handle nw" data-corner="nw"></div>
+                    <div class="ve-ov-handle ne" data-corner="ne"></div>
+                    <div class="ve-ov-handle sw" data-corner="sw"></div>
+                    <div class="ve-ov-handle se" data-corner="se"></div>
+                  </div>
+                  <canvas id="ve-overlay-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
+                  <div id="ve-fade-overlay" style="position:absolute;inset:0;background:#000;pointer-events:none;opacity:0;transition:none;"></div>
+                  <div class="ve-timecode" id="ve-timecode">00:00:00 / 00:00:00</div>
+                </div>
+              </div>
+
+              <!-- Transport -->
+              <div class="ve-transport">
+                <button class="ve-transport-btn" id="ve-btn-tostart" title="To start">⏮</button>
+                <button class="ve-transport-btn" id="ve-btn-back5" title="-5s">⏪</button>
+                <button class="ve-transport-btn" id="ve-btn-prev-frame" title="Previous frame">◁</button>
+                <button class="ve-transport-btn ve-play-btn" id="ve-btn-play" title="Play/Pause">▶</button>
+                <button class="ve-transport-btn" id="ve-btn-next-frame" title="Next frame">▷</button>
+                <button class="ve-transport-btn" id="ve-btn-fwd5" title="+5s">⏩</button>
+                <button class="ve-transport-btn" id="ve-btn-toend" title="To end">⏭</button>
+                <button class="ve-transport-btn" id="ve-btn-loop" title="Loop">↻</button>
+                <button class="ve-transport-btn" id="ve-btn-split" title="Split clip at playhead (S)" style="margin-left:8px;font-size:13px;">✂ Split</button>
+                <div class="ve-vol-wrap">
+                  <span class="ve-vol-label">🔊</span>
+                  <input type="range" id="ve-volume" min="0" max="100" value="80" class="ve-vol">
+                </div>
+              </div>
+
+              <!-- Zoom + hype bar -->
+              <div class="ve-zoom-bar">
+                <span class="ve-zoom-label">Zoom</span>
+                <button class="ve-zoom-btn" id="ve-btn-zoom-out">−</button>
+                <input type="range" id="ve-zoom-slider" min="1" max="40" value="1" step="0.5" class="ve-zoom-range">
+                <button class="ve-zoom-btn" id="ve-btn-zoom-in">+</button>
+                <div class="ve-zoom-sep"></div>
+                <button class="ve-hype-btn" id="ve-btn-hype">⚡ Find Hype</button>
+              </div>
+
+              <!-- Timeline canvas -->
+              <div class="ve-timeline-wrap" id="ve-timeline-wrap">
+                <canvas id="ve-timeline-canvas"></canvas>
+              </div>
+
+            </div><!-- end preview col -->
+
+            <!-- Tools panel -->
+            <div class="ve-tools">
+
+              <div class="ve-tools-hdr">Selected Clip</div>
+              <div class="ve-info-row"><span class="ve-info-label">File</span><span class="ve-info-val ve-clip-name-val" id="ve-clip-name">—</span></div>
+              <div class="ve-trim-inputs">
+                <div class="ve-trim-input-row">
+                  <span class="ve-trim-input-label">In</span>
+                  <input class="ve-trim-input" id="ve-in-input" value="00:00:00">
+                </div>
+                <div class="ve-trim-input-row">
+                  <span class="ve-trim-input-label">Out</span>
+                  <input class="ve-trim-input" id="ve-out-input" value="00:00:00">
+                </div>
+              </div>
+
+              <div class="ve-tools-hdr" style="margin-top:8px;">Speed</div>
+              <div class="ve-speed-row">
+                <button class="ve-speed-btn" data-speed="0.25">0.25×</button>
+                <button class="ve-speed-btn" data-speed="0.5">0.5×</button>
+                <button class="ve-speed-btn active" data-speed="1">1×</button>
+                <button class="ve-speed-btn" data-speed="1.5">1.5×</button>
+                <button class="ve-speed-btn" data-speed="2">2×</button>
+                <button class="ve-speed-btn" data-speed="4">4×</button>
+              </div>
+
+              <!-- Separate audio -->
+              <button class="ve-sep-audio-btn" id="ve-sep-audio-btn" style="display:none;">⚟ Separate Audio</button>
+
+              <!-- Layer clip panel (V2+ selected) -->
+              <div id="ve-layer-panel" style="display:none;">
+                <div class="ve-tools-hdr" style="color:#10b981; margin-top:8px;">Layer Clip</div>
+                <div class="ve-info-row"><span class="ve-info-label">File</span><span class="ve-info-val ve-clip-name-val" id="ve-layer-name">—</span></div>
+                <div class="ve-info-row"><span class="ve-info-label">Pos</span><span class="ve-info-val" id="ve-layer-pos">—</span></div>
+                <div class="ve-info-row"><span class="ve-info-label">Size</span><span class="ve-info-val" id="ve-layer-size">—</span></div>
+                <div class="ve-ovl-btns">
+                  <button class="ve-btn ve-btn-outline ve-ovl-action-btn" id="ve-layer-goto">⏩ Go to clip</button>
+                  <button class="ve-btn ve-btn-outline ve-ovl-action-btn" id="ve-layer-toV1">↑ Move to V1</button>
+                  <button class="ve-btn ve-btn-outline ve-ovl-action-btn ve-ovl-del-btn" id="ve-layer-delete">🗑 Remove clip</button>
+                </div>
+                <div class="ve-ovl-hint">Drag preview to reposition · Drag corners to resize</div>
+
+                <!-- Keyframe controls -->
+                <div id="ve-kf-section" style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <span style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:rgba(232,237,245,0.45);">KEYFRAMES</span>
+                    <div style="display:flex;gap:5px;align-items:center;">
+                      <button class="ve-kf-help-btn" id="ve-kf-help" title="How keyframes work">?</button>
+                      <button class="ve-kf-clear-btn" id="ve-kf-clear" style="display:none;" title="Remove all keyframes">Clear all</button>
+                    </div>
+                  </div>
+                  <button class="ve-btn ve-btn-primary" id="ve-kf-add" style="width:100%;font-size:11px;padding:6px 0;margin-bottom:6px;">◆ Record Keyframe Here</button>
+                  <div class="ve-kf-list" id="ve-kf-list"></div>
+                  <div class="ve-kf-empty" id="ve-kf-empty">No keyframes yet — drag the clip in the preview, then record.</div>
+                </div>
+              </div>
+
+              <hr class="ve-divider">
+              <div class="ve-tools-hdr">Text Overlay</div>
+              <input class="ve-trim-input" id="ve-text-input" placeholder="Enter text…" style="margin-bottom:4px;">
+              <div class="ve-text-options">
+                <select class="ve-text-select" id="ve-text-pos">
+                  <option value="bottom">Bottom</option>
+                  <option value="center">Center</option>
+                  <option value="top">Top</option>
+                </select>
+                <input type="color" id="ve-text-color" value="#ffffff" class="ve-text-color-pick" title="Text color">
+              </div>
+              <div class="ve-trim-inputs" style="margin-top:4px;">
+                <div class="ve-trim-input-row">
+                  <span class="ve-trim-input-label">From</span>
+                  <input class="ve-trim-input" id="ve-text-start" placeholder="00:00:00">
+                </div>
+                <div class="ve-trim-input-row">
+                  <span class="ve-trim-input-label">To</span>
+                  <input class="ve-trim-input" id="ve-text-end" placeholder="00:00:00">
+                </div>
+              </div>
+              <button class="ve-tool-btn" id="ve-text-add-btn" style="margin-top:5px;"><span class="ve-tool-icon">+</span>Add Text</button>
+              <div id="ve-text-list" class="ve-text-list"></div>
+
+              <hr class="ve-divider">
+              <div class="ve-tools-hdr">Transitions</div>
+              <div class="ve-fade-row">
+                <label class="ve-fade-label"><input type="checkbox" id="ve-fade-in-en"> Fade In</label>
+                <input type="number" class="ve-fade-dur" id="ve-fade-in-dur" value="0.5" min="0.1" max="10" step="0.1">
+                <span class="ve-fade-unit">s</span>
+              </div>
+              <div class="ve-fade-row">
+                <label class="ve-fade-label"><input type="checkbox" id="ve-fade-out-en"> Fade Out</label>
+                <input type="number" class="ve-fade-dur" id="ve-fade-out-dur" value="0.5" min="0.1" max="10" step="0.1">
+                <span class="ve-fade-unit">s</span>
+              </div>
+
+              <hr class="ve-divider">
+              <div class="ve-tools-hdr">File Info</div>
+              <div class="ve-info-row"><span class="ve-info-label">Total</span><span class="ve-info-val" id="ve-info-duration">—</span></div>
+              <div class="ve-info-row"><span class="ve-info-label">Clips</span><span class="ve-info-val" id="ve-info-clips">0</span></div>
+              <div class="ve-info-row"><span class="ve-info-label">Res</span><span class="ve-info-val" id="ve-info-dims">—</span></div>
+
+              <div class="ve-export-section">
+                <hr class="ve-divider">
+                <div class="ve-tools-hdr">Export</div>
+                <div class="ve-export-label">Format</div>
+                <div class="ve-format-row">
+                  <button class="ve-format-btn active" data-fmt="mp4">MP4</button>
+                  <button class="ve-format-btn" data-fmt="mkv">MKV</button>
+                  <button class="ve-format-btn" data-fmt="mov">MOV</button>
+                </div>
+                <button class="ve-export-btn" id="ve-export-btn">⬇ Export</button>
+              </div>
+            </div><!-- end tools -->
+
+          </div><!-- end ve-main -->
+        </div><!-- end ve-editor -->
+        <!-- Keyframe onboarding tutorial -->
+        <div id="ve-kf-onboard" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,0.72);z-index:300;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+          <div class="ve-kf-onboard-box">
+            <button class="ve-kf-ob-x" id="ve-kf-ob-x">×</button>
+            <div id="ve-kf-ob-content"></div>
+            <div class="ve-kf-ob-nav">
+              <button class="ve-btn ve-btn-outline" id="ve-kf-ob-prev">← Back</button>
+              <div class="ve-kf-ob-dots" id="ve-kf-ob-dots"></div>
+              <button class="ve-btn ve-btn-primary" id="ve-kf-ob-next">Next →</button>
+            </div>
+          </div>
+        </div>
+      </div><!-- end module-videoeditor -->
+
+      <!-- ── Overlay Editor Module ───────────────────────────────────────── -->
+      <div id="module-editor" style="display:none; flex:1; flex-direction:column; height:100%;">
+        <webview id="editor-webview" src="about:blank" style="width:100%; height:100%; border:none;" allowpopups></webview>
+      </div>
+
+    </div><!-- end content-area -->
+    </div><!-- end flex row -->
+  </div><!-- end main-app -->
+
+</div><!-- end app -->
+
+<!-- ── Onboarding Wizard ────────────────────────────────────────────────────── -->
+<div id="onboarding" style="display:none;">
+  <div class="onboard-backdrop"></div>
+  <div class="onboard-modal">
+    <div class="onboard-step active" id="ob-step-1">
+      <div class="onboard-icon">🎉</div>
+      <h2 class="onboard-title">Welcome to CreatorHub</h2>
+      <p class="onboard-desc">Your all-in-one creator toolkit. Set up your overlays and start streaming right away.</p>
+      <button class="btn-primary" id="ob-next-1">Get Started →</button>
+    </div>
+    <div class="onboard-step" id="ob-step-2">
+      <div class="onboard-icon">🎬</div>
+      <h2 class="onboard-title">Record &amp; Stream</h2>
+      <p class="onboard-desc">Head to <strong>Record / Stream</strong> in the sidebar to manage scenes, sources, audio, and go live.</p>
+      <button class="btn-primary" id="ob-done-2">Let's go →</button>
+    </div>
+    <div class="onboard-progress">
+      <span class="ob-dot active"></span>
+      <span class="ob-dot"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Source Properties Modal ──────────────────────────────────────────────── -->
+<div id="source-props-modal" style="display:none;">
+  <div class="modal-backdrop" id="sp-backdrop"></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="sp-title">Source Properties</span>
+      <button class="modal-close" id="sp-close">✕</button>
+    </div>
+    <div class="modal-body" id="sp-body">
+      <div class="rs-empty">Loading…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" id="sp-apply" style="flex:1;width:auto;padding:9px;">Apply</button>
+      <button class="btn-outline" id="sp-cancel" style="padding:9px 20px;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Video Settings Modal ──────────────────────────────────────────────────── -->
+<div id="video-settings-modal" style="display:none;">
+  <div class="modal-backdrop" id="vs-backdrop"></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <span>Video Settings</span>
+      <button class="modal-close" id="vs-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="settings-row">
+        <label>Base (Canvas) Resolution</label>
+        <div class="res-inputs">
+          <input type="number" id="vs-base-w" min="1" placeholder="1920">
+          <span>×</span>
+          <input type="number" id="vs-base-h" min="1" placeholder="1080">
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>Output (Scaled) Resolution</label>
+        <div class="res-inputs">
+          <input type="number" id="vs-out-w" min="1" placeholder="1920">
+          <span>×</span>
+          <input type="number" id="vs-out-h" min="1" placeholder="1080">
+        </div>
+      </div>
+      <div class="settings-row">
+        <label>Frame Rate</label>
+        <select id="vs-fps">
+          <option value="24">24 FPS</option>
+          <option value="30" selected>30 FPS</option>
+          <option value="60">60 FPS</option>
+          <option value="120">120 FPS</option>
+        </select>
+      </div>
+      <div id="vs-status" style="font-size:11px;min-height:16px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-primary" id="vs-apply" style="flex:1;width:auto;padding:9px;">Apply</button>
+      <button class="btn-outline" id="vs-cancel" style="padding:9px 20px;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="studio-engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
