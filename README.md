@@ -4,10 +4,7 @@ This is the Electron shell for CreatorHub which wraps Overlayd and provides nati
 
 Quick start (Windows, from PowerShell):
 
-```powershell
-cd "c:\Users\wjlin\Desktop\big project\creatorhub"
-# Install dependencies (will install electron & electron-forge)
-npm install
+
 
 # Start the app in development
 npx electron-forge start
