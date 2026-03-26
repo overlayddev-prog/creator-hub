@@ -128,10 +128,7 @@ app.on('before-quit', () => {
 // actual GitHub repo, then publish releases with `npm run make` artifacts.
 if (app.isPackaged) {
   const { updateElectronApp, UpdateSourceType } = require('update-electron-app');
-  updateElectronApp({
-    updateInterval: '1 hour',
-    logger: require('electron').log,
-  });
+  updateElectronApp({ updateInterval: '1 hour' });
 }
 
 app.whenReady().then(() => {
