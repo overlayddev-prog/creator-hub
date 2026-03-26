@@ -12,6 +12,16 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.3.0': {
+    sections: [
+      {
+        title: 'App',
+        items: [
+          '<b>Auto-updater test</b> — verifying updates apply correctly in the background',
+        ],
+      },
+    ],
+  },
   '0.2.0': {
     sections: [
       {
@@ -139,7 +149,7 @@ function showMainApp() {
   if (!localStorage.getItem('creatorhub_onboarded')) {
     setTimeout(() => showOnboarding(), 600);
   } else {
-    setTimeout(() => checkPatchNotes('0.2.0'), 800);
+    setTimeout(() => checkPatchNotes('0.3.0'), 800);
   }
 }
 
