@@ -134,8 +134,14 @@ app.on('before-quit', () => {
 // To activate: replace YOUR_USERNAME/YOUR_REPO_NAME in package.json with your
 // actual GitHub repo, then publish releases with `npm run make` artifacts.
 if (app.isPackaged) {
-  const { updateElectronApp, UpdateSourceType } = require('update-electron-app');
+  const { updateElectronApp } = require('update-electron-app');
+  const { autoUpdater } = require('electron');
   updateElectronApp({ updateInterval: '1 hour' });
+  autoUpdater.on('checking-for-update',  () => console.log('[updater] checking...'));
+  autoUpdater.on('update-available',     () => console.log('[updater] update available'));
+  autoUpdater.on('update-not-available', () => console.log('[updater] up to date'));
+  autoUpdater.on('update-downloaded',    () => console.log('[updater] downloaded — will install on next launch'));
+  autoUpdater.on('error',                (e) => console.log('[updater] error:', e.message));
 }
 
 app.whenReady().then(() => {
