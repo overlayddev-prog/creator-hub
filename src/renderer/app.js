@@ -149,7 +149,7 @@ function showMainApp() {
   if (!localStorage.getItem('creatorhub_onboarded')) {
     setTimeout(() => showOnboarding(), 600);
   } else {
-    setTimeout(() => checkPatchNotes('0.3.0'), 800);
+    setTimeout(() => checkPatchNotes('0.3.0'), 2500);
   }
 }
 
