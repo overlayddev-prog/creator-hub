@@ -1,6 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('creatorhub', {
+  // ── IPC event listener ─────────────────────────────────────────────────────
+  ipc: {
+    on: (channel, cb) => ipcRenderer.on(channel, cb),
+  },
+
   // ── API proxy (CORS-free requests via main process) ───────────────────────
   api: {
     fetch: (url, options) => ipcRenderer.invoke('api:fetch', url, options),

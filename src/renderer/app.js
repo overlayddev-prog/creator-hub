@@ -258,6 +258,8 @@ async function boot() {
 
 // ── Wire up all events ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  window.creatorhub?.ipc?.on('updater:log', (_e, msg) => console.log(msg));
+
 
   // Patch notes
   const closePn = () => { $('patchnotes-modal').style.display = 'none'; };

@@ -109,6 +109,7 @@ if (tray) tray.setContextMenu(tray.getContextMenu ? tray.getContextMenu() : unde
   });
 
   mainWin.loadURL(`http://127.0.0.1:${port}`);
+  mainWin.webContents.once('did-finish-load', () => setTimeout(initAutoUpdater, 3000));
   mainWin.webContents.on('before-input-event', (_e, input) => {
     if (input.type === 'keyDown' && input.key === 'F12') {
       mainWin.webContents.isDevToolsOpened()
@@ -133,15 +134,17 @@ app.on('before-quit', () => {
 // Checks GitHub Releases on launch and downloads updates in the background.
 // To activate: replace YOUR_USERNAME/YOUR_REPO_NAME in package.json with your
 // actual GitHub repo, then publish releases with `npm run make` artifacts.
-if (app.isPackaged) {
+function initAutoUpdater() {
+  if (!app.isPackaged) return;
   const { updateElectronApp } = require('update-electron-app');
   const { autoUpdater } = require('electron');
+  const sendLog = (msg) => { console.log(msg); mainWin?.webContents?.send('updater:log', msg); };
+  autoUpdater.on('checking-for-update',  () => sendLog('[updater] checking...'));
+  autoUpdater.on('update-available',     () => sendLog('[updater] update available — downloading...'));
+  autoUpdater.on('update-not-available', () => sendLog('[updater] up to date'));
+  autoUpdater.on('update-downloaded',    () => sendLog('[updater] downloaded — will install on next launch'));
+  autoUpdater.on('error',                (e) => sendLog('[updater] error: ' + e.message));
   updateElectronApp({ updateInterval: '1 hour' });
-  autoUpdater.on('checking-for-update',  () => console.log('[updater] checking...'));
-  autoUpdater.on('update-available',     () => console.log('[updater] update available'));
-  autoUpdater.on('update-not-available', () => console.log('[updater] up to date'));
-  autoUpdater.on('update-downloaded',    () => console.log('[updater] downloaded — will install on next launch'));
-  autoUpdater.on('error',                (e) => console.log('[updater] error:', e.message));
 }
 
 app.whenReady().then(() => {
