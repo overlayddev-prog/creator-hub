@@ -355,6 +355,7 @@
                 <span class="status-dot disconnected" id="studio-rec-dot"></span>
                 <span id="studio-rec-label">Not recording</span>
                 <span class="studio-timer" id="studio-rec-timer"></span>
+                <span class="studio-rec-size" id="studio-rec-size" style="display:none;font-size:10px;color:rgba(232,237,245,0.45);margin-left:6px;"></span>
               </div>
               <div class="studio-settings-grid" style="grid-template-columns:1fr 1fr;">
                 <label>Format
@@ -617,8 +618,11 @@
                 <button class="ve-speed-btn" data-speed="4">4×</button>
               </div>
 
-              <!-- Separate audio -->
-              <button class="ve-sep-audio-btn" id="ve-sep-audio-btn" style="display:none;">⚟ Separate Audio</button>
+              <!-- Separate audio / Mute -->
+              <div style="display:flex;gap:6px;margin-top:4px;">
+                <button class="ve-sep-audio-btn" id="ve-sep-audio-btn" style="display:none;">⚟ Separate Audio</button>
+                <button class="ve-mute-btn" id="ve-mute-btn" style="display:none;">🔇 Mute Clip</button>
+              </div>
 
               <!-- Layer clip panel (V2+ selected) -->
               <div id="ve-layer-panel" style="display:none;">

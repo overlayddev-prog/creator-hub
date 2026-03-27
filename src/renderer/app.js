@@ -12,6 +12,18 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.8.0': {
+    sections: [
+      {
+        title: 'Studio',
+        items: [
+          '<b>Mute per clip</b> — mute any clip with one click; unmute at any time. Works in playback and export',
+          '<b>F9 record hotkey</b> — start and stop recording from any window, no need to switch focus',
+          '<b>File size indicator</b> — see how large your recording is growing in real time',
+        ],
+      },
+    ],
+  },
   '0.7.0': {
     sections: [
       {
@@ -253,7 +265,7 @@ function showMainApp() {
   if (!localStorage.getItem('creatorhub_onboarded')) {
     setTimeout(() => showOnboarding(), 600);
   }
-  setTimeout(() => checkPatchNotes('0.7.0'), 2500);
+  setTimeout(() => checkPatchNotes('0.8.0'), 2500);
 }
 
 // ── Source URLs ───────────────────────────────────────────────────────────────
@@ -1534,6 +1546,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const studioStartRec  = $('studio-start-rec');
   const studioStopRec   = $('studio-stop-rec');
   let stopRecClock = null;
+  let recTotalBytes = 0;
+
+  // F9 global hotkey → toggle record
+  window.creatorhub.ipc.on('hotkey:toggle-record', () => {
+    if (!mediaRecorder && studioStartRec && !studioStartRec.disabled) studioStartRec.click();
+    else if (mediaRecorder && studioStopRec && !studioStopRec.disabled) studioStopRec.click();
+  });
 
   if (studioStartRec) {
     studioStartRec.addEventListener('click', async () => {
@@ -1548,8 +1567,13 @@ document.addEventListener('DOMContentLoaded', () => {
         mimeType: 'video/webm;codecs=vp8,opus',
         videoBitsPerSecond: bps,
       });
+      recTotalBytes = 0;
       mediaRecorder.ondataavailable = async e => {
         if (e.data.size > 0) {
+          recTotalBytes += e.data.size;
+          const mb = (recTotalBytes / 1048576).toFixed(1);
+          const sizeEl = $('studio-rec-size');
+          if (sizeEl) { sizeEl.textContent = mb + ' MB'; sizeEl.style.display = ''; }
           const buf = await e.data.arrayBuffer();
           await window.creatorhub.studio.recordChunk(buf);
         }
@@ -1563,6 +1587,8 @@ document.addEventListener('DOMContentLoaded', () => {
       $('studio-rec-dot').style.background = 'var(--red)';
       $('studio-rec-label').textContent = 'Recording…';
       $('studio-rec-badge').style.display = '';
+      const recSizeEl = $('studio-rec-size');
+      if (recSizeEl) { recSizeEl.textContent = '0.0 MB'; recSizeEl.style.display = ''; }
       stopRecClock = makeClock(t => {
         $('studio-rec-timer').textContent = t;
         $('studio-rec-clock').textContent = t;
@@ -1590,6 +1616,9 @@ document.addEventListener('DOMContentLoaded', () => {
       $('studio-rec-label').textContent = 'Not recording';
       $('studio-rec-timer').textContent  = '';
       $('studio-rec-badge').style.display = 'none';
+      const recSizeElStop = $('studio-rec-size');
+      if (recSizeElStop) { recSizeElStop.style.display = 'none'; recSizeElStop.textContent = ''; }
+      recTotalBytes = 0;
 
       if (res.ok) {
         showToast('Saved: ' + res.outputPath.replace(/.*[\\/]/, ''));
@@ -2300,6 +2329,7 @@ document.addEventListener('DOMContentLoaded', () => {
           bgCtx.fillText(clip.fileName, Math.max(LW,cx1)+6, ry+13);
           if (clip.speed !== 1) { bgCtx.fillStyle = '#f59e0b'; bgCtx.fillText(`${clip.speed}×`, Math.max(LW,cx1)+6, ry+24); }
           if (clip.audioDetached) { bgCtx.fillStyle = '#a78bfa'; bgCtx.fillText('⚟ audio detached', Math.max(LW,cx1)+6, ry+35); }
+          if (clip.muted) { bgCtx.fillStyle = '#f87171'; bgCtx.fillText('🔇 muted', Math.max(LW,cx1)+6, ry+35 + (clip.audioDetached ? 11 : 0)); }
           bgCtx.restore();
 
           if (!clip.audioDetached) {
@@ -2515,7 +2545,7 @@ document.addEventListener('DOMContentLoaded', () => {
           layer.video.src = displayClip.fileUrl;
           layer.video.load();
           layer.video.playbackRate = speed;
-          layer.video.volume = outOfRange ? 0 : (displayClip.audioDetached ? 0 : (displayClip.volume || 1));
+          layer.video.volume = outOfRange ? 0 : (displayClip.muted || displayClip.audioDetached ? 0 : (displayClip.volume || 1));
           layer.video.addEventListener('loadedmetadata', () => {
             layer.video.currentTime = expectedTime;
             if (!outOfRange && isPlaying) layer.video.play().catch(() => {});
@@ -2553,6 +2583,7 @@ document.addEventListener('DOMContentLoaded', () => {
           vePlayPos >= a.timelineStart && vePlayPos < a.timelineStart + a.timelineDuration);
         if (!activeAudio) { if (!aud.paused) aud.pause(); continue; }
         const targetTime = (activeAudio.inPoint || 0) + (vePlayPos - activeAudio.timelineStart);
+        aud.volume = activeAudio.muted ? 0 : (activeAudio.volume || 1);
         if (aud.src !== activeAudio.fileUrl) {
           aud.src = activeAudio.fileUrl; aud.load();
           aud.addEventListener('canplay', () => {
@@ -2659,7 +2690,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const target = Math.max(clip.inPoint, Math.min(clip.outPoint, fileTime));
       veActiveClip       = clip;
       video.playbackRate = clip.speed;
-      video.volume       = clip.volume;
+      video.volume       = clip.muted ? 0 : (clip.volume || 1);
       if (video.src !== clip.fileUrl) {
         // Must wait for metadata before setting currentTime — browser ignores it otherwise
         const onMeta = () => {
@@ -2733,7 +2764,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Separate audio button — only for video clips that haven't detached audio yet
       const sepBtn = $('ve-sep-audio-btn');
-      if (sepBtn) sepBtn.style.display = (clip && !clip.audioDetached) ? 'block' : 'none';
+      if (sepBtn) sepBtn.style.display = (clip && !clip.audioDetached) ? '' : 'none';
+
+      // Mute button — shown for any selected clip
+      const muteBtn = $('ve-mute-btn');
+      if (muteBtn) {
+        muteBtn.style.display = clip ? '' : 'none';
+        muteBtn.textContent   = (clip && clip.muted) ? '🔊 Unmute Clip' : '🔇 Mute Clip';
+        muteBtn.classList.toggle('active', !!(clip && clip.muted));
+      }
 
       // Layer clip panel — for V2+ clips
       const layerPanel = $('ve-layer-panel');
@@ -3185,7 +3224,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const clip = {
         id: genId(), filePath: fp, fileName, fileUrl,
         fileDuration: dur, inPoint: 0, outPoint: dur,
-        track: targetTrack, speed: 1, volume: 1, audioDetached: false,
+        track: targetTrack, speed: 1, volume: 1, muted: false, audioDetached: false,
         x: targetTrack === 0 ? 0 : 50, y: targetTrack === 0 ? 0 : 5,
         w: targetTrack === 0 ? 100 : 35, h: targetTrack === 0 ? 100 : 35,
         waveform: null, thumbnails: [],
@@ -3523,6 +3562,14 @@ document.addEventListener('DOMContentLoaded', () => {
         video.playbackRate = clip.speed;
         computeLayout(); pushHistory(); refreshClipPanel(); drawTimeline();
       });
+    });
+
+    // ── Mute clip ──────────────────────────────────────────────────────────────
+    $('ve-mute-btn').addEventListener('click', () => {
+      const clip = selectedClip() || selectedAudioClip(); if (!clip) return;
+      clip.muted = !clip.muted;
+      syncAllLayers(); syncAudioElements();
+      pushHistory(); refreshClipPanel(); drawTimeline();
     });
 
     // ── Separate audio ─────────────────────────────────────────────────────────

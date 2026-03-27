@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const { spawn } = require('child_process');
-const { app, BrowserWindow, ipcMain, shell, net, Tray, Menu, nativeImage, session, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, net, Tray, Menu, nativeImage, session, protocol, globalShortcut } = require('electron');
 
 
 // --- Tiny local HTTP server so the renderer loads from http://localhost ---
@@ -215,6 +215,12 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+
+  // ── Global hotkeys ───────────────────────────────────────────────────────────
+  globalShortcut.register('F9', () => {
+    if (mainWin) mainWin.webContents.send('hotkey:toggle-record');
+  });
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
     else if (mainWin) { mainWin.show(); mainWin.focus(); }
@@ -225,6 +231,10 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform === 'darwin') app.quit();
   // else: do nothing — tray keeps the app alive
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 // ── API proxy (routes renderer fetch calls through Node — no CORS) ────────────
@@ -522,7 +532,7 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
   const hasCanvas   = !!(canvasW && canvasH);
   const needsEncode = fadeIn > 0 || fadeOut > 0 || hasOverlays || hasCanvas ||
     clips.length > 1 ||
-    clips.some(c => c.speed !== 1 || (c.textOverlays && c.textOverlays.length));
+    clips.some(c => c.speed !== 1 || c.muted || (c.textOverlays && c.textOverlays.length));
 
   if (!needsEncode && clips.length === 1) {
     // Fast path: single clip, stream copy
@@ -546,6 +556,11 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
     const clipDur = (c.outPoint - c.inPoint) / (c.speed || 1);
     let vChain = `[${i}:v]`;
     let aChain = `[${i}:a]`;
+
+    if (c.muted) {
+      filterParts.push(`${aChain}volume=0[a${i}]`);
+      aChain = `[a${i}]`;
+    }
 
     if (c.speed && c.speed !== 1) {
       filterParts.push(`${vChain}setpts=${1/c.speed}*PTS[v${i}]`);
