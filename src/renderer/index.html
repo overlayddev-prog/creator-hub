@@ -691,6 +691,18 @@
               <div class="ve-info-row"><span class="ve-info-label">Clips</span><span class="ve-info-val" id="ve-info-clips">0</span></div>
               <div class="ve-info-row"><span class="ve-info-label">Res</span><span class="ve-info-val" id="ve-info-dims">—</span></div>
 
+              <div class="ve-canvas-section">
+                <hr class="ve-divider">
+                <div class="ve-tools-hdr">Canvas</div>
+                <select id="ve-canvas-select" class="ve-canvas-select">
+                  <option value="1920x1080">1920 × 1080 — YouTube</option>
+                  <option value="1080x1920">1080 × 1920 — Shorts / TikTok</option>
+                  <option value="1080x1080">1080 × 1080 — Instagram</option>
+                  <option value="2560x1440">2560 × 1440 — 1440p</option>
+                  <option value="3840x2160">3840 × 2160 — 4K</option>
+                </select>
+              </div>
+
               <div class="ve-export-section">
                 <hr class="ve-divider">
                 <div class="ve-tools-hdr">Export</div>
@@ -701,6 +713,10 @@
                   <button class="ve-format-btn" data-fmt="mov">MOV</button>
                 </div>
                 <button class="ve-export-btn" id="ve-export-btn">⬇ Export</button>
+                <div id="ve-export-progress" style="display:none;">
+                  <div class="ve-progress-bar"><div class="ve-progress-fill" id="ve-progress-fill"></div></div>
+                  <div class="ve-progress-pct" id="ve-progress-label">0%</div>
+                </div>
               </div>
             </div><!-- end tools -->
 

@@ -47,10 +47,11 @@ contextBridge.exposeInMainWorld('creatorhub', {
 
   // ── Video Editor ───────────────────────────────────────────────────────────
   videoeditor: {
-    export:        (clips, format, outputDir, fadeIn, fadeOut, overlayClips) =>
-      ipcRenderer.invoke('videoeditor:export', clips, format, outputDir, fadeIn, fadeOut, overlayClips),
+    export:        (clips, format, outputDir, fadeIn, fadeOut, overlayClips, w, h) =>
+      ipcRenderer.invoke('videoeditor:export', clips, format, outputDir, fadeIn, fadeOut, overlayClips, w, h),
     getThumbnails: (filePath, count, duration) =>
       ipcRenderer.invoke('videoeditor:get-thumbnails', filePath, count, duration),
+    onProgress:    (cb) => ipcRenderer.on('export:progress', (_e, pct) => cb(pct)),
   },
 
   // ── Projects (.editor file persistence) ───────────────────────────────────

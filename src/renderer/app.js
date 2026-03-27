@@ -12,6 +12,18 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.7.0': {
+    sections: [
+      {
+        title: 'Editor',
+        items: [
+          '<b>Timeline snapping</b> — clips snap to each other, the playhead, and timeline start while dragging',
+          '<b>Export progress bar</b> — real-time % progress shown during export',
+          '<b>Canvas size</b> — set project resolution per project (YouTube, Shorts, Instagram, 1440p, 4K)',
+        ],
+      },
+    ],
+  },
   '0.6.0': {
     sections: [
       {
@@ -241,7 +253,7 @@ function showMainApp() {
   if (!localStorage.getItem('creatorhub_onboarded')) {
     setTimeout(() => showOnboarding(), 600);
   }
-  setTimeout(() => checkPatchNotes('0.6.0'), 2500);
+  setTimeout(() => checkPatchNotes('0.7.0'), 2500);
 }
 
 // ── Source URLs ───────────────────────────────────────────────────────────────
@@ -1798,6 +1810,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let veScrubTimer   = null;
     let veZoom         = 1;
     let veScrollOff    = 0;
+    let veCanvasW      = 1920;
+    let veCanvasH      = 1080;
+    let veSnapPos      = null;
     let veHistory      = [];
     let veHistIdx      = -1;
     let veHypeMarkers  = [];
@@ -1865,6 +1880,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function visibleDur() { return veTotalDur > 0 ? (veTotalDur / veZoom) * 1.25 : 60; }
     function timeToX(t)   { return LW + (t - veScrollOff) / visibleDur() * tw(); }
     function xToTime(x)   { return veScrollOff + (x - LW) / tw() * visibleDur(); }
+
+    function getSnapPos(rawStart, clipDur, excludeId) {
+      const thresh = visibleDur() * 0.015;
+      const points = [0, vePlayPos];
+      for (const c of veClips) {
+        if (c.id === excludeId) continue;
+        points.push(c.timelineStart, c.timelineStart + c.timelineDuration);
+      }
+      for (const a of veAudioClips) {
+        if (a.id === excludeId) continue;
+        points.push(a.timelineStart, a.timelineStart + a.timelineDuration);
+      }
+      let best = thresh, snapped = rawStart, indicator = null;
+      for (const p of points) {
+        const d1 = Math.abs(rawStart - p);
+        if (d1 < best) { best = d1; snapped = p; indicator = p; }
+        const d2 = Math.abs((rawStart + clipDur) - p);
+        if (d2 < best) { best = d2; snapped = p - clipDur; indicator = p; }
+      }
+      veSnapPos = indicator;
+      return Math.max(0, snapped);
+    }
+
+    function updateCanvasAspectRatio() {
+      const c = $('ve-video-container');
+      if (!c) return;
+      c.style.aspectRatio = veCanvasW + '/' + veCanvasH;
+      const sel = $('ve-canvas-select');
+      if (sel) sel.value = veCanvasW + 'x' + veCanvasH;
+    }
+
     function clampScroll() {
       const maxOff = Math.max(0, veTotalDur - visibleDur());
       veScrollOff = Math.max(0, Math.min(maxOff, veScrollOff));
@@ -2378,6 +2424,16 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillStyle = '#ff3355';
         ctx.beginPath(); ctx.moveTo(phX-5,RULER_H-8); ctx.lineTo(phX+5,RULER_H-8); ctx.lineTo(phX,RULER_H+2); ctx.closePath(); ctx.fill();
       }
+      if (veSnapPos !== null) {
+        const sx = timeToX(veSnapPos);
+        if (sx >= LW && sx <= W) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(0,229,255,0.7)'; ctx.lineWidth = 1;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath(); ctx.moveTo(sx, RULER_H); ctx.lineTo(sx, H); ctx.stroke();
+          ctx.restore();
+        }
+      }
     }
 
     // ── Canvas/overlay resize ─────────────────────────────────────────────────
@@ -2858,34 +2914,17 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (veDragging === 'seek') {
         seekToPos(Math.max(0, Math.min(veTotalDur, t)));
       } else if (veDragging === 'audioMove' && veDragClip) {
-        veDragClip.timelineStart = Math.max(0, t - veDragOffsetSec);
+        veDragClip.timelineStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
         computeLayout();
       } else if (veDragging === 'clipMove' && veDragClip) {
         const hovTrack = getVideoTrackAtY(y);
         veDragTargetTrack = (hovTrack !== null) ? hovTrack : (veDragClip.track || 0);
         if (veDragTargetTrack === (veDragClip.track || 0)) {
           if (veDragTargetTrack === 0) {
-            // V1 free drag with snap-to-attach
-            const rawStart  = Math.max(0, t - veDragOffsetSec);
-            const snapThresh = visibleDur() * 0.015;
-            const v1Others   = veClips.filter(c => !c.track && c.id !== veDragClip.id);
-            let snapped = rawStart;
-            // Snap to timeline start
-            if (Math.abs(rawStart) < snapThresh) { snapped = 0; }
-            else {
-              for (const other of v1Others) {
-                const otherEnd = other.timelineStart + other.timelineDuration;
-                if (Math.abs(rawStart - otherEnd) < snapThresh) { snapped = otherEnd; break; }
-                if (Math.abs((rawStart + veDragClip.timelineDuration) - other.timelineStart) < snapThresh) {
-                  snapped = other.timelineStart - veDragClip.timelineDuration; break;
-                }
-              }
-            }
-            veDragClip.timelineStart = Math.max(0, snapped);
+            veDragClip.timelineStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
             computeLayout();
           } else {
-            // V2+ free drag left/right
-            veDragClip.timelineStart = Math.max(0, t - veDragOffsetSec);
+            veDragClip.timelineStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
             computeLayout();
           }
         }
@@ -2927,7 +2966,7 @@ document.addEventListener('DOMContentLoaded', () => {
         veDragTargetTrack = null; pushHistory(); veDragClip = null;
         refreshClipPanel();
       }
-      veDragging = null;
+      veDragging = null; veSnapPos = null;
     });
 
     // ── V1 wrap drag & resize ─────────────────────────────────────────────────
@@ -3219,11 +3258,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }));
 
       [$('ve-export-btn'), $('ve-btn-export-top')].forEach(b => { if (b) { b.disabled = true; b.textContent = '⏳ Exporting…'; } });
+      $('ve-export-progress').style.display = 'block';
+      $('ve-progress-fill').style.width = '0%';
+      $('ve-progress-label').textContent = '0%';
       showToast('Exporting…');
       const result = await window.creatorhub.videoeditor.export(
         exportClips, veFormat, outputDir,
         veFadeInEn ? veFadeInDur : 0, veFadeOutEn ? veFadeOutDur : 0, overlayClips,
+        veCanvasW, veCanvasH,
       ).catch(e => ({ ok: false, error: e.message }));
+      $('ve-export-progress').style.display = 'none';
       [$('ve-export-btn'), $('ve-btn-export-top')].forEach(b => { if (b) { b.disabled = false; b.textContent = b.id === 've-export-btn' ? '⬇ Export' : 'Export'; } });
       if (result.ok) { showToast('Exported: ' + result.outputPath.split(/[\\/]/).pop()); addRecording(result.outputPath); }
       else showToast('Export failed: ' + (result.error || 'Unknown error'));
@@ -3240,6 +3284,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fadeInEn: veFadeInEn, fadeInDur: veFadeInDur,
         fadeOutEn: veFadeOutEn, fadeOutDur: veFadeOutDur,
         format: veFormat,
+        canvasW: veCanvasW, canvasH: veCanvasH,
       };
     }
 
@@ -3279,7 +3324,10 @@ document.addEventListener('DOMContentLoaded', () => {
       veZoom = state.zoom || 1; veScrollOff = state.scrollOff || 0;
       veFadeInEn = state.fadeInEn || false; veFadeInDur = state.fadeInDur || 0.5;
       veFadeOutEn = state.fadeOutEn || false; veFadeOutDur = state.fadeOutDur || 0.5;
-      veFormat = state.format || 'mp4';
+      veFormat  = state.format  || 'mp4';
+      veCanvasW = state.canvasW || 1920;
+      veCanvasH = state.canvasH || 1080;
+      updateCanvasAspectRatio();
       veSelId = null; veHistory = []; veHistIdx = -1; vePlayPos = 0;
       computeLayout(); clampScroll();
       updateUndoRedo(); refreshClipPanel(); renderTextList(); drawTimeline();
@@ -3295,7 +3343,9 @@ document.addEventListener('DOMContentLoaded', () => {
       $('ve-project-name-display').textContent = veProjectName;
       $('ve-dashboard').style.display = 'none';
       $('ve-editor').style.display    = 'flex';
+      veCanvasW = 1920; veCanvasH = 1080;
       resizeCanvas(); resizeOverlay();
+      updateCanvasAspectRatio();
     }
 
     function backToDashboard() {
@@ -3636,6 +3686,17 @@ document.addEventListener('DOMContentLoaded', () => {
     $('ve-btn-export-top').addEventListener('click', doVeExport);
     $('ve-export-btn').addEventListener('click',     doVeExport);
     $('ve-btn-save').addEventListener('click',       saveProject);
+
+    $('ve-canvas-select').addEventListener('change', function() {
+      const [w, h] = this.value.split('x').map(Number);
+      veCanvasW = w; veCanvasH = h;
+      updateCanvasAspectRatio();
+    });
+
+    window.creatorhub.videoeditor.onProgress(pct => {
+      $('ve-progress-fill').style.width = pct + '%';
+      $('ve-progress-label').textContent = pct + '%';
+    });
     $('ve-btn-back-dash').addEventListener('click',  backToDashboard);
 
     // ── Init ───────────────────────────────────────────────────────────────────

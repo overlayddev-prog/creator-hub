@@ -508,7 +508,7 @@ ipcMain.handle('videoeditor:get-thumbnails', async (_e, filePath, count, duratio
 
 // ── Video Editor — multi-clip export via FFmpeg ───────────────────────────────
 // clips = [{ filePath, inPoint, outPoint, speed, textOverlays }]
-ipcMain.handle('videoeditor:export', async (_e, clips, format, outputDir, fadeIn, fadeOut, overlayClips) => {
+ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fadeIn, fadeOut, overlayClips, canvasW, canvasH) => {
   const ffmpegPath = require('ffmpeg-static');
   if (!clips || !clips.length) return { ok: false, error: 'No clips' };
 
@@ -516,9 +516,11 @@ ipcMain.handle('videoeditor:export', async (_e, clips, format, outputDir, fadeIn
   const ext = (format || 'mp4').toLowerCase();
   const dir = outputDir || path.dirname(clips[0].filePath);
   const outPath = path.join(dir, `Edited-${ts}.${ext}`);
+  const sendProgress = (pct) => { try { event.sender.send('export:progress', pct); } catch {} };
 
   const hasOverlays = Array.isArray(overlayClips) && overlayClips.length > 0;
-  const needsEncode = fadeIn > 0 || fadeOut > 0 || hasOverlays ||
+  const hasCanvas   = !!(canvasW && canvasH);
+  const needsEncode = fadeIn > 0 || fadeOut > 0 || hasOverlays || hasCanvas ||
     clips.length > 1 ||
     clips.some(c => c.speed !== 1 || (c.textOverlays && c.textOverlays.length));
 
@@ -529,7 +531,7 @@ ipcMain.handle('videoeditor:export', async (_e, clips, format, outputDir, fadeIn
       const proc = spawn(ffmpegPath,
         ['-ss', String(c.inPoint), '-to', String(c.outPoint), '-i', c.filePath, '-c', 'copy', outPath, '-y'],
         { stdio: ['ignore', 'ignore', 'ignore'] });
-      proc.on('close', code => resolve(code === 0 ? { ok: true, outputPath: outPath } : { ok: false, error: `FFmpeg exited ${code}` }));
+      proc.on('close', code => { sendProgress(100); resolve(code === 0 ? { ok: true, outputPath: outPath } : { ok: false, error: `FFmpeg exited ${code}` }); });
       proc.on('error', e => resolve({ ok: false, error: e.message }));
     });
   }
@@ -607,12 +609,17 @@ ipcMain.handle('videoeditor:export', async (_e, clips, format, outputDir, fadeIn
       const shifted = `[ovshift${oi}]`;
       const scaled  = `[ovscaled${oi}]`;
       const out     = `[vwith_ov${oi}]`;
-      // Shift overlay PTS so frame 0 of the overlay file aligns with tStart in the output
       filterParts.push(`[${idx}:v]setpts=PTS+${tStart}/TB${shifted}`);
       filterParts.push(`${shifted}scale=${wExpr}:${hExpr}${scaled}`);
       filterParts.push(`${finalV}${scaled}overlay=x=${xExpr}:y=${yExpr}:enable='between(t\\,${tStart}\\,${tEnd})'${out}`);
       finalV = out;
     });
+  }
+
+  // Canvas size — scale + letterbox/pillarbox to fit exactly
+  if (hasCanvas) {
+    filterParts.push(`${finalV}scale=${canvasW}:${canvasH}:force_original_aspect_ratio=decrease,pad=${canvasW}:${canvasH}:(ow-iw)/2:(oh-ih)/2[vcanvas]`);
+    finalV = '[vcanvas]';
   }
 
   const args = [
@@ -625,8 +632,15 @@ ipcMain.handle('videoeditor:export', async (_e, clips, format, outputDir, fadeIn
   ];
 
   return new Promise(resolve => {
-    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'ignore'] });
-    proc.on('close', code => resolve(code === 0 ? { ok: true, outputPath: outPath } : { ok: false, error: `FFmpeg exited ${code}` }));
+    const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    proc.stderr.on('data', (data) => {
+      const m = data.toString().match(/time=(\d+):(\d+):(\d+\.?\d*)/);
+      if (m && totalDur > 0) {
+        const elapsed = parseInt(m[1])*3600 + parseInt(m[2])*60 + parseFloat(m[3]);
+        sendProgress(Math.min(99, Math.round(elapsed / totalDur * 100)));
+      }
+    });
+    proc.on('close', code => { sendProgress(100); resolve(code === 0 ? { ok: true, outputPath: outPath } : { ok: false, error: `FFmpeg exited ${code}` }); });
     proc.on('error', e => resolve({ ok: false, error: e.message }));
   });
 });
