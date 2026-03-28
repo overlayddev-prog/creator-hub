@@ -532,7 +532,7 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
   const hasCanvas   = !!(canvasW && canvasH);
   const needsEncode = fadeIn > 0 || fadeOut > 0 || hasOverlays || hasCanvas ||
     clips.length > 1 ||
-    clips.some(c => c.speed !== 1 || c.muted || (c.textOverlays && c.textOverlays.length));
+    clips.some(c => c.speed !== 1 || c.muted || (c.textOverlays && c.textOverlays.length) || c.transitionIn);
 
   if (!needsEncode && clips.length === 1) {
     // Fast path: single clip, stream copy
@@ -597,10 +597,51 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
     totalDur += clipDur;
   });
 
-  // Concat all clips
-  const concatV = clips.map((_,i) => `[vc${i}]`).join('');
-  const concatA = clips.map((_,i) => `[ac${i}]`).join('');
-  filterParts.push(`${concatV}${concatA}concat=n=${clips.length}:v=1:a=1[vout][aout]`);
+  // Concat / xfade all clips
+  const hasTransitions = clips.some((c, i) => i > 0 && c.transitionIn);
+  if (!hasTransitions) {
+    const concatV = clips.map((_,i) => `[vc${i}]`).join('');
+    const concatA = clips.map((_,i) => `[ac${i}]`).join('');
+    filterParts.push(`${concatV}${concatA}concat=n=${clips.length}:v=1:a=1[vout][aout]`);
+  } else {
+    // Chain clips with xfade where transitionIn is set, concat otherwise
+    function deriveXfadeType(ti) {
+      if (!ti || !ti.data) return 'fade';
+      const fromKfs = (ti.data.from && ti.data.from.keyframes) || [];
+      if (fromKfs.length >= 2) {
+        const dx = fromKfs[fromKfs.length - 1].x - fromKfs[0].x;
+        if (dx < -50) return 'slideleft';
+        if (dx > 50)  return 'slideright';
+      }
+      return 'fade';
+    }
+    let curV = '[vc0]', curA = '[ac0]';
+    let cumDur = (clips[0].outPoint - clips[0].inPoint) / (clips[0].speed || 1);
+    for (let i = 1; i < clips.length; i++) {
+      const clipDur = (clips[i].outPoint - clips[i].inPoint) / (clips[i].speed || 1);
+      const isLast  = i === clips.length - 1;
+      const vOut = isLast ? '[vout]' : `[xfv${i}]`;
+      const aOut = isLast ? '[aout]' : `[xfa${i}]`;
+      if (clips[i].transitionIn) {
+        const tDur   = Math.min(clips[i].transitionIn.duration || 0.5, clipDur * 0.9, cumDur * 0.9);
+        const offset = (cumDur - tDur).toFixed(3);
+        const xfType = deriveXfadeType(clips[i].transitionIn);
+        filterParts.push(`${curV}[vc${i}]xfade=transition=${xfType}:duration=${tDur.toFixed(3)}:offset=${offset}${vOut}`);
+        filterParts.push(`${curA}[ac${i}]acrossfade=d=${tDur.toFixed(3)}${aOut}`);
+        cumDur += clipDur - tDur;
+      } else {
+        filterParts.push(`${curV}[vc${i}]concat=n=2:v=1:a=0${vOut}`);
+        filterParts.push(`${curA}[ac${i}]concat=n=2:v=0:a=1${aOut}`);
+        cumDur += clipDur;
+      }
+      curV = vOut; curA = aOut;
+    }
+    // Single clip fallback (shouldn't reach here normally)
+    if (clips.length === 1) {
+      filterParts.push(`[vc0][ac0]concat=n=1:v=1:a=1[vout][aout]`);
+    }
+    totalDur = cumDur; // update for fade calculations
+  }
 
   // Fades on final output
   let finalV = '[vout]', finalA = '[aout]';
@@ -913,6 +954,48 @@ ipcMain.handle('project:rename', async (_e, filePath, newName) => {
 });
 
 ipcMain.handle('project:delete', async (_e, filePath) => {
+  try { fs.unlinkSync(filePath); return { ok: true }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+// ── Transition files (.transition format) ────────────────────────────────────
+const TRANSITIONS_DIR = path.join(app.getPath('documents'), 'CreatorHub', 'Transitions');
+function ensureTransDir() {
+  if (!fs.existsSync(TRANSITIONS_DIR)) fs.mkdirSync(TRANSITIONS_DIR, { recursive: true });
+  return TRANSITIONS_DIR;
+}
+
+ipcMain.handle('transitions:get-dir', () => ensureTransDir());
+
+ipcMain.handle('transitions:list', () => {
+  const dir = ensureTransDir();
+  return fs.readdirSync(dir)
+    .filter(f => f.endsWith('.transition'))
+    .map(f => {
+      const fp = path.join(dir, f);
+      try {
+        const data = JSON.parse(fs.readFileSync(fp, 'utf8'));
+        return { name: data.name || f.replace('.transition', ''), duration: data.duration || 1, filePath: fp };
+      } catch { return { name: f.replace('.transition', ''), duration: 1, filePath: fp }; }
+    });
+});
+
+ipcMain.handle('transitions:save', (_e, filePath, data) => {
+  try {
+    const dir = ensureTransDir();
+    const safeName = (data.name || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
+    const fp = filePath || path.join(dir, safeName + '.transition');
+    fs.writeFileSync(fp, JSON.stringify(data, null, 2), 'utf8');
+    return { ok: true, filePath: fp };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('transitions:load', (_e, filePath) => {
+  try { return { ok: true, data: JSON.parse(fs.readFileSync(filePath, 'utf8')) }; }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('transitions:delete', (_e, filePath) => {
   try { fs.unlinkSync(filePath); return { ok: true }; }
   catch (e) { return { ok: false, error: e.message }; }
 });

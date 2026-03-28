@@ -439,6 +439,7 @@
           <button class="assets-tab active" data-assets-tab="images">Images <span class="assets-tab-count" id="assets-count-images">0</span></button>
           <button class="assets-tab" data-assets-tab="videos">Videos <span class="assets-tab-count" id="assets-count-videos">0</span></button>
           <button class="assets-tab" data-assets-tab="audio">Audio <span class="assets-tab-count" id="assets-count-audio">0</span></button>
+          <button class="assets-tab" data-assets-tab="transitions">Transitions <span class="assets-tab-count" id="assets-count-transitions">0</span></button>
         </div>
 
         <div class="assets-filterbar">
@@ -460,8 +461,107 @@
             <div class="assets-grid" id="assets-grid"></div>
           </div>
           <div class="assets-detail" id="assets-detail" style="display:none;"></div>
+
+          <!-- Transitions tab content -->
+          <div id="assets-transitions-wrap" style="display:none; flex:1; flex-direction:column; overflow-y:auto; padding:14px; gap:18px;">
+            <div>
+              <div class="te-section-hdr">Templates</div>
+              <div class="te-templates-grid" id="te-templates-grid"></div>
+            </div>
+            <div>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <div class="te-section-hdr" style="margin-bottom:0;">Saved Transitions</div>
+                <button class="te-new-blank-btn" id="te-new-blank">+ Blank</button>
+              </div>
+              <div class="te-saved-grid" id="te-saved-grid">
+                <div class="te-saved-empty" id="te-saved-empty">No saved transitions yet — create one above</div>
+              </div>
+            </div>
+          </div>
         </div>
 
+      </div>
+
+      <!-- ── Transition Editor Module ──────────────────────────────────── -->
+      <div id="module-transition-editor" style="display:none; flex:1; flex-direction:column; height:100%; overflow:hidden;">
+
+        <!-- Top bar -->
+        <div class="te-topbar">
+          <button class="te-back-btn" id="te-back">← Assets</button>
+          <input class="te-name-input" id="te-name" placeholder="Transition name…">
+          <div class="te-topbar-right">
+            <span class="te-dur-wrap">
+              Duration&nbsp;
+              <input type="number" id="te-duration" value="1.0" min="0.1" max="10" step="0.1" class="te-dur-input">
+              &nbsp;s
+            </span>
+            <button class="te-save-btn" id="te-save">💾 Save</button>
+          </div>
+        </div>
+
+        <!-- Body -->
+        <div class="te-body">
+
+          <!-- Preview + timeline column -->
+          <div class="te-preview-col">
+            <div class="te-canvas-wrap" id="te-canvas-wrap">
+              <canvas id="te-canvas"></canvas>
+              <div class="te-layer-badge te-badge-from">FROM</div>
+              <div class="te-layer-badge te-badge-to">TO</div>
+            </div>
+
+            <!-- Transport -->
+            <div class="te-transport">
+              <button class="te-transport-btn" id="te-btn-play">▶</button>
+              <input type="range" id="te-scrubber" min="0" max="1000" value="0" class="te-scrubber">
+              <span class="te-timecode" id="te-timecode">0.00s</span>
+            </div>
+
+            <!-- Keyframe timeline canvas -->
+            <div class="te-timeline-wrap" id="te-timeline-wrap">
+              <canvas id="te-timeline"></canvas>
+            </div>
+          </div>
+
+          <!-- Properties panel -->
+          <div class="te-props">
+            <div class="te-props-hdr">Layer</div>
+            <div class="te-layer-tabs">
+              <button class="te-layer-tab active" data-te-layer="from" id="te-tab-from">🔵 FROM</button>
+              <button class="te-layer-tab" data-te-layer="to" id="te-tab-to">🔴 TO</button>
+            </div>
+
+            <div class="te-props-hdr" style="margin-top:12px;">Properties at <span id="te-prop-time">0.00s</span></div>
+            <div class="te-prop-row"><span class="te-prop-label">Opacity</span><input type="number" class="te-prop-input" id="te-p-opacity" min="0" max="100" value="100"><span class="te-prop-unit">%</span></div>
+            <div class="te-prop-row"><span class="te-prop-label">X</span><input type="number" class="te-prop-input" id="te-p-x" value="0"><span class="te-prop-unit">%</span></div>
+            <div class="te-prop-row"><span class="te-prop-label">Y</span><input type="number" class="te-prop-input" id="te-p-y" value="0"><span class="te-prop-unit">%</span></div>
+            <div class="te-prop-row"><span class="te-prop-label">Width</span><input type="number" class="te-prop-input" id="te-p-w" value="100"><span class="te-prop-unit">%</span></div>
+            <div class="te-prop-row"><span class="te-prop-label">Height</span><input type="number" class="te-prop-input" id="te-p-h" value="100"><span class="te-prop-unit">%</span></div>
+            <div class="te-prop-row"><span class="te-prop-label">Rotation</span><input type="number" class="te-prop-input" id="te-p-rotation" value="0"><span class="te-prop-unit">°</span></div>
+
+            <button class="te-add-kf-btn" id="te-add-kf">◆ Record Keyframe Here</button>
+
+            <div class="te-props-hdr" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+              <span>Keyframes</span>
+              <button class="te-clear-kf-btn" id="te-clear-kf" style="display:none;">Clear all</button>
+            </div>
+            <div id="te-kf-list" class="te-kf-list"></div>
+            <div id="te-kf-empty" class="te-kf-empty">No keyframes — scrub to a time, set properties, then click Record</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ── Transition Picker Modal ─────────────────────────────────────── -->
+      <div class="modal-backdrop" id="te-picker-modal" style="display:none;">
+        <div class="modal-box" style="width:520px; max-height:70vh; display:flex; flex-direction:column;">
+          <div class="modal-hdr">
+            <span>Pick a Transition</span>
+            <button class="modal-close" id="te-picker-close">×</button>
+          </div>
+          <div id="te-picker-list" style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-wrap:wrap; gap:10px;"></div>
+          <div style="padding:10px 12px; border-top:1px solid var(--border); font-size:11px; color:var(--muted);">No saved transitions? Create them in the Assets → Transitions tab.</div>
+        </div>
       </div>
 
       <!-- ── Recordings Module ──────────────────────────────────────────── -->
@@ -622,6 +722,20 @@
               <div style="display:flex;gap:6px;margin-top:4px;">
                 <button class="ve-sep-audio-btn" id="ve-sep-audio-btn" style="display:none;">⚟ Separate Audio</button>
                 <button class="ve-mute-btn" id="ve-mute-btn" style="display:none;">🔇 Mute Clip</button>
+              </div>
+
+              <!-- Transition in (V1 non-first clips) -->
+              <div id="ve-transition-panel" style="display:none; margin-top:6px;">
+                <hr class="ve-divider" style="margin:6px 0;">
+                <div class="ve-tools-hdr">Transition In</div>
+                <div class="ve-info-row">
+                  <span class="ve-info-label">Current</span>
+                  <span class="ve-info-val" id="ve-trans-name">None</span>
+                </div>
+                <div style="display:flex; gap:6px; margin-top:4px;">
+                  <button class="ve-btn ve-btn-outline" id="ve-trans-pick" style="flex:1; font-size:10px;">🎬 Pick Transition</button>
+                  <button class="ve-btn ve-btn-outline" id="ve-trans-remove" style="flex:1; font-size:10px; display:none; color:var(--red); border-color:rgba(255,51,85,0.3);">✕ Remove</button>
+                </div>
               </div>
 
               <!-- Layer clip panel (V2+ selected) -->

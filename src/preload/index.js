@@ -65,6 +65,15 @@ contextBridge.exposeInMainWorld('creatorhub', {
     updateThumbnail: (filePath, videoPath)       => ipcRenderer.invoke('project:updateThumbnail', filePath, videoPath),
   },
 
+  // ── Transition files (.transition) ────────────────────────────────────────
+  transitions: {
+    getDir:  ()               => ipcRenderer.invoke('transitions:get-dir'),
+    list:    ()               => ipcRenderer.invoke('transitions:list'),
+    save:    (filePath, data) => ipcRenderer.invoke('transitions:save', filePath, data),
+    load:    (filePath)       => ipcRenderer.invoke('transitions:load', filePath),
+    delete:  (filePath)       => ipcRenderer.invoke('transitions:delete', filePath),
+  },
+
   // ── Studio (FFmpeg-based recording / streaming) ────────────────────────────
   studio: {
     getDesktopSources:      (types)        => ipcRenderer.invoke('studio:desktop-sources', types),

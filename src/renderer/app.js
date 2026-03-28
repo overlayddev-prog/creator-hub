@@ -12,6 +12,19 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.9.0': {
+    sections: [
+      {
+        title: 'Editor',
+        items: [
+          '<b>Transition Editor</b> — create custom transitions between V1 clips; keyframe position, size, opacity, and rotation for both FROM and TO layers',
+          '<b>Built-in transitions</b> — Fade, Slide Left, Slide Right, and Zoom In available instantly from Assets → Transitions',
+          '<b>Transition picker</b> — assign any saved or built-in transition to a V1 clip via the clip panel',
+          '<b>Transition export</b> — transitions render in the final export using FFmpeg xfade and acrossfade filters',
+        ],
+      },
+    ],
+  },
   '0.8.0': {
     sections: [
       {
@@ -409,12 +422,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Module routing ────────────────────────────────────────────────────────
   const modules = {
-    stream:      $('module-stream'),
-    recstream:   $('module-recstream'),
-    editor:      $('module-editor'),
-    assets:      $('module-assets'),
-    recordings:  $('module-recordings'),
-    videoeditor: $('module-videoeditor'),
+    stream:             $('module-stream'),
+    recstream:          $('module-recstream'),
+    editor:             $('module-editor'),
+    assets:             $('module-assets'),
+    recordings:         $('module-recordings'),
+    videoeditor:        $('module-videoeditor'),
+    'transition-editor': $('module-transition-editor'),
   };
 
   function switchModule(name) {
@@ -521,15 +535,126 @@ document.addEventListener('DOMContentLoaded', () => {
     return 'images';
   }
 
+  // ── Transitions Assets Tab ────────────────────────────────────────────────
+  const TE_TEMPLATES = [
+    {
+      id: 'fade', name: 'Fade', duration: 1.0,
+      from: { keyframes: [
+        { time: 0, x: 0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+        { time: 1, x: 0, y: 0, w: 100, h: 100, opacity:   0, rotation: 0 },
+      ]},
+      to: { keyframes: [
+        { time: 0, x: 0, y: 0, w: 100, h: 100, opacity:   0, rotation: 0 },
+        { time: 1, x: 0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+      ]},
+    },
+    {
+      id: 'slide-left', name: 'Slide Left', duration: 0.7,
+      from: { keyframes: [
+        { time: 0,   x:    0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+        { time: 0.7, x: -100, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+      ]},
+      to: { keyframes: [
+        { time: 0,   x:  100, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+        { time: 0.7, x:    0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+      ]},
+    },
+    {
+      id: 'slide-right', name: 'Slide Right', duration: 0.7,
+      from: { keyframes: [
+        { time: 0,   x:    0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+        { time: 0.7, x:  100, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+      ]},
+      to: { keyframes: [
+        { time: 0,   x: -100, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+        { time: 0.7, x:    0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
+      ]},
+    },
+    {
+      id: 'zoom-in', name: 'Zoom In', duration: 0.8,
+      from: { keyframes: [
+        { time: 0,   x:  0, y:  0, w: 100, h: 100, opacity: 100, rotation: 0 },
+        { time: 0.8, x: -5, y: -5, w: 110, h: 110, opacity:   0, rotation: 0 },
+      ]},
+      to: { keyframes: [
+        { time: 0,   x: 10, y: 10, w:  80, h:  80, opacity:   0, rotation: 0 },
+        { time: 0.8, x:  0, y:  0, w: 100, h: 100, opacity: 100, rotation: 0 },
+      ]},
+    },
+  ];
+
+  async function loadTransitionsList() {
+    const list = await window.creatorhub.transitions.list().catch(() => []);
+    $('assets-count-transitions').textContent = list.length;
+    const savedGrid = $('te-saved-grid');
+    const emptyEl   = $('te-saved-empty');
+    if (!list.length) {
+      emptyEl.style.display = '';
+      savedGrid.querySelectorAll('.te-saved-card').forEach(el => el.remove());
+      return;
+    }
+    emptyEl.style.display = 'none';
+    savedGrid.querySelectorAll('.te-saved-card').forEach(el => el.remove());
+    list.forEach(t => {
+      const card = document.createElement('div');
+      card.className = 'te-saved-card';
+      card.innerHTML = `
+        <span class="te-saved-card-name">${t.name}</span>
+        <span class="te-saved-card-dur">${t.duration}s</span>
+        <div class="te-saved-card-actions">
+          <button class="te-saved-card-btn edit-btn">✏️ Edit</button>
+          <button class="te-saved-card-btn del del-btn">🗑</button>
+        </div>`;
+      card.querySelector('.edit-btn').addEventListener('click', async () => {
+        const res = await window.creatorhub.transitions.load(t.filePath);
+        if (res.ok) openTransitionEditor(t.filePath, res.data);
+        else showToast('Failed to load transition');
+      });
+      card.querySelector('.del-btn').addEventListener('click', async () => {
+        await window.creatorhub.transitions.delete(t.filePath);
+        loadTransitionsList();
+      });
+      savedGrid.insertBefore(card, emptyEl);
+    });
+  }
+
+  function renderTransitionTemplates() {
+    const grid = $('te-templates-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    TE_TEMPLATES.forEach(tpl => {
+      const card = document.createElement('div');
+      card.className = 'te-template-card';
+      card.innerHTML = `
+        <div class="te-template-name">${tpl.name}</div>
+        <div class="te-template-dur">${tpl.duration}s</div>
+        <div class="te-template-preview" style="background:linear-gradient(to right,rgba(59,130,246,0.5),rgba(239,68,68,0.5));"></div>`;
+      card.addEventListener('click', () => {
+        const data = JSON.parse(JSON.stringify(tpl));
+        delete data.id;
+        openTransitionEditor(null, data);
+      });
+      grid.appendChild(card);
+    });
+  }
+
   function renderAssets() {
     const search = $('assets-search').value.toLowerCase();
     const sort = $('assets-sort').value;
     const isRecordings = assetsTab === 'recordings';
+    const isTransitions = assetsTab === 'transitions';
 
     // Update counts
     const counts = { images: 0, videos: 0, audio: 0 };
     assetsLib.forEach(a => counts[a.category] = (counts[a.category] || 0) + 1);
     ['images','videos','audio'].forEach(k => { $('assets-count-' + k).textContent = counts[k] || 0; });
+
+    // Show/hide transitions panel
+    $('assets-transitions-wrap').style.display = isTransitions ? 'flex' : 'none';
+    $('assets-grid-wrap').style.display = isTransitions ? 'none' : '';
+    const filterbarEl = document.querySelector('.assets-filterbar');
+    if (filterbarEl) filterbarEl.style.display = isTransitions ? 'none' : '';
+    if (isTransitions) { loadTransitionsList(); renderTransitionTemplates(); return; }
 
     let items = assetsLib.filter(a => a.category === assetsTab && a.name.toLowerCase().includes(search));
     if (sort === 'newest') items = items.sort((a,b) => b.addedAt - a.addedAt);
@@ -718,6 +843,343 @@ document.addEventListener('DOMContentLoaded', () => {
     $('assets-view-grid').classList.remove('active');
     renderAssets();
   });
+
+  // ── Transition Editor ─────────────────────────────────────────────────────
+  let teData      = null;   // { name, duration, from:{keyframes:[]}, to:{keyframes:[]} }
+  let teFilePath  = null;
+  let tePlayPos   = 0;
+  let teIsPlaying = false;
+  let teSelLayer  = 'from';
+  let teRafId     = null;
+  let teLastTs    = 0;
+  let tePickerClip = null;
+
+  function teInterpolate(kfs, t) {
+    if (!kfs || !kfs.length) return { x: 0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 };
+    const sorted = [...kfs].sort((a, b) => a.time - b.time);
+    if (t <= sorted[0].time) return { ...sorted[0] };
+    if (t >= sorted[sorted.length - 1].time) return { ...sorted[sorted.length - 1] };
+    for (let i = 0; i < sorted.length - 1; i++) {
+      const a = sorted[i], b = sorted[i + 1];
+      if (t >= a.time && t <= b.time) {
+        const alpha = (t - a.time) / (b.time - a.time);
+        return {
+          x:        a.x        + (b.x        - a.x)        * alpha,
+          y:        a.y        + (b.y        - a.y)        * alpha,
+          w:        a.w        + (b.w        - a.w)        * alpha,
+          h:        a.h        + (b.h        - a.h)        * alpha,
+          opacity:  a.opacity  + (b.opacity  - a.opacity)  * alpha,
+          rotation: a.rotation + (b.rotation - a.rotation) * alpha,
+        };
+      }
+    }
+    return { ...sorted[sorted.length - 1] };
+  }
+
+  function teGetState(layerKey, t) {
+    if (!teData || !teData[layerKey]) return { x: 0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 };
+    return teInterpolate(teData[layerKey].keyframes, t);
+  }
+
+  function teDrawPreview() {
+    const cv  = $('te-canvas');
+    const wrap = $('te-canvas-wrap');
+    if (!cv || !wrap) return;
+    const W = wrap.clientWidth  || 480;
+    const H = wrap.clientHeight || 270;
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#111827'; ctx.fillRect(0, 0, W, H);
+    // Checkerboard pattern hint
+    for (let gx = 0; gx < W; gx += 40) for (let gy = 0; gy < H; gy += 40) {
+      if (((gx / 40) + (gy / 40)) % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(gx, gy, 40, 40); }
+    }
+
+    function drawLayer(key, fillColor, strokeColor) {
+      const s  = teGetState(key, tePlayPos);
+      const lx = (s.x / 100) * W;
+      const ly = (s.y / 100) * H;
+      const lw = (s.w / 100) * W;
+      const lh = (s.h / 100) * H;
+      ctx.save();
+      ctx.globalAlpha = s.opacity / 100;
+      ctx.translate(lx + lw / 2, ly + lh / 2);
+      ctx.rotate((s.rotation * Math.PI) / 180);
+      ctx.fillStyle = fillColor;
+      ctx.fillRect(-lw / 2, -lh / 2, lw, lh);
+      ctx.strokeStyle = strokeColor; ctx.lineWidth = 2;
+      ctx.strokeRect(-lw / 2, -lh / 2, lw, lh);
+      ctx.fillStyle = strokeColor; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(key.toUpperCase(), 0, 0);
+      ctx.restore();
+    }
+
+    drawLayer('to',   'rgba(239,68,68,0.35)',   '#ef4444');
+    drawLayer('from', 'rgba(59,130,246,0.35)',   '#3b82f6');
+  }
+
+  function teDrawTimeline() {
+    const cv  = $('te-timeline');
+    const wrap = $('te-timeline-wrap');
+    if (!cv || !wrap || !teData) return;
+    const W = wrap.clientWidth || 480;
+    if (cv.width !== W) cv.width = W;
+    cv.height = 52;
+    const H = cv.height;
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0f1520'; ctx.fillRect(0, 0, W, H);
+    const dur = parseFloat($('te-duration').value) || 1;
+    const PAD_L = 36, PAD_R = 8;
+    const trackW = W - PAD_L - PAD_R;
+
+    function drawRow(rowY, key, color) {
+      ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(0, rowY, W, 20);
+      ctx.fillStyle = color; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(key.slice(0, 2).toUpperCase(), 18, rowY + 10);
+      const kfs = (teData[key] && teData[key].keyframes) || [];
+      kfs.forEach(kf => {
+        const kx = PAD_L + (kf.time / dur) * trackW;
+        ctx.save(); ctx.translate(kx, rowY + 10); ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = (teSelLayer === key) ? color : 'rgba(200,200,200,0.5)';
+        ctx.fillRect(-4, -4, 8, 8); ctx.restore();
+      });
+    }
+
+    drawRow(4,  'from', '#3b82f6');
+    drawRow(28, 'to',   '#ef4444');
+
+    // Playhead
+    const px = PAD_L + (tePlayPos / dur) * trackW;
+    ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
+    ctx.fillStyle = '#00e5ff'; ctx.beginPath(); ctx.arc(px, 2, 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function teRefreshProps() {
+    if (!teData) return;
+    const s = teGetState(teSelLayer, tePlayPos);
+    $('te-p-opacity').value  = Math.round(s.opacity);
+    $('te-p-x').value        = Math.round(s.x);
+    $('te-p-y').value        = Math.round(s.y);
+    $('te-p-w').value        = Math.round(s.w);
+    $('te-p-h').value        = Math.round(s.h);
+    $('te-p-rotation').value = Math.round(s.rotation);
+    $('te-prop-time').textContent = tePlayPos.toFixed(2) + 's';
+    teRefreshKfList();
+  }
+
+  function teRefreshKfList() {
+    const kfs = (teData && teData[teSelLayer] && teData[teSelLayer].keyframes) || [];
+    const list    = $('te-kf-list');
+    const empty   = $('te-kf-empty');
+    const clearBtn = $('te-clear-kf');
+    if (!list) return;
+    list.innerHTML = '';
+    if (empty)   empty.style.display   = kfs.length ? 'none' : 'block';
+    if (clearBtn) clearBtn.style.display = kfs.length ? 'inline' : 'none';
+    [...kfs].sort((a, b) => a.time - b.time).forEach((kf, idx) => {
+      const item = document.createElement('div');
+      item.className = 'te-kf-item';
+      item.innerHTML = `<span class="te-kf-time">◆ ${kf.time.toFixed(2)}s</span><button class="te-kf-del" data-idx="${idx}">×</button>`;
+      item.querySelector('.te-kf-time').addEventListener('click', () => {
+        tePlayPos = kf.time;
+        const dur = parseFloat($('te-duration').value) || 1;
+        $('te-scrubber').value = (kf.time / dur) * 1000;
+        $('te-timecode').textContent = kf.time.toFixed(2) + 's';
+        teRefreshProps(); teDrawPreview(); teDrawTimeline();
+      });
+      item.querySelector('.te-kf-del').addEventListener('click', () => teDeleteKf(teSelLayer, idx));
+      list.appendChild(item);
+    });
+  }
+
+  function teAddKf() {
+    if (!teData) return;
+    const layer = teData[teSelLayer];
+    if (!layer.keyframes) layer.keyframes = [];
+    layer.keyframes = layer.keyframes.filter(k => Math.abs(k.time - tePlayPos) > 0.02);
+    layer.keyframes.push({
+      time:     tePlayPos,
+      opacity:  parseFloat($('te-p-opacity').value)  || 100,
+      x:        parseFloat($('te-p-x').value)        || 0,
+      y:        parseFloat($('te-p-y').value)        || 0,
+      w:        parseFloat($('te-p-w').value)        || 100,
+      h:        parseFloat($('te-p-h').value)        || 100,
+      rotation: parseFloat($('te-p-rotation').value) || 0,
+    });
+    layer.keyframes.sort((a, b) => a.time - b.time);
+    teRefreshProps(); teDrawTimeline();
+    showToast('Keyframe recorded');
+  }
+
+  function teDeleteKf(layerKey, idx) {
+    if (!teData || !teData[layerKey]) return;
+    const sorted = [...teData[layerKey].keyframes].sort((a, b) => a.time - b.time);
+    sorted.splice(idx, 1);
+    teData[layerKey].keyframes = sorted;
+    teRefreshProps(); teDrawTimeline();
+  }
+
+  function teTick(ts) {
+    if (!teIsPlaying) return;
+    const dur = parseFloat($('te-duration').value) || 1;
+    const dt  = (ts - teLastTs) / 1000;
+    teLastTs  = ts;
+    tePlayPos += dt;
+    if (tePlayPos >= dur) tePlayPos = 0; // loop
+    $('te-scrubber').value       = (tePlayPos / dur) * 1000;
+    $('te-timecode').textContent = tePlayPos.toFixed(2) + 's';
+    teRefreshProps(); teDrawPreview(); teDrawTimeline();
+    teRafId = requestAnimationFrame(teTick);
+  }
+
+  function openTransitionEditor(filePath, data) {
+    teFilePath  = filePath;
+    teData      = JSON.parse(JSON.stringify(data));
+    tePlayPos   = 0; teIsPlaying = false; teSelLayer = 'from';
+    if (teRafId) { cancelAnimationFrame(teRafId); teRafId = null; }
+    $('te-name').value     = teData.name     || '';
+    $('te-duration').value = teData.duration || 1.0;
+    $('te-btn-play').textContent = '▶';
+    $('te-tab-from').classList.add('active');
+    $('te-tab-to').classList.remove('active');
+    switchModule('transition-editor');
+    setTimeout(() => { teRefreshProps(); teDrawPreview(); teDrawTimeline(); }, 50);
+  }
+
+  function closeTransitionEditor() {
+    teIsPlaying = false;
+    if (teRafId) { cancelAnimationFrame(teRafId); teRafId = null; }
+    teData = null;
+    assetsTab = 'transitions';
+    document.querySelectorAll('.assets-tab').forEach(t => t.classList.toggle('active', t.dataset.assetsTab === 'transitions'));
+    switchModule('assets');
+  }
+
+  async function saveTransition() {
+    const name = $('te-name').value.trim();
+    if (!name) { showToast('Enter a name first'); return; }
+    teData.name     = name;
+    teData.duration = parseFloat($('te-duration').value) || 1.0;
+    const dir = await window.creatorhub.transitions.getDir().catch(() => null);
+    if (!dir) { showToast('Could not get transitions folder'); return; }
+    const safeName = name.replace(/[^a-z0-9_\- ]/gi, '_');
+    const fp = dir + '\\' + safeName + '.transition';
+    const result = await window.creatorhub.transitions.save(fp, teData).catch(() => ({ ok: false }));
+    if (result && result.ok) {
+      teFilePath = result.filePath || fp;
+      showToast('Transition saved!');
+    } else {
+      showToast('Save failed');
+    }
+  }
+
+  async function openTransitionPicker(clip) {
+    tePickerClip = clip;
+    const list = $('te-picker-list');
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">Loading…</div>';
+    $('te-picker-modal').style.display = 'flex';
+    list.innerHTML = '';
+
+    // Built-in templates
+    TE_TEMPLATES.forEach(tpl => {
+      const card = document.createElement('div');
+      card.className = 'te-template-card';
+      card.style.cursor = 'pointer';
+      card.innerHTML = `
+        <div class="te-template-preview" style="background:linear-gradient(to right,rgba(59,130,246,0.5),rgba(239,68,68,0.5));"></div>
+        <div class="te-template-name">${tpl.name}</div>
+        <div class="te-template-dur">${tpl.duration}s</div>`;
+      card.addEventListener('click', () => {
+        clip.transitionIn = { name: tpl.name, duration: tpl.duration, data: JSON.parse(JSON.stringify(tpl)) };
+        $('te-picker-modal').style.display = 'none';
+        pushHistory(); refreshClipPanel(); drawTimeline();
+      });
+      list.appendChild(card);
+    });
+
+    // Saved transitions
+    const saved = await window.creatorhub.transitions.list().catch(() => []);
+    for (const t of saved) {
+      const res = await window.creatorhub.transitions.load(t.filePath).catch(() => null);
+      if (!res || !res.ok) continue;
+      const card = document.createElement('div');
+      card.className = 'te-template-card';
+      card.style.cursor = 'pointer';
+      card.innerHTML = `
+        <div class="te-template-preview" style="background:linear-gradient(135deg,rgba(59,130,246,0.5),rgba(239,68,68,0.5));"></div>
+        <div class="te-template-name">${t.name}</div>
+        <div class="te-template-dur">${t.duration}s · Custom</div>`;
+      card.addEventListener('click', () => {
+        clip.transitionIn = { name: t.name, duration: t.duration, data: res.data };
+        $('te-picker-modal').style.display = 'none';
+        pushHistory(); refreshClipPanel(); drawTimeline();
+      });
+      list.appendChild(card);
+    }
+
+    if (!list.children.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No transitions available. Create one in Assets → Transitions.</div>';
+    }
+  }
+
+  // Transition editor event listeners
+  $('te-back').addEventListener('click',    () => closeTransitionEditor());
+  $('te-save').addEventListener('click',    () => saveTransition());
+  $('te-new-blank').addEventListener('click', () => {
+    openTransitionEditor(null, { name: '', duration: 1.0, from: { keyframes: [] }, to: { keyframes: [] } });
+  });
+
+  $('te-btn-play').addEventListener('click', () => {
+    teIsPlaying = !teIsPlaying;
+    $('te-btn-play').textContent = teIsPlaying ? '⏸' : '▶';
+    if (teIsPlaying) {
+      teLastTs = performance.now();
+      teRafId  = requestAnimationFrame(teTick);
+    } else {
+      if (teRafId) { cancelAnimationFrame(teRafId); teRafId = null; }
+    }
+  });
+
+  $('te-scrubber').addEventListener('input', function () {
+    const dur = parseFloat($('te-duration').value) || 1;
+    tePlayPos = (this.value / 1000) * dur;
+    $('te-timecode').textContent = tePlayPos.toFixed(2) + 's';
+    teRefreshProps(); teDrawPreview(); teDrawTimeline();
+  });
+
+  $('te-duration').addEventListener('change', function () {
+    if (teData) teData.duration = parseFloat(this.value) || 1.0;
+    teRefreshProps(); teDrawPreview(); teDrawTimeline();
+  });
+
+  document.querySelectorAll('.te-layer-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      teSelLayer = tab.dataset.teLayer;
+      document.querySelectorAll('.te-layer-tab').forEach(t => t.classList.toggle('active', t === tab));
+      teRefreshProps(); teDrawTimeline();
+    });
+  });
+
+  $('te-add-kf').addEventListener('click', () => teAddKf());
+  $('te-clear-kf').addEventListener('click', () => {
+    if (!teData || !confirm('Remove all keyframes from this layer?')) return;
+    teData[teSelLayer].keyframes = [];
+    teRefreshProps(); teDrawTimeline();
+  });
+
+  ['te-p-opacity', 'te-p-x', 'te-p-y', 'te-p-w', 'te-p-h', 'te-p-rotation'].forEach(id => {
+    $(id).addEventListener('input', () => { if (teData) teDrawPreview(); });
+  });
+
+  $('te-picker-close').addEventListener('click', () => {
+    $('te-picker-modal').style.display = 'none';
+  });
+
+  new ResizeObserver(() => { if (teData) { teDrawPreview(); teDrawTimeline(); } }).observe($('te-canvas-wrap'));
+  new ResizeObserver(() => { if (teData) teDrawTimeline(); }).observe($('te-timeline-wrap'));
 
   // ── Recordings Module ─────────────────────────────────────────────────────
   let recSelected = null;
@@ -2332,6 +2794,16 @@ document.addEventListener('DOMContentLoaded', () => {
           if (clip.muted) { bgCtx.fillStyle = '#f87171'; bgCtx.fillText('🔇 muted', Math.max(LW,cx1)+6, ry+35 + (clip.audioDetached ? 11 : 0)); }
           bgCtx.restore();
 
+          // Transition-in indicator (yellow bar at start of clip)
+          if (clip.track === 0 && clip.transitionIn) {
+            const tDurPx = (clip.transitionIn.duration / (clip.timelineDuration || 1)) * cw;
+            bgCtx.fillStyle = 'rgba(251,191,36,0.25)';
+            bgCtx.fillRect(Math.max(LW, cx1), ry + 2, Math.min(tDurPx, cw - 4), VID_H - 4);
+            bgCtx.fillStyle = '#fbbf24';
+            bgCtx.font = 'bold 8px sans-serif'; bgCtx.textAlign = 'left';
+            bgCtx.fillText('T↓', Math.max(LW, cx1) + 2, ry + VID_H - 5);
+          }
+
           if (!clip.audioDetached) {
             const aud_ry = ry + VID_H - 14;
             bgCtx.save();
@@ -2772,6 +3244,21 @@ document.addEventListener('DOMContentLoaded', () => {
         muteBtn.style.display = clip ? '' : 'none';
         muteBtn.textContent   = (clip && clip.muted) ? '🔊 Unmute Clip' : '🔇 Mute Clip';
         muteBtn.classList.toggle('active', !!(clip && clip.muted));
+      }
+
+      // Transition panel — show for V1 clips that are not the first clip
+      const transPanel = $('ve-transition-panel');
+      if (transPanel) {
+        let showTrans = false;
+        if (clip && clip.track === 0) {
+          const v1clips = veClips.filter(c => c.track === 0).sort((a, b) => a.timelineStart - b.timelineStart);
+          showTrans = v1clips.indexOf(clip) > 0;
+        }
+        transPanel.style.display = showTrans ? '' : 'none';
+        if (showTrans) {
+          $('ve-trans-name').textContent = clip.transitionIn ? clip.transitionIn.name : 'None';
+          $('ve-trans-remove').style.display = clip.transitionIn ? '' : 'none';
+        }
       }
 
       // Layer clip panel — for V2+ clips
@@ -3286,6 +3773,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const exportClips = v1Clips.map(c => ({
         filePath: c.filePath, inPoint: c.inPoint, outPoint: c.outPoint, speed: c.speed,
+        muted: c.muted || false,
+        transitionIn: c.transitionIn || null,
         textOverlays: veTextOverlays.filter(o => o.startSec < c.timelineStart + c.timelineDuration && o.endSec > c.timelineStart)
           .map(o => ({ ...o, startSec: o.startSec - c.timelineStart, endSec: o.endSec - c.timelineStart })),
       }));
@@ -3569,6 +4058,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const clip = selectedClip() || selectedAudioClip(); if (!clip) return;
       clip.muted = !clip.muted;
       syncAllLayers(); syncAudioElements();
+      pushHistory(); refreshClipPanel(); drawTimeline();
+    });
+
+    // ── Transition in (V1 clip) ────────────────────────────────────────────────
+    $('ve-trans-pick').addEventListener('click', () => {
+      const clip = selectedClip(); if (!clip) return;
+      openTransitionPicker(clip);
+    });
+    $('ve-trans-remove').addEventListener('click', () => {
+      const clip = selectedClip(); if (!clip) return;
+      delete clip.transitionIn;
       pushHistory(); refreshClipPanel(); drawTimeline();
     });
 
