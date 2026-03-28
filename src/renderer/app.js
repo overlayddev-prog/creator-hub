@@ -1076,7 +1076,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function openTransitionPicker(clip) {
+  async function openTransitionPicker(clip, onPick) {
     tePickerClip = clip;
     const list = $('te-picker-list');
     list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">Loading…</div>';
@@ -1095,7 +1095,7 @@ document.addEventListener('DOMContentLoaded', () => {
       card.addEventListener('click', () => {
         clip.transitionIn = { name: tpl.name, duration: tpl.duration, data: JSON.parse(JSON.stringify(tpl)) };
         $('te-picker-modal').style.display = 'none';
-        pushHistory(); refreshClipPanel(); drawTimeline();
+        if (onPick) onPick();
       });
       list.appendChild(card);
     });
@@ -1115,7 +1115,7 @@ document.addEventListener('DOMContentLoaded', () => {
       card.addEventListener('click', () => {
         clip.transitionIn = { name: t.name, duration: t.duration, data: res.data };
         $('te-picker-modal').style.display = 'none';
-        pushHistory(); refreshClipPanel(); drawTimeline();
+        if (onPick) onPick();
       });
       list.appendChild(card);
     }
@@ -4064,7 +4064,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Transition in (V1 clip) ────────────────────────────────────────────────
     $('ve-trans-pick').addEventListener('click', () => {
       const clip = selectedClip(); if (!clip) return;
-      openTransitionPicker(clip);
+      openTransitionPicker(clip, () => { pushHistory(); refreshClipPanel(); drawTimeline(); });
     });
     $('ve-trans-remove').addEventListener('click', () => {
       const clip = selectedClip(); if (!clip) return;
