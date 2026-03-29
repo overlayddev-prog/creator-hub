@@ -40,27 +40,27 @@
       <div class="sidebar-logo">CreatorHub</div>
 
       <nav class="sidebar-nav">
-        <button class="nav-item active" id="nav-stream" data-module="stream">
-          <span class="nav-icon">📡</span>
-          Stream Setup
+        <button class="nav-item active" id="nav-home" data-module="home" data-accent="cyan">
+          <span class="nav-icon">🏠</span>
+          Home
         </button>
-        <button class="nav-item" id="nav-recstream" data-module="recstream">
+        <button class="nav-item" id="nav-recstream" data-module="recstream" data-accent="cyan">
           <span class="nav-icon">🎬</span>
           Record / Stream
         </button>
-        <button class="nav-item" id="nav-editor" data-module="editor">
+        <button class="nav-item" id="nav-editor" data-module="editor" data-accent="violet">
           <span class="nav-icon">🎨</span>
           Overlay Editor
         </button>
-        <button class="nav-item" id="nav-videoeditor" data-module="videoeditor">
+        <button class="nav-item" id="nav-videoeditor" data-module="videoeditor" data-accent="amber">
           <span class="nav-icon">✂️</span>
           Video Editor
         </button>
-        <button class="nav-item" id="nav-assets" data-module="assets">
+        <button class="nav-item" id="nav-assets" data-module="assets" data-accent="green">
           <span class="nav-icon">🗂️</span>
           Assets
         </button>
-        <button class="nav-item" id="nav-recordings" data-module="recordings">
+        <button class="nav-item" id="nav-recordings" data-module="recordings" data-accent="red">
           <span class="nav-icon">⏺</span>
           Recordings
         </button>
@@ -92,96 +92,112 @@
     <!-- Content Area -->
     <div class="content-area">
 
-      <!-- ── Stream Setup Module ─────────────────────────────────────────── -->
-      <div id="module-stream">
-
-        <!-- Overlay selector -->
-        <div class="module-topbar">
-          <select class="overlay-select" id="overlay-select">
-            <option value="">Loading overlays...</option>
-          </select>
-        </div>
-
-        <!-- Tab bar -->
-        <div class="tab-bar">
-          <div class="tab active" data-tab="sources">Sources</div>
-          <div class="tab" data-tab="scenes">Scenes</div>
-          <div class="tab" data-tab="presets">Presets</div>
-          <div class="tab" data-tab="test">Test</div>
-        </div>
-
-        <!-- Tab content -->
-        <div class="tab-content">
-
-          <!-- Sources Tab -->
-          <div class="tab-page active" id="tab-sources">
-            <div class="section-label">Browser Source URLs</div>
-            <div class="source-row" id="row-overlay">
-              <span class="source-dot"></span>
-              <span class="source-name">Alerts</span>
-              <span class="source-url" id="url-overlay">—</span>
-              <span class="source-copy">click to copy</span>
-            </div>
-            <div class="source-row" id="row-background">
-              <span class="source-dot"></span>
-              <span class="source-name">Background</span>
-              <span class="source-url" id="url-background">—</span>
-              <span class="source-copy">click to copy</span>
-            </div>
-            <div class="source-row" id="row-goals">
-              <span class="source-dot"></span>
-              <span class="source-name">Goals</span>
-              <span class="source-url" id="url-goals">—</span>
-              <span class="source-copy">click to copy</span>
-            </div>
-            <div class="sources-actions">
-              <button class="btn-outline" id="btn-copy-all">Copy All 3 URLs</button>
-            </div>
-            <div class="setup-info">Copy the URLs above and add them as browser sources in your streaming software.</div>
+      <!-- ── Home Dashboard ── -->
+      <div id="module-home" style="display:flex; flex:1; flex-direction:column; overflow-y:auto;">
+        <div class="dash-wrap">
+          <div class="dash-header">
+            <div class="dash-greeting" id="dash-greeting">Welcome back</div>
+            <div class="dash-sub">What are you working on today?</div>
           </div>
 
-          <!-- Scenes Tab -->
-          <div class="tab-page" id="tab-scenes">
-            <div class="section-label">Scenes</div>
-            <div id="scenes-list" class="scenes-list">
-              <div class="scenes-empty">Manage scenes in Record / Stream</div>
-            </div>
-            <button class="btn-outline" id="btn-refresh-scenes" style="margin-top:10px;">Refresh Scenes</button>
-          </div>
-
-          <!-- Presets Tab -->
-          <div class="tab-page" id="tab-presets">
-            <div class="section-label">Choose a Style</div>
-            <div class="preset-grid" id="preset-grid"></div>
-            <button class="btn-primary" id="btn-apply-preset" disabled>Select a preset above</button>
-          </div>
-
-          <!-- Test Tab -->
-          <div class="tab-page" id="tab-test">
-            <div class="section-label">Send Test Alerts</div>
-            <div class="test-grid">
-              <button class="test-btn" data-type="follower"><span class="test-icon">👤</span>Follow<span class="test-label">test</span></button>
-              <button class="test-btn" data-type="subscriber"><span class="test-icon">⭐</span>Subscribe<span class="test-label">test</span></button>
-              <button class="test-btn" data-type="raid"><span class="test-icon">🔥</span>Raid<span class="test-label">test</span></button>
-              <button class="test-btn" data-type="bits"><span class="test-icon">💎</span>Bits<span class="test-label">test</span></button>
-              <button class="test-btn" data-type="giftsub"><span class="test-icon">🎁</span>Gift Sub<span class="test-label">test</span></button>
-              <button class="test-btn" data-type="donation"><span class="test-icon">💰</span>Donation<span class="test-label">test</span></button>
-            </div>
-            <div class="hype-section">
-              <div class="section-label">Hype Control</div>
-              <div class="hype-row">
-                <input type="range" class="hype-slider" id="hype-slider" min="0" max="100" value="0">
-                <span class="hype-val" id="hype-val">0%</span>
+          <div class="dash-section">
+            <div class="dash-section-label">Overview</div>
+            <div class="dash-stats-row">
+              <div class="dash-stat-chip">
+                <div class="dash-stat-value" id="dash-stat-recordings">0</div>
+                <div class="dash-stat-label">Recordings</div>
               </div>
-              <div class="hype-actions">
-                <button class="hype-btn" id="btn-set-hype">Set Hype</button>
-                <button class="hype-btn" id="btn-reset-hype">Reset to 0</button>
+              <div class="dash-stat-chip">
+                <div class="dash-stat-value" id="dash-stat-projects">0</div>
+                <div class="dash-stat-label">Projects</div>
+              </div>
+              <div class="dash-stat-chip">
+                <div class="dash-stat-value" id="dash-stat-transitions">0</div>
+                <div class="dash-stat-label">Transitions</div>
+              </div>
+              <div class="dash-stat-chip">
+                <div class="dash-stat-value" id="dash-stat-assets">0</div>
+                <div class="dash-stat-label">Assets</div>
               </div>
             </div>
           </div>
 
-        </div><!-- end tab-content -->
-      </div><!-- end module-stream -->
+          <div class="dash-section">
+            <div class="dash-section-label">Modules</div>
+            <div class="dash-card-grid">
+
+              <div class="dash-module-card dash-accent-cyan" data-nav="recstream">
+                <div class="dash-card-icon-wrap">🎬</div>
+                <div class="dash-card-body">
+                  <div class="dash-card-name">Record / Stream</div>
+                  <div class="dash-card-desc">Capture your screen, manage scenes, and go live with one click.</div>
+                </div>
+                <div class="dash-card-shimmer"></div>
+                <div class="dash-card-arrow">→</div>
+              </div>
+
+              <div class="dash-module-card dash-accent-violet" data-nav="editor">
+                <div class="dash-card-icon-wrap">🎨</div>
+                <div class="dash-card-body">
+                  <div class="dash-card-name">Overlay Editor</div>
+                  <div class="dash-card-desc">Design and customize your stream overlays, alerts, and goals.</div>
+                </div>
+                <div class="dash-card-shimmer"></div>
+                <div class="dash-card-arrow">→</div>
+              </div>
+
+              <div class="dash-module-card dash-accent-amber" data-nav="videoeditor">
+                <div class="dash-card-icon-wrap">✂️</div>
+                <div class="dash-card-body">
+                  <div class="dash-card-name">Video Editor</div>
+                  <div class="dash-card-desc">Cut, trim, add transitions, and export your clips for any platform.</div>
+                </div>
+                <div class="dash-card-shimmer"></div>
+                <div class="dash-card-arrow">→</div>
+              </div>
+
+              <div class="dash-module-card dash-accent-green" data-nav="assets">
+                <div class="dash-card-icon-wrap">🗂️</div>
+                <div class="dash-card-body">
+                  <div class="dash-card-name">Assets</div>
+                  <div class="dash-card-desc">Browse and manage your transitions, overlays, and media files.</div>
+                </div>
+                <div class="dash-card-shimmer"></div>
+                <div class="dash-card-arrow">→</div>
+              </div>
+
+              <div class="dash-module-card dash-accent-red" data-nav="recordings">
+                <div class="dash-card-icon-wrap">⏺</div>
+                <div class="dash-card-body">
+                  <div class="dash-card-name">Recordings</div>
+                  <div class="dash-card-desc">View, play, and send your saved recordings straight to the editor.</div>
+                </div>
+                <div class="dash-card-shimmer"></div>
+                <div class="dash-card-arrow">→</div>
+              </div>
+
+              <div class="dash-module-card dash-card-disabled">
+                <div class="dash-card-icon-wrap">📊</div>
+                <div class="dash-card-body">
+                  <div class="dash-card-name">Analytics</div>
+                  <div class="dash-card-desc">Track your growth, view stats, and measure performance.</div>
+                </div>
+                <span class="dash-coming-soon">Soon</span>
+              </div>
+
+              <div class="dash-module-card dash-card-disabled">
+                <div class="dash-card-icon-wrap">📅</div>
+                <div class="dash-card-body">
+                  <div class="dash-card-name">Social</div>
+                  <div class="dash-card-desc">Schedule posts and manage your social channels in one place.</div>
+                </div>
+                <span class="dash-coming-soon">Soon</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- ── Studio Module ──────────────────────────────────────────────── -->
       <div id="module-recstream" class="studio" style="display:none;">

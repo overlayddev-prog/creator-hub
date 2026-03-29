@@ -297,13 +297,8 @@ function showMainApp() {
   planBadge.className = 'plan-badge ' + (userData.plan || 'free');
   planBadge.textContent = userData.plan || 'free';
 
-  const sel = $('overlay-select');
-  sel.innerHTML = overlays.map(o => `<option value="${o.token}">${o.name}</option>`).join('');
   currentToken = overlays.length ? overlays[0].token : '';
-  updateSourceUrls();
-  renderPresets();
   renderStudioOverlays();
-  pollHype();
 
   window.creatorhub.app.getAutoLaunch().then(enabled => {
     $('autolaunch-checkbox').checked = !!enabled;
@@ -313,6 +308,7 @@ function showMainApp() {
     setTimeout(() => showOnboarding(), 600);
   }
   setTimeout(() => checkPatchNotes('0.8.0'), 2500);
+  if (_switchModule) _switchModule('home');
 }
 
 // ── Source URLs ───────────────────────────────────────────────────────────────
@@ -372,12 +368,21 @@ async function pollHype() {
   if (currentToken) hypeTimer = setTimeout(pollHype, 4000);
 }
 
-// ── Scenes (stream setup tab) ─────────────────────────────────────────────────
-function loadScenes() {
-  const list = $('scenes-list');
-  if (list) list.innerHTML = '<div class="scenes-empty">Manage scenes in Record / Stream</div>';
-}
+// Exposed so outer-scope functions (showMainApp) can call it after DOMContentLoaded wires it up
+let _switchModule = null;
 
+// ── Dashboard countUp helper ──────────────────────────────────────────────────
+function dashCountUp(el, target) {
+  const duration = 900;
+  const start = performance.now();
+  function tick(now) {
+    const p = Math.min(1, (now - start) / duration);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(ease * target);
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
 
 // ── Onboarding ────────────────────────────────────────────────────────────────
 function showOnboarding() { $('onboarding').style.display = 'flex'; }
@@ -456,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Module routing ────────────────────────────────────────────────────────
   const modules = {
-    stream:             $('module-stream'),
+    home:               $('module-home'),
     recstream:          $('module-recstream'),
     editor:             $('module-editor'),
     assets:             $('module-assets'),
@@ -474,6 +479,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!el) return;
       el.style.display = key === name ? 'flex' : 'none';
     });
+    if (name === 'home') {
+      initDashboard();
+    }
     if (name === 'editor') {
       const webview = $('editor-webview');
       const target = currentToken ? `${baseUrl}/editor/${currentToken}` : `${baseUrl}/dashboard`;
@@ -497,9 +505,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  _switchModule = switchModule;
+
   document.querySelectorAll('.nav-item[data-module]').forEach(btn => {
     btn.addEventListener('click', () => switchModule(btn.dataset.module));
   });
+
+  // ── Home Dashboard ──────────────────────────────────────────────────────────
+  let _dashInited = false;
+
+  async function initDashboard() {
+    // Greeting
+    $('dash-greeting').textContent = 'Welcome back, ' + (userData?.username || userData?.email || 'there');
+
+    // Count stats
+    const recCount = JSON.parse(localStorage.getItem('ch_recordings') || '[]').length;
+    const assetsCount = JSON.parse(localStorage.getItem('ch_assets') || '[]').length;
+
+    let projectCount = 0;
+    try {
+      const projects = await window.creatorhub.project.list().catch(() => []);
+      projectCount = (projects || []).length;
+    } catch (e) { projectCount = 0; }
+
+    let transitionCount = 0;
+    try {
+      const transList = await window.creatorhub.transitions.list().catch(() => []);
+      transitionCount = (transList || []).length;
+    } catch (e) { transitionCount = 0; }
+
+    dashCountUp($('dash-stat-recordings'),  recCount);
+    dashCountUp($('dash-stat-projects'),    projectCount);
+    dashCountUp($('dash-stat-transitions'), transitionCount);
+    dashCountUp($('dash-stat-assets'),      assetsCount);
+
+    // Wire up card clicks (only once)
+    if (!_dashInited) {
+      _dashInited = true;
+      document.querySelectorAll('.dash-module-card[data-nav]').forEach(card => {
+        card.addEventListener('click', () => switchModule(card.dataset.nav));
+      });
+    }
+
+    // Shimmer entrance on cards
+    document.querySelectorAll('.dash-module-card:not(.dash-card-disabled)').forEach((card, i) => {
+      setTimeout(() => {
+        card.classList.add('dash-shimmer-go');
+        setTimeout(() => card.classList.remove('dash-shimmer-go'), 700);
+      }, i * 80);
+    });
+  }
 
   // ── Assets Module ──────────────────────────────────────────────────────────
   let assetsLib    = JSON.parse(localStorage.getItem('ch_assets')     || '[]');
@@ -1248,51 +1303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.creatorhub.app.openFolder(studioRecDir || '');
   });
 
-  // ── Tabs ──────────────────────────────────────────────────────────────────
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      const name = tab.dataset.tab;
-      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-      document.querySelectorAll('.tab-page').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
-      if (name === 'scenes') loadScenes();
-    });
-  });
-
-  // Overlay selector
-  $('overlay-select').addEventListener('change', () => {
-    currentToken = $('overlay-select').value;
-    updateSourceUrls();
-    clearTimeout(hypeTimer);
-    pollHype();
-    if ($('module-editor').style.display !== 'none') {
-      $('editor-webview').src = `${baseUrl}/editor/${currentToken}`;
-    }
-  });
-
-  // Copy source URLs
-  ['overlay', 'background', 'goals'].forEach(type => {
-    $('row-' + type).addEventListener('click', () => {
-      navigator.clipboard.writeText(getSourceUrl(type))
-        .then(() => showToast('Copied ' + type + ' URL'));
-    });
-  });
-  $('btn-copy-all').addEventListener('click', () => {
-    if (!currentToken) { showToast('Select an overlay first'); return; }
-    navigator.clipboard.writeText(
-      ['overlay', 'background', 'goals'].map(t => getSourceUrl(t)).join('\n')
-    ).then(() => showToast('Copied all 3 URLs'));
-  });
-
-
-  $('btn-refresh-scenes').addEventListener('click', () => loadScenes());
-
-  $('btn-apply-preset').addEventListener('click', () => {
-    if (!currentToken) { showToast('Select an overlay first'); return; }
-    window.creatorhub.app.openExternal(`${baseUrl}/presets/${currentToken}`);
-    showToast('Presets page opened in browser');
-  });
-
-  // Test alerts
+  // Test alerts (studio module)
   const TEST_DATA = {
     follower:   { user: 'TestViewer',     label: 'FOLLOWER' },
     subscriber: { user: 'TestSubscriber', label: 'SUBSCRIBER' },
@@ -1317,36 +1328,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { showToast('Could not send test alert'); }
   }
 
-  document.querySelectorAll('.test-btn').forEach(btn => {
-    btn.addEventListener('click', () => sendTestAlert(btn.dataset.type, btn));
-  });
-
   document.querySelectorAll('.studio-test-btn').forEach(btn => {
     btn.addEventListener('click', () => sendTestAlert(btn.dataset.type, btn));
-  });
-
-  $('hype-slider').addEventListener('input', function () { $('hype-val').textContent = this.value + '%'; });
-  $('btn-set-hype').addEventListener('click', async () => {
-    if (!currentToken) return;
-    const val = parseInt($('hype-slider').value);
-    try {
-      await apiFetch(`${baseUrl}/api/plugin/${currentToken}/hype`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'set', value: val / 100 }),
-      });
-      showToast('Hype set to ' + val + '%');
-    } catch (e) { showToast('Failed to set hype'); }
-  });
-  $('btn-reset-hype').addEventListener('click', async () => {
-    if (!currentToken) return;
-    $('hype-slider').value = 0; $('hype-val').textContent = '0%';
-    try {
-      await apiFetch(`${baseUrl}/api/plugin/${currentToken}/hype`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'set', value: 0 }),
-      });
-      showToast('Hype reset');
-    } catch (e) { /* silent */ }
   });
 
   // ── Record / Stream module ────────────────────────────────────────────────
