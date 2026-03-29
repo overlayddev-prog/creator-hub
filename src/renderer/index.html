@@ -451,6 +451,7 @@
           <button class="assets-import-btn" id="assets-import-btn">+ Import Files</button>
         </div>
 
+        <!-- Pill tabs -->
         <div class="assets-tabs">
           <button class="assets-tab active" data-assets-tab="images">Images <span class="assets-tab-count" id="assets-count-images">0</span></button>
           <button class="assets-tab" data-assets-tab="videos">Videos <span class="assets-tab-count" id="assets-count-videos">0</span></button>
@@ -458,8 +459,12 @@
           <button class="assets-tab" data-assets-tab="transitions">Transitions <span class="assets-tab-count" id="assets-count-transitions">0</span></button>
         </div>
 
+        <!-- Filterbar -->
         <div class="assets-filterbar">
-          <input class="assets-search" id="assets-search" placeholder="Search assets…">
+          <div style="flex:1; position:relative;">
+            <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--dim);pointer-events:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="assets-search" id="assets-search" placeholder="Search assets…" style="width:100%;">
+          </div>
           <select class="assets-sort" id="assets-sort">
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
@@ -467,8 +472,12 @@
             <option value="size">Largest first</option>
           </select>
           <div class="assets-view-toggle">
-            <button class="assets-view-btn active" id="assets-view-grid" title="Grid">⊞</button>
-            <button class="assets-view-btn" id="assets-view-list" title="List">☰</button>
+            <button class="assets-view-btn active" id="assets-view-grid" title="Grid">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </button>
+            <button class="assets-view-btn" id="assets-view-list" title="List">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
           </div>
         </div>
 
@@ -476,7 +485,25 @@
           <div class="assets-grid-wrap" id="assets-grid-wrap">
             <div class="assets-grid" id="assets-grid"></div>
           </div>
-          <div class="assets-detail" id="assets-detail" style="display:none;"></div>
+
+          <!-- Detail Panel -->
+          <div class="assets-detail" id="assets-detail" style="display:none;">
+            <!-- Inner Info/Notes tabs -->
+            <div class="detail-panel-tabs">
+              <button class="detail-panel-tab active" id="detail-tab-info">Info</button>
+              <button class="detail-panel-tab" id="detail-tab-notes">Notes</button>
+            </div>
+            <!-- Scrollable body -->
+            <div class="detail-body">
+              <!-- Info section — populated by JS -->
+              <div id="detail-info-section" style="display:flex; flex-direction:column; gap:10px; flex:1;"></div>
+              <!-- Notes section -->
+              <div id="detail-notes-section" style="display:none; flex-direction:column; gap:8px; flex:1;">
+                <textarea class="detail-notes-area" id="asset-notes-input" placeholder="Add notes about this asset…"></textarea>
+                <button class="detail-notes-save" id="asset-notes-save">Save Note</button>
+              </div>
+            </div>
+          </div>
 
           <!-- Transitions tab content -->
           <div id="assets-transitions-wrap" style="display:none; flex:1; flex-direction:column; overflow-y:auto; padding:14px; gap:18px;">

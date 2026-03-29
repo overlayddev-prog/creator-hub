@@ -12,6 +12,19 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.1': {
+    sections: [
+      {
+        title: 'Assets',
+        items: [
+          '<b>Redesigned Assets module</b> — pill tabs, bigger cards, and a cleaner layout throughout',
+          '<b>Play button on cards</b> — preview any clip directly from the asset grid',
+          '<b>Detail panel</b> — Info and Notes tabs; add per-clip notes saved locally',
+          '<b>Play button in detail panel</b> — preview the selected asset from the side panel',
+        ],
+      },
+    ],
+  },
   '0.10.0': {
     sections: [
       {
@@ -806,6 +819,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <img src="${thumbSrc}" alt="" onerror="this.style.display='none'">
             <div class="asset-type-badge">${asset.ext.toUpperCase()}</div>
             ${isVideo && asset.duration ? `<div class="asset-dur">${asset.duration}</div>` : ''}
+            <div class="asset-play-btn">
+              <div class="asset-play-circle">
+                <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+            </div>
             <div class="asset-thumb-overlay">
               <button class="asset-thumb-btn">Add to Canvas</button>
             </div>
@@ -815,6 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="asset-meta">${formatBytes(asset.size)}${asset.dims ? ' · ' + asset.dims : ''}</div>
           </div>`;
         card.addEventListener('click', () => selectAsset(asset.id));
+        card.querySelector('.asset-play-circle').addEventListener('click', e => { e.stopPropagation(); showToast('Opening preview…'); });
         card.querySelector('.asset-thumb-btn').addEventListener('click', e => { e.stopPropagation(); addAssetToCanvas(asset); });
         grid.appendChild(card);
       }
@@ -835,23 +854,85 @@ document.addEventListener('DOMContentLoaded', () => {
     const isVideo = asset.category === 'videos';
     const isAudio = asset.category === 'audio';
     const detailThumbSrc = asset.thumb || (!isAudio ? assetUrl(asset.path) : null);
-    panel.innerHTML = `
-      <div class="detail-thumb">${detailThumbSrc ? `<img src="${detailThumbSrc}" alt="" onerror="this.style.display='none'">` : ''}<span>${isAudio ? '🎵' : isVideo ? '🎬' : '🖼️'}</span></div>
-      <div class="detail-name">${asset.name}</div>
-      <div class="detail-row"><span class="detail-row-label">Type</span><span class="detail-row-val">${asset.ext.toUpperCase()}</span></div>
-      <div class="detail-row"><span class="detail-row-label">Size</span><span class="detail-row-val">${formatBytes(asset.size)}</span></div>
-      ${asset.dims ? `<div class="detail-row"><span class="detail-row-label">Dims</span><span class="detail-row-val">${asset.dims}</span></div>` : ''}
-      ${asset.duration ? `<div class="detail-row"><span class="detail-row-label">Duration</span><span class="detail-row-val">${asset.duration}</span></div>` : ''}
-      <div class="detail-row"><span class="detail-row-label">Added</span><span class="detail-row-val">${new Date(asset.addedAt).toLocaleDateString()}</span></div>
-      ${!isAudio ? `<button class="detail-add-btn" id="detail-add">Add to Canvas</button>` : `<button class="detail-add-btn" id="detail-add">Add to Scene</button>`}
-      <button class="detail-remove-btn" id="detail-remove">Remove from Library</button>`;
-    panel.querySelector('#detail-add')?.addEventListener('click', () => addAssetToCanvas(asset));
-    panel.querySelector('#detail-remove').addEventListener('click', () => {
-      assetsLib = assetsLib.filter(a => a.id !== asset.id);
-      assetsSelected = null;
-      saveAssets();
-      renderAssets();
-    });
+
+    // Populate the info section (already in HTML from index.html)
+    const infoSection = $('detail-info-section');
+    if (infoSection) {
+      const playBtnHtml = detailThumbSrc ? `
+        <div class="detail-play">
+          <div class="detail-play-circle">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+        </div>` : '';
+      infoSection.innerHTML = `
+        <div class="detail-thumb" id="detail-thumb-wrap">
+          ${detailThumbSrc ? `<img src="${detailThumbSrc}" alt="" onerror="this.style.display='none'">` : ''}
+          <span>${isAudio ? '🎵' : isVideo ? '🎬' : '🖼️'}</span>
+          ${playBtnHtml}
+        </div>
+        <div class="detail-name">${asset.name}</div>
+        <div class="detail-row"><span class="detail-row-label">Type</span><span class="detail-row-val">${asset.ext.toUpperCase()}</span></div>
+        <div class="detail-row"><span class="detail-row-label">Size</span><span class="detail-row-val">${formatBytes(asset.size)}</span></div>
+        ${asset.dims ? `<div class="detail-row"><span class="detail-row-label">Dims</span><span class="detail-row-val">${asset.dims}</span></div>` : ''}
+        ${asset.duration ? `<div class="detail-row"><span class="detail-row-label">Duration</span><span class="detail-row-val">${asset.duration}</span></div>` : ''}
+        <div class="detail-row"><span class="detail-row-label">Added</span><span class="detail-row-val">${new Date(asset.addedAt).toLocaleDateString()}</span></div>
+        <div class="detail-actions" style="margin-top:auto;">
+          ${!isAudio ? `<button class="detail-add-btn" id="detail-add">Add to Canvas</button>` : `<button class="detail-add-btn" id="detail-add">Add to Scene</button>`}
+          <button class="detail-remove-btn" id="detail-remove">Remove from Library</button>
+        </div>`;
+
+      infoSection.querySelector('#detail-add')?.addEventListener('click', () => addAssetToCanvas(asset));
+      infoSection.querySelector('#detail-remove')?.addEventListener('click', () => {
+        assetsLib = assetsLib.filter(a => a.id !== asset.id);
+        assetsSelected = null;
+        saveAssets();
+        renderAssets();
+      });
+
+      // Play button in detail thumb
+      const detailThumbWrap = infoSection.querySelector('#detail-thumb-wrap');
+      if (detailThumbWrap) {
+        detailThumbWrap.addEventListener('click', () => {
+          showToast('Opening preview…');
+        });
+      }
+    }
+
+    // Reset to Info tab on new selection
+    const dTabInfo  = $('detail-tab-info');
+    const dTabNotes = $('detail-tab-notes');
+    const dSecInfo  = $('detail-info-section');
+    const dSecNotes = $('detail-notes-section');
+    if (dTabInfo) {
+      dTabInfo.classList.add('active');
+      dTabNotes.classList.remove('active');
+      dSecInfo.style.display = 'flex';
+      dSecNotes.style.display = 'none';
+
+      dTabInfo.onclick  = () => {
+        dTabInfo.classList.add('active'); dTabNotes.classList.remove('active');
+        dSecInfo.style.display = 'flex'; dSecNotes.style.display = 'none';
+      };
+      dTabNotes.onclick = () => {
+        dTabNotes.classList.add('active'); dTabInfo.classList.remove('active');
+        dSecNotes.style.display = 'flex'; dSecInfo.style.display = 'none';
+        // Load saved note
+        const noteKey = 'ch_asset_note_' + asset.path;
+        const noteInput = $('asset-notes-input');
+        if (noteInput) noteInput.value = localStorage.getItem(noteKey) || '';
+      };
+    }
+
+    // Wire up notes save
+    const noteSaveBtn = $('asset-notes-save');
+    if (noteSaveBtn) {
+      noteSaveBtn.onclick = () => {
+        const noteKey = 'ch_asset_note_' + asset.path;
+        const val = $('asset-notes-input')?.value || '';
+        localStorage.setItem(noteKey, val);
+        showToast('Note saved');
+      };
+    }
   }
 
   function addAssetToCanvas(asset) {
