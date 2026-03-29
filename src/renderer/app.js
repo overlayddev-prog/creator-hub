@@ -328,7 +328,7 @@ function showMainApp() {
   if (!localStorage.getItem('creatorhub_onboarded')) {
     setTimeout(() => showOnboarding(), 600);
   }
-  setTimeout(() => checkPatchNotes('0.8.0'), 2500);
+  window.creatorhub.app.getVersion().then(v => setTimeout(() => checkPatchNotes(v), 2500));
   if (_switchModule) _switchModule('home');
 }
 
