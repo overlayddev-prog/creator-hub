@@ -2965,19 +2965,84 @@ document.addEventListener('DOMContentLoaded', () => {
       const isPlaying = !video.paused;
       const pct = (v, lo=0, hi=100) => Math.max(lo, Math.min(hi, v));
       // ── V1 wrap positioning ─────────────────────────────────────────────────
-      const v1Wrap    = $('ve-v1-wrap');
-      const v1Active  = veClips.filter(c => !c.track).find(c =>
+      const v1Wrap     = $('ve-v1-wrap');
+      const transWrap  = $('ve-v1-trans-wrap');
+      const transVideo = $('ve-v1-trans-video');
+      const v1Sorted   = veClips.filter(c => !c.track).sort((a, b) => a.timelineStart - b.timelineStart);
+      const v1Active   = v1Sorted.find(c =>
         vePlayPos >= c.timelineStart && vePlayPos < c.timelineStart + c.timelineDuration);
+
       if (!v1Active) {
         v1Wrap.style.display = 'none';
+        transWrap.style.display = 'none';
+        if (!transVideo.paused) transVideo.pause();
       } else {
-        const kPos = getClipPosAt(v1Active, vePlayPos);
-        v1Wrap.style.display  = 'block';
-        v1Wrap.style.left     = pct(kPos.x)    + '%';
-        v1Wrap.style.top      = pct(kPos.y)     + '%';
-        v1Wrap.style.width    = pct(kPos.w, 5) + '%';
-        v1Wrap.style.height   = pct(kPos.h, 5) + '%';
-        v1Wrap.classList.toggle('ve-ov-selected', v1Active.id === veSelId);
+        const tOffset    = vePlayPos - v1Active.timelineStart;
+        const transIn    = v1Active.transitionIn;
+        const inTransition = transIn && transIn.data && tOffset < transIn.duration;
+
+        if (inTransition) {
+          const tDur      = transIn.duration;
+          const toState   = teInterpolate(transIn.data.to   && transIn.data.to.keyframes,   tOffset);
+          const fromState = teInterpolate(transIn.data.from && transIn.data.from.keyframes, tOffset);
+
+          // TO layer — main v1Wrap
+          v1Wrap.style.display   = 'block';
+          v1Wrap.style.left      = pct(toState.x)       + '%';
+          v1Wrap.style.top       = pct(toState.y)       + '%';
+          v1Wrap.style.width     = pct(toState.w,  1)   + '%';
+          v1Wrap.style.height    = pct(toState.h,  1)   + '%';
+          v1Wrap.style.opacity   = (pct(toState.opacity, 0, 100) / 100).toFixed(3);
+          v1Wrap.style.transform = `rotate(${toState.rotation}deg)`;
+          v1Wrap.classList.toggle('ve-ov-selected', v1Active.id === veSelId);
+
+          // FROM layer — transWrap with previous clip
+          const prevClip = v1Sorted[v1Sorted.findIndex(c => c.id === v1Active.id) - 1];
+          if (prevClip) {
+            transWrap.style.display   = 'block';
+            transWrap.style.left      = pct(fromState.x)      + '%';
+            transWrap.style.top       = pct(fromState.y)      + '%';
+            transWrap.style.width     = pct(fromState.w, 1)   + '%';
+            transWrap.style.height    = pct(fromState.h, 1)   + '%';
+            transWrap.style.opacity   = (pct(fromState.opacity, 0, 100) / 100).toFixed(3);
+            transWrap.style.transform = `rotate(${fromState.rotation}deg)`;
+
+            // FROM video is the last `tDur` seconds of prevClip
+            const fromFileTime  = prevClip.outPoint - (tDur - tOffset) * (prevClip.speed || 1);
+            const clampedFromTime = Math.max(prevClip.inPoint, Math.min(prevClip.outPoint, fromFileTime));
+            transVideo.volume = 0; // mute FROM — only TO audio plays
+            if (transVideo.src !== prevClip.fileUrl) {
+              transVideo.src = prevClip.fileUrl;
+              transVideo.load();
+              transVideo.playbackRate = prevClip.speed || 1;
+              transVideo.addEventListener('loadedmetadata', () => {
+                transVideo.currentTime = clampedFromTime;
+                if (isPlaying) transVideo.play().catch(() => {});
+              }, { once: true });
+            } else if (!isPlaying) {
+              if (!transVideo.paused) transVideo.pause();
+              if (Math.abs(transVideo.currentTime - clampedFromTime) > 0.05) transVideo.currentTime = clampedFromTime;
+            } else {
+              if (transVideo.paused) { transVideo.currentTime = clampedFromTime; transVideo.play().catch(() => {}); }
+              else if (Math.abs(transVideo.currentTime - clampedFromTime) > 0.25) transVideo.currentTime = clampedFromTime;
+            }
+          } else {
+            transWrap.style.display = 'none';
+          }
+        } else {
+          // Normal — no active transition
+          transWrap.style.display = 'none';
+          if (!transVideo.paused) transVideo.pause();
+          v1Wrap.style.opacity   = '';
+          v1Wrap.style.transform = '';
+          const kPos = getClipPosAt(v1Active, vePlayPos);
+          v1Wrap.style.display  = 'block';
+          v1Wrap.style.left     = pct(kPos.x)    + '%';
+          v1Wrap.style.top      = pct(kPos.y)    + '%';
+          v1Wrap.style.width    = pct(kPos.w, 5) + '%';
+          v1Wrap.style.height   = pct(kPos.h, 5) + '%';
+          v1Wrap.classList.toggle('ve-ov-selected', v1Active.id === veSelId);
+        }
       }
       // ── V2+ layers ──────────────────────────────────────────────────────────
       for (let li = 0; li < MAX_LAYERS; li++) {

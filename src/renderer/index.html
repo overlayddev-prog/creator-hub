@@ -644,6 +644,10 @@
                 <div class="ve-video-container" id="ve-video-container">
                   <!-- Dynamic layer wraps injected by JS -->
                   <div id="ve-layers-container" style="position:absolute;inset:0;pointer-events:none;overflow:visible;"></div>
+                  <!-- V1 transition FROM layer — sits below V1 wrap during transitions -->
+                  <div id="ve-v1-trans-wrap" style="display:none;position:absolute;overflow:hidden;box-sizing:border-box;pointer-events:none;">
+                    <video id="ve-v1-trans-video" preload="auto" style="width:100%;height:100%;object-fit:contain;display:block;"></video>
+                  </div>
                   <!-- V1 track wrap — rendered after V2+ layers so it paints on top -->
                   <div id="ve-v1-wrap" style="display:none;position:absolute;overflow:hidden;box-sizing:border-box;cursor:move;">
                     <video id="ve-video" preload="auto" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;"></video>
