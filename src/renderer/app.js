@@ -12,6 +12,27 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.0': {
+    sections: [
+      {
+        title: 'App',
+        items: [
+          '<b>Home dashboard</b> — new landing page with module cards, live stat counts, and quick navigation',
+          '<b>Stream Setup removed</b> — replaced with the Home dashboard as the default page',
+          '<b>Sidebar accents</b> — each nav item glows its module color on hover',
+        ],
+      },
+      {
+        title: 'Fix',
+        items: [
+          '<b>Transition flicker</b> — FROM clip now pre-loads before the transition starts, eliminating the black flash',
+          '<b>Transition null guard</b> — prevents crash on corrupted or incomplete transition files',
+          '<b>Temp file cleanup</b> — thumbnail generation now always cleans up temp directories even on error',
+          '<b>Volume clamp</b> — video and audio volumes are now safely clamped to valid range',
+        ],
+      },
+    ],
+  },
   '0.9.3': {
     sections: [
       {
