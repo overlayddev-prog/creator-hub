@@ -483,74 +483,58 @@
       </div>
 
       <!-- ── Transition Editor Module ──────────────────────────────────── -->
-      <div id="module-transition-editor" style="display:none; flex:1; flex-direction:column; height:100%; overflow:hidden;">
+<div id="module-transition-editor" style="display:none; flex:1; flex-direction:column; height:100%; overflow:hidden;">
 
-        <!-- Top bar -->
-        <div class="te-topbar">
-          <button class="te-back-btn" id="te-back">← Assets</button>
-          <input class="te-name-input" id="te-name" placeholder="Transition name…">
-          <div class="te-topbar-right">
-            <span class="te-dur-wrap">
-              Duration&nbsp;
-              <input type="number" id="te-duration" value="1.0" min="0.1" max="10" step="0.1" class="te-dur-input">
-              &nbsp;s
-            </span>
-            <button class="te-save-btn" id="te-save">💾 Save</button>
-          </div>
-        </div>
+  <div class="te-topbar">
+    <button class="te-back-btn" id="te-back">← Assets</button>
+    <input class="te-name-input" id="te-name" placeholder="Transition name…">
+    <div class="te-topbar-right">
+      <span class="te-dur-wrap">Duration&nbsp;<input type="number" id="te-duration" value="1.0" min="0.1" max="10" step="0.1" class="te-dur-input">&nbsp;s</span>
+      <label class="te-smooth-wrap"><input type="checkbox" id="te-smooth" checked><span class="te-smooth-label">Smooth</span></label>
+      <button class="te-save-btn" id="te-save">💾 Save</button>
+    </div>
+  </div>
 
-        <!-- Body -->
-        <div class="te-body">
+  <div class="te-body">
 
-          <!-- Preview + timeline column -->
-          <div class="te-preview-col">
-            <div class="te-canvas-wrap" id="te-canvas-wrap">
-              <canvas id="te-canvas"></canvas>
-              <div class="te-layer-badge te-badge-from">FROM</div>
-              <div class="te-layer-badge te-badge-to">TO</div>
-            </div>
-
-            <!-- Transport -->
-            <div class="te-transport">
-              <button class="te-transport-btn" id="te-btn-play">▶</button>
-              <input type="range" id="te-scrubber" min="0" max="1000" value="0" class="te-scrubber">
-              <span class="te-timecode" id="te-timecode">0.00s</span>
-            </div>
-
-            <!-- Keyframe timeline canvas -->
-            <div class="te-timeline-wrap" id="te-timeline-wrap">
-              <canvas id="te-timeline"></canvas>
-            </div>
-          </div>
-
-          <!-- Properties panel -->
-          <div class="te-props">
-            <div class="te-props-hdr">Layer</div>
-            <div class="te-layer-tabs">
-              <button class="te-layer-tab active" data-te-layer="from" id="te-tab-from">🔵 FROM</button>
-              <button class="te-layer-tab" data-te-layer="to" id="te-tab-to">🔴 TO</button>
-            </div>
-
-            <div class="te-props-hdr" style="margin-top:12px;">Properties at <span id="te-prop-time">0.00s</span></div>
-            <div class="te-prop-row"><span class="te-prop-label">Opacity</span><input type="number" class="te-prop-input" id="te-p-opacity" min="0" max="100" value="100"><span class="te-prop-unit">%</span></div>
-            <div class="te-prop-row"><span class="te-prop-label">X</span><input type="number" class="te-prop-input" id="te-p-x" value="0"><span class="te-prop-unit">%</span></div>
-            <div class="te-prop-row"><span class="te-prop-label">Y</span><input type="number" class="te-prop-input" id="te-p-y" value="0"><span class="te-prop-unit">%</span></div>
-            <div class="te-prop-row"><span class="te-prop-label">Width</span><input type="number" class="te-prop-input" id="te-p-w" value="100"><span class="te-prop-unit">%</span></div>
-            <div class="te-prop-row"><span class="te-prop-label">Height</span><input type="number" class="te-prop-input" id="te-p-h" value="100"><span class="te-prop-unit">%</span></div>
-            <div class="te-prop-row"><span class="te-prop-label">Rotation</span><input type="number" class="te-prop-input" id="te-p-rotation" value="0"><span class="te-prop-unit">°</span></div>
-
-            <button class="te-add-kf-btn" id="te-add-kf">◆ Record Keyframe Here</button>
-
-            <div class="te-props-hdr" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
-              <span>Keyframes</span>
-              <button class="te-clear-kf-btn" id="te-clear-kf" style="display:none;">Clear all</button>
-            </div>
-            <div id="te-kf-list" class="te-kf-list"></div>
-            <div id="te-kf-empty" class="te-kf-empty">No keyframes — scrub to a time, set properties, then click Record</div>
-          </div>
-
-        </div>
+    <div class="te-preview-col">
+      <div class="te-canvas-wrap" id="te-canvas-wrap">
+        <canvas id="te-canvas"></canvas>
+        <div class="te-layer-badge te-badge-from">FROM</div>
+        <div class="te-layer-badge te-badge-to">TO</div>
+        <div class="te-loop-bar"><div class="te-loop-fill" id="te-loop-fill"></div></div>
       </div>
+      <div class="te-strip-bar">
+        <div class="te-frame-strip" id="te-frame-strip"></div>
+        <button class="te-add-frame-btn" id="te-add-frame">+ Frame</button>
+      </div>
+    </div>
+
+    <div class="te-props">
+      <div class="te-props-hdr" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Frame <span id="te-frame-num">1</span> of <span id="te-frame-total">1</span></span>
+        <button class="te-del-frame-btn" id="te-del-frame">🗑</button>
+      </div>
+
+      <div class="te-props-layer-hdr te-from-hdr">🔵 FROM clip</div>
+      <div class="te-prop-row"><span class="te-prop-label">Opacity</span><input type="number" class="te-prop-input" id="te-from-opacity" min="0" max="100" value="100"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">X</span><input type="number" class="te-prop-input" id="te-from-x" value="0"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">Y</span><input type="number" class="te-prop-input" id="te-from-y" value="0"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">Width</span><input type="number" class="te-prop-input" id="te-from-w" value="100"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">Height</span><input type="number" class="te-prop-input" id="te-from-h" value="100"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">Rotation</span><input type="number" class="te-prop-input" id="te-from-rotation" value="0"><span class="te-prop-unit">°</span></div>
+
+      <div class="te-props-layer-hdr te-to-hdr" style="margin-top:10px;">🔴 TO clip</div>
+      <div class="te-prop-row"><span class="te-prop-label">Opacity</span><input type="number" class="te-prop-input" id="te-to-opacity" min="0" max="100" value="100"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">X</span><input type="number" class="te-prop-input" id="te-to-x" value="0"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">Y</span><input type="number" class="te-prop-input" id="te-to-y" value="0"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">Width</span><input type="number" class="te-prop-input" id="te-to-w" value="100"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">Height</span><input type="number" class="te-prop-input" id="te-to-h" value="100"><span class="te-prop-unit">%</span></div>
+      <div class="te-prop-row"><span class="te-prop-label">Rotation</span><input type="number" class="te-prop-input" id="te-to-rotation" value="0"><span class="te-prop-unit">°</span></div>
+    </div>
+
+  </div>
+</div>
 
       <!-- ── Transition Picker Modal ─────────────────────────────────────── -->
       <div class="modal-backdrop" id="te-picker-modal" style="display:none;">

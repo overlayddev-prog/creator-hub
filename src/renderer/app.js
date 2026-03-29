@@ -12,6 +12,40 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.9.3': {
+    sections: [
+      {
+        title: 'Transition Editor',
+        items: [
+          '<b>Frame-by-frame editor</b> — transitions are now built as explicit frames; each frame defines FROM and TO layer states',
+          '<b>Smooth toggle</b> — Smooth ON interpolates between frames across the duration; Smooth OFF hard-cuts through each frame sequentially',
+          '<b>Frame strip</b> — visual filmstrip of all frames; click to select, drag to reorder',
+          '<b>Real-time preview</b> — transitions now preview in the video editor timeline, not just the transition editor',
+          '<b>Scroll-wheel inputs</b> — scroll any property input to nudge values; hold Shift for ×10 step',
+        ],
+      },
+    ],
+  },
+  '0.9.2': {
+    sections: [
+      {
+        title: 'Editor',
+        items: [
+          '<b>Transition preview in editor</b> — transitions now animate in real-time in the video editor timeline',
+        ],
+      },
+    ],
+  },
+  '0.9.1': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Transition picker</b> — fixed scope bug that prevented transitions from applying correctly',
+        ],
+      },
+    ],
+  },
   '0.9.0': {
     sections: [
       {
@@ -538,48 +572,32 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Transitions Assets Tab ────────────────────────────────────────────────
   const TE_TEMPLATES = [
     {
-      id: 'fade', name: 'Fade', duration: 1.0,
-      from: { keyframes: [
-        { time: 0, x: 0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-        { time: 1, x: 0, y: 0, w: 100, h: 100, opacity:   0, rotation: 0 },
-      ]},
-      to: { keyframes: [
-        { time: 0, x: 0, y: 0, w: 100, h: 100, opacity:   0, rotation: 0 },
-        { time: 1, x: 0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-      ]},
+      id: 'fade', name: 'Fade', duration: 1.0, smooth: true,
+      frames: [
+        { id:'f1', from:{x:0,y:0,w:100,h:100,opacity:100,rotation:0}, to:{x:0,y:0,w:100,h:100,opacity:0,  rotation:0} },
+        { id:'f2', from:{x:0,y:0,w:100,h:100,opacity:0,  rotation:0}, to:{x:0,y:0,w:100,h:100,opacity:100,rotation:0} },
+      ],
     },
     {
-      id: 'slide-left', name: 'Slide Left', duration: 0.7,
-      from: { keyframes: [
-        { time: 0,   x:    0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-        { time: 0.7, x: -100, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-      ]},
-      to: { keyframes: [
-        { time: 0,   x:  100, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-        { time: 0.7, x:    0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-      ]},
+      id: 'slide-left', name: 'Slide Left', duration: 0.7, smooth: true,
+      frames: [
+        { id:'f1', from:{x:0,  y:0,w:100,h:100,opacity:100,rotation:0}, to:{x:100, y:0,w:100,h:100,opacity:100,rotation:0} },
+        { id:'f2', from:{x:-100,y:0,w:100,h:100,opacity:100,rotation:0}, to:{x:0,   y:0,w:100,h:100,opacity:100,rotation:0} },
+      ],
     },
     {
-      id: 'slide-right', name: 'Slide Right', duration: 0.7,
-      from: { keyframes: [
-        { time: 0,   x:    0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-        { time: 0.7, x:  100, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-      ]},
-      to: { keyframes: [
-        { time: 0,   x: -100, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-        { time: 0.7, x:    0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 },
-      ]},
+      id: 'slide-right', name: 'Slide Right', duration: 0.7, smooth: true,
+      frames: [
+        { id:'f1', from:{x:0,  y:0,w:100,h:100,opacity:100,rotation:0}, to:{x:-100,y:0,w:100,h:100,opacity:100,rotation:0} },
+        { id:'f2', from:{x:100,y:0,w:100,h:100,opacity:100,rotation:0}, to:{x:0,   y:0,w:100,h:100,opacity:100,rotation:0} },
+      ],
     },
     {
-      id: 'zoom-in', name: 'Zoom In', duration: 0.8,
-      from: { keyframes: [
-        { time: 0,   x:  0, y:  0, w: 100, h: 100, opacity: 100, rotation: 0 },
-        { time: 0.8, x: -5, y: -5, w: 110, h: 110, opacity:   0, rotation: 0 },
-      ]},
-      to: { keyframes: [
-        { time: 0,   x: 10, y: 10, w:  80, h:  80, opacity:   0, rotation: 0 },
-        { time: 0.8, x:  0, y:  0, w: 100, h: 100, opacity: 100, rotation: 0 },
-      ]},
+      id: 'zoom-in', name: 'Zoom In', duration: 0.8, smooth: true,
+      frames: [
+        { id:'f1', from:{x:0, y:0, w:100,h:100,opacity:100,rotation:0}, to:{x:10,y:10,w:80, h:80, opacity:0,  rotation:0} },
+        { id:'f2', from:{x:-5,y:-5,w:110,h:110,opacity:0,  rotation:0}, to:{x:0, y:0, w:100,h:100,opacity:100,rotation:0} },
+      ],
     },
   ];
 
@@ -845,212 +863,217 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── Transition Editor ─────────────────────────────────────────────────────
-  let teData      = null;   // { name, duration, from:{keyframes:[]}, to:{keyframes:[]} }
-  let teFilePath  = null;
-  let tePlayPos   = 0;
-  let teIsPlaying = false;
-  let teSelLayer  = 'from';
-  let teRafId     = null;
-  let teLastTs    = 0;
-  let tePickerClip = null;
+  let teData        = null;  // { name, duration, smooth, frames:[{id,from:{},to:{}}] }
+  let teFilePath    = null;
+  let tePlayPos     = 0;
+  let teRafId       = null;
+  let teLastTs      = 0;
+  let teSelFrameIdx = 0;
+  let tePickerClip  = null;
 
-  function teInterpolate(kfs, t) {
-    if (!kfs || !kfs.length) return { x: 0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 };
-    const sorted = [...kfs].sort((a, b) => a.time - b.time);
-    if (t <= sorted[0].time) return { ...sorted[0] };
-    if (t >= sorted[sorted.length - 1].time) return { ...sorted[sorted.length - 1] };
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const a = sorted[i], b = sorted[i + 1];
-      if (t >= a.time && t <= b.time) {
-        const alpha = (t - a.time) / (b.time - a.time);
-        return {
-          x:        a.x        + (b.x        - a.x)        * alpha,
-          y:        a.y        + (b.y        - a.y)        * alpha,
-          w:        a.w        + (b.w        - a.w)        * alpha,
-          h:        a.h        + (b.h        - a.h)        * alpha,
-          opacity:  a.opacity  + (b.opacity  - a.opacity)  * alpha,
-          rotation: a.rotation + (b.rotation - a.rotation) * alpha,
-        };
-      }
+  // Shared state interpolator — called from both editor and syncAllLayers in initVideoEditor
+  function teGetTransitionStateAt(data, t) {
+    // backward-compat: convert old keyframe format on the fly
+    if (data && !data.frames && data.from && data.from.keyframes) {
+      const fkfs = (data.from.keyframes || []).slice().sort((a,b)=>a.time-b.time);
+      const tkfs = (data.to.keyframes   || []).slice().sort((a,b)=>a.time-b.time);
+      const def  = {x:0,y:0,w:100,h:100,opacity:100,rotation:0};
+      const n    = Math.max(fkfs.length, tkfs.length, 2);
+      data = { ...data, smooth: true, frames: Array.from({length:n},(_,i)=>({ id:'f'+i, from:{...(fkfs[i]||def)}, to:{...(tkfs[i]||def)} })) };
     }
-    return { ...sorted[sorted.length - 1] };
-  }
-
-  function teGetState(layerKey, t) {
-    if (!teData || !teData[layerKey]) return { x: 0, y: 0, w: 100, h: 100, opacity: 100, rotation: 0 };
-    return teInterpolate(teData[layerKey].keyframes, t);
+    const frames = (data && data.frames) || [];
+    const dur    = (data && data.duration) || 1;
+    const smooth = data ? data.smooth !== false : true;
+    const def    = {x:0,y:0,w:100,h:100,opacity:100,rotation:0};
+    if (!frames.length) return { from:{...def}, to:{...def} };
+    if (frames.length === 1) return { from:{...frames[0].from}, to:{...frames[0].to} };
+    if (!smooth) {
+      const idx = Math.min(frames.length-1, Math.floor(t / (dur / frames.length)));
+      return { from:{...frames[idx].from}, to:{...frames[idx].to} };
+    }
+    const N = frames.length - 1;
+    const raw = Math.min(N - 0.00001, Math.max(0, (t / dur) * N));
+    const a   = Math.floor(raw), alpha = raw - a;
+    const fa  = frames[a], fb = frames[Math.min(N, a+1)];
+    function lerp(k) {
+      return {
+        x:        fa[k].x        + (fb[k].x        - fa[k].x)        * alpha,
+        y:        fa[k].y        + (fb[k].y        - fa[k].y)        * alpha,
+        w:        fa[k].w        + (fb[k].w        - fa[k].w)        * alpha,
+        h:        fa[k].h        + (fb[k].h        - fa[k].h)        * alpha,
+        opacity:  fa[k].opacity  + (fb[k].opacity  - fa[k].opacity)  * alpha,
+        rotation: fa[k].rotation + (fb[k].rotation - fa[k].rotation) * alpha,
+      };
+    }
+    return { from: lerp('from'), to: lerp('to') };
   }
 
   function teDrawPreview() {
-    const cv  = $('te-canvas');
-    const wrap = $('te-canvas-wrap');
+    const cv = $('te-canvas'), wrap = $('te-canvas-wrap');
     if (!cv || !wrap) return;
-    const W = wrap.clientWidth  || 480;
-    const H = wrap.clientHeight || 270;
+    const W = wrap.clientWidth || 480, H = wrap.clientHeight || 270;
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     const ctx = cv.getContext('2d');
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#111827'; ctx.fillRect(0, 0, W, H);
-    // Checkerboard pattern hint
-    for (let gx = 0; gx < W; gx += 40) for (let gy = 0; gy < H; gy += 40) {
-      if (((gx / 40) + (gy / 40)) % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.02)'; ctx.fillRect(gx, gy, 40, 40); }
-    }
-
-    function drawLayer(key, fillColor, strokeColor) {
-      const s  = teGetState(key, tePlayPos);
-      const lx = (s.x / 100) * W;
-      const ly = (s.y / 100) * H;
-      const lw = (s.w / 100) * W;
-      const lh = (s.h / 100) * H;
-      ctx.save();
-      ctx.globalAlpha = s.opacity / 100;
-      ctx.translate(lx + lw / 2, ly + lh / 2);
-      ctx.rotate((s.rotation * Math.PI) / 180);
-      ctx.fillStyle = fillColor;
-      ctx.fillRect(-lw / 2, -lh / 2, lw, lh);
-      ctx.strokeStyle = strokeColor; ctx.lineWidth = 2;
-      ctx.strokeRect(-lw / 2, -lh / 2, lw, lh);
-      ctx.fillStyle = strokeColor; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(key.toUpperCase(), 0, 0);
-      ctx.restore();
-    }
-
-    drawLayer('to',   'rgba(239,68,68,0.35)',   '#ef4444');
-    drawLayer('from', 'rgba(59,130,246,0.35)',   '#3b82f6');
-  }
-
-  function teDrawTimeline() {
-    const cv  = $('te-timeline');
-    const wrap = $('te-timeline-wrap');
-    if (!cv || !wrap || !teData) return;
-    const W = wrap.clientWidth || 480;
-    if (cv.width !== W) cv.width = W;
-    cv.height = 52;
-    const H = cv.height;
-    const ctx = cv.getContext('2d');
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#0f1520'; ctx.fillRect(0, 0, W, H);
-    const dur = parseFloat($('te-duration').value) || 1;
-    const PAD_L = 36, PAD_R = 8;
-    const trackW = W - PAD_L - PAD_R;
-
-    function drawRow(rowY, key, color) {
-      ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fillRect(0, rowY, W, 20);
-      ctx.fillStyle = color; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(key.slice(0, 2).toUpperCase(), 18, rowY + 10);
-      const kfs = (teData[key] && teData[key].keyframes) || [];
-      kfs.forEach(kf => {
-        const kx = PAD_L + (kf.time / dur) * trackW;
-        ctx.save(); ctx.translate(kx, rowY + 10); ctx.rotate(Math.PI / 4);
-        ctx.fillStyle = (teSelLayer === key) ? color : 'rgba(200,200,200,0.5)';
-        ctx.fillRect(-4, -4, 8, 8); ctx.restore();
-      });
-    }
-
-    drawRow(4,  'from', '#3b82f6');
-    drawRow(28, 'to',   '#ef4444');
-
-    // Playhead
-    const px = PAD_L + (tePlayPos / dur) * trackW;
-    ctx.strokeStyle = '#00e5ff'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, H); ctx.stroke();
-    ctx.fillStyle = '#00e5ff'; ctx.beginPath(); ctx.arc(px, 2, 4, 0, Math.PI * 2); ctx.fill();
-  }
-
-  function teRefreshProps() {
+    for (let gx = 0; gx < W; gx += 40) for (let gy = 0; gy < H; gy += 40)
+      if (((gx/40)+(gy/40))%2===0) { ctx.fillStyle='rgba(255,255,255,0.02)'; ctx.fillRect(gx,gy,40,40); }
     if (!teData) return;
-    const s = teGetState(teSelLayer, tePlayPos);
-    $('te-p-opacity').value  = Math.round(s.opacity);
-    $('te-p-x').value        = Math.round(s.x);
-    $('te-p-y').value        = Math.round(s.y);
-    $('te-p-w').value        = Math.round(s.w);
-    $('te-p-h').value        = Math.round(s.h);
-    $('te-p-rotation').value = Math.round(s.rotation);
-    $('te-prop-time').textContent = tePlayPos.toFixed(2) + 's';
-    teRefreshKfList();
+    const state = teGetTransitionStateAt(teData, tePlayPos);
+    function drawL(s, fill, stroke, lbl) {
+      const lx=(s.x/100)*W, ly=(s.y/100)*H, lw=(s.w/100)*W, lh=(s.h/100)*H;
+      ctx.save(); ctx.globalAlpha=Math.max(0,Math.min(1,s.opacity/100));
+      ctx.translate(lx+lw/2,ly+lh/2); ctx.rotate((s.rotation*Math.PI)/180);
+      ctx.fillStyle=fill; ctx.fillRect(-lw/2,-lh/2,lw,lh);
+      ctx.strokeStyle=stroke; ctx.lineWidth=2; ctx.strokeRect(-lw/2,-lh/2,lw,lh);
+      ctx.fillStyle=stroke; ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(lbl,0,0); ctx.restore();
+    }
+    drawL(state.to,   'rgba(239,68,68,0.35)',  '#ef4444','TO');
+    drawL(state.from, 'rgba(59,130,246,0.35)', '#3b82f6','FROM');
   }
 
-  function teRefreshKfList() {
-    const kfs = (teData && teData[teSelLayer] && teData[teSelLayer].keyframes) || [];
-    const list    = $('te-kf-list');
-    const empty   = $('te-kf-empty');
-    const clearBtn = $('te-clear-kf');
-    if (!list) return;
-    list.innerHTML = '';
-    if (empty)   empty.style.display   = kfs.length ? 'none' : 'block';
-    if (clearBtn) clearBtn.style.display = kfs.length ? 'inline' : 'none';
-    [...kfs].sort((a, b) => a.time - b.time).forEach((kf, idx) => {
-      const item = document.createElement('div');
-      item.className = 'te-kf-item';
-      item.innerHTML = `<span class="te-kf-time">◆ ${kf.time.toFixed(2)}s</span><button class="te-kf-del" data-idx="${idx}">×</button>`;
-      item.querySelector('.te-kf-time').addEventListener('click', () => {
-        tePlayPos = kf.time;
-        const dur = parseFloat($('te-duration').value) || 1;
-        $('te-scrubber').value = (kf.time / dur) * 1000;
-        $('te-timecode').textContent = kf.time.toFixed(2) + 's';
-        teRefreshProps(); teDrawPreview(); teDrawTimeline();
+  function teDrawFrameCard(canvas, frame) {
+    canvas.width = 64; canvas.height = 36;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0f1520'; ctx.fillRect(0,0,64,36);
+    function drawM(s, color) {
+      const lx=(s.x/100)*64,ly=(s.y/100)*36,lw=(s.w/100)*64,lh=(s.h/100)*36;
+      ctx.save(); ctx.globalAlpha=Math.max(0,Math.min(1,s.opacity/100));
+      ctx.translate(lx+lw/2,ly+lh/2); ctx.rotate((s.rotation*Math.PI)/180);
+      ctx.fillStyle=color; ctx.fillRect(-lw/2,-lh/2,lw,lh); ctx.restore();
+    }
+    drawM(frame.to,   'rgba(239,68,68,0.55)');
+    drawM(frame.from, 'rgba(59,130,246,0.55)');
+  }
+
+  function teDrawFrameStrip() {
+    const strip = $('te-frame-strip');
+    if (!strip || !teData) return;
+    strip.innerHTML = '';
+    teData.frames.forEach((frame, idx) => {
+      const card = document.createElement('div');
+      card.className = 'te-frame-card' + (idx === teSelFrameIdx ? ' selected' : '');
+      card.draggable = true;
+      const cv = document.createElement('canvas');
+      cv.className = 'te-frame-canvas';
+      teDrawFrameCard(cv, frame);
+      const lbl = document.createElement('div');
+      lbl.className = 'te-frame-label'; lbl.textContent = idx + 1;
+      card.appendChild(cv); card.appendChild(lbl);
+      card.addEventListener('click', () => teSelectFrame(idx));
+      card.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', String(idx)); card.classList.add('dragging'); });
+      card.addEventListener('dragend',   () => card.classList.remove('dragging'));
+      card.addEventListener('dragover',  e => e.preventDefault());
+      card.addEventListener('drop', e => {
+        e.preventDefault();
+        const from = parseInt(e.dataTransfer.getData('text/plain'));
+        if (from === idx) return;
+        const moved = teData.frames.splice(from, 1)[0];
+        teData.frames.splice(idx, 0, moved);
+        teSelFrameIdx = idx;
+        teDrawFrameStrip(); teRefreshPropsPanel();
       });
-      item.querySelector('.te-kf-del').addEventListener('click', () => teDeleteKf(teSelLayer, idx));
-      list.appendChild(item);
+      strip.appendChild(card);
     });
+    $('te-frame-num').textContent   = teSelFrameIdx + 1;
+    $('te-frame-total').textContent = teData.frames.length;
+    $('te-del-frame').style.display = teData.frames.length > 1 ? '' : 'none';
   }
 
-  function teAddKf() {
+  function teSelectFrame(idx) {
+    teSelFrameIdx = Math.max(0, Math.min((teData.frames.length || 1) - 1, idx));
+    teDrawFrameStrip();
+    teRefreshPropsPanel();
+    const N = teData.frames.length, dur = teData.duration || 1;
+    tePlayPos = N > 1 ? (teSelFrameIdx / (N - 1)) * dur : 0;
+    teDrawPreview();
+    const fill = $('te-loop-fill');
+    if (fill) fill.style.width = ((tePlayPos / dur) * 100).toFixed(1) + '%';
+  }
+
+  function teRefreshPropsPanel() {
+    if (!teData || !teData.frames[teSelFrameIdx]) return;
+    const f = teData.frames[teSelFrameIdx];
+    $('te-from-opacity').value  = Math.round(f.from.opacity);
+    $('te-from-x').value        = Math.round(f.from.x);
+    $('te-from-y').value        = Math.round(f.from.y);
+    $('te-from-w').value        = Math.round(f.from.w);
+    $('te-from-h').value        = Math.round(f.from.h);
+    $('te-from-rotation').value = Math.round(f.from.rotation);
+    $('te-to-opacity').value    = Math.round(f.to.opacity);
+    $('te-to-x').value          = Math.round(f.to.x);
+    $('te-to-y').value          = Math.round(f.to.y);
+    $('te-to-w').value          = Math.round(f.to.w);
+    $('te-to-h').value          = Math.round(f.to.h);
+    $('te-to-rotation').value   = Math.round(f.to.rotation);
+  }
+
+  function teReadPropsIntoFrame() {
+    if (!teData || !teData.frames[teSelFrameIdx]) return;
+    const f = teData.frames[teSelFrameIdx];
+    f.from = {
+      opacity:  parseFloat($('te-from-opacity').value)  || 0,
+      x:        parseFloat($('te-from-x').value)        || 0,
+      y:        parseFloat($('te-from-y').value)        || 0,
+      w:        parseFloat($('te-from-w').value)        || 100,
+      h:        parseFloat($('te-from-h').value)        || 100,
+      rotation: parseFloat($('te-from-rotation').value) || 0,
+    };
+    f.to = {
+      opacity:  parseFloat($('te-to-opacity').value)    || 0,
+      x:        parseFloat($('te-to-x').value)          || 0,
+      y:        parseFloat($('te-to-y').value)          || 0,
+      w:        parseFloat($('te-to-w').value)          || 100,
+      h:        parseFloat($('te-to-h').value)          || 100,
+      rotation: parseFloat($('te-to-rotation').value)   || 0,
+    };
+  }
+
+  function teAddFrame() {
     if (!teData) return;
-    const layer = teData[teSelLayer];
-    if (!layer.keyframes) layer.keyframes = [];
-    layer.keyframes = layer.keyframes.filter(k => Math.abs(k.time - tePlayPos) > 0.02);
-    layer.keyframes.push({
-      time:     tePlayPos,
-      opacity:  parseFloat($('te-p-opacity').value)  || 100,
-      x:        parseFloat($('te-p-x').value)        || 0,
-      y:        parseFloat($('te-p-y').value)        || 0,
-      w:        parseFloat($('te-p-w').value)        || 100,
-      h:        parseFloat($('te-p-h').value)        || 100,
-      rotation: parseFloat($('te-p-rotation').value) || 0,
-    });
-    layer.keyframes.sort((a, b) => a.time - b.time);
-    teRefreshProps(); teDrawTimeline();
-    showToast('Keyframe recorded');
+    const last = teData.frames[teData.frames.length - 1];
+    teData.frames.push({ id: Date.now().toString(36), from:{...last.from}, to:{...last.to} });
+    teSelectFrame(teData.frames.length - 1);
   }
 
-  function teDeleteKf(layerKey, idx) {
-    if (!teData || !teData[layerKey]) return;
-    const sorted = [...teData[layerKey].keyframes].sort((a, b) => a.time - b.time);
-    sorted.splice(idx, 1);
-    teData[layerKey].keyframes = sorted;
-    teRefreshProps(); teDrawTimeline();
+  function teDeleteFrame() {
+    if (!teData || teData.frames.length <= 1) return;
+    teData.frames.splice(teSelFrameIdx, 1);
+    teSelectFrame(Math.min(teSelFrameIdx, teData.frames.length - 1));
   }
 
   function teTick(ts) {
-    if (!teIsPlaying) return;
-    const dur = parseFloat($('te-duration').value) || 1;
-    const dt  = (ts - teLastTs) / 1000;
+    if (!teRafId) return;
+    const dur = teData ? (teData.duration || 1) : 1;
+    const dt  = Math.min((ts - teLastTs) / 1000, 0.1);
     teLastTs  = ts;
     tePlayPos += dt;
-    if (tePlayPos >= dur) tePlayPos = 0; // loop
-    $('te-scrubber').value       = (tePlayPos / dur) * 1000;
-    $('te-timecode').textContent = tePlayPos.toFixed(2) + 's';
-    teRefreshProps(); teDrawPreview(); teDrawTimeline();
+    if (tePlayPos >= dur) tePlayPos = 0;
+    const fill = $('te-loop-fill');
+    if (fill) fill.style.width = ((tePlayPos / dur) * 100).toFixed(1) + '%';
+    teDrawPreview();
     teRafId = requestAnimationFrame(teTick);
   }
 
   function openTransitionEditor(filePath, data) {
-    teFilePath  = filePath;
-    teData      = JSON.parse(JSON.stringify(data));
-    tePlayPos   = 0; teIsPlaying = false; teSelLayer = 'from';
+    teFilePath    = filePath;
+    teData        = JSON.parse(JSON.stringify(data));
+    tePlayPos     = 0; teSelFrameIdx = 0;
     if (teRafId) { cancelAnimationFrame(teRafId); teRafId = null; }
     $('te-name').value     = teData.name     || '';
     $('te-duration').value = teData.duration || 1.0;
-    $('te-btn-play').textContent = '▶';
-    $('te-tab-from').classList.add('active');
-    $('te-tab-to').classList.remove('active');
+    $('te-smooth').checked = teData.smooth !== false;
+    if (!teData.frames) teData.frames = [{ id:'f1', from:{x:0,y:0,w:100,h:100,opacity:100,rotation:0}, to:{x:0,y:0,w:100,h:100,opacity:100,rotation:0} }];
     switchModule('transition-editor');
-    setTimeout(() => { teRefreshProps(); teDrawPreview(); teDrawTimeline(); }, 50);
+    setTimeout(() => {
+      teDrawPreview(); teDrawFrameStrip(); teRefreshPropsPanel();
+      teLastTs = performance.now();
+      teRafId  = requestAnimationFrame(teTick);
+    }, 50);
   }
 
   function closeTransitionEditor() {
-    teIsPlaying = false;
     if (teRafId) { cancelAnimationFrame(teRafId); teRafId = null; }
     teData = null;
     assetsTab = 'transitions';
@@ -1063,17 +1086,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!name) { showToast('Enter a name first'); return; }
     teData.name     = name;
     teData.duration = parseFloat($('te-duration').value) || 1.0;
+    teData.smooth   = $('te-smooth').checked;
     const dir = await window.creatorhub.transitions.getDir().catch(() => null);
     if (!dir) { showToast('Could not get transitions folder'); return; }
-    const safeName = name.replace(/[^a-z0-9_\- ]/gi, '_');
-    const fp = dir + '\\' + safeName + '.transition';
+    const fp = dir + '\\' + name.replace(/[^a-z0-9_\- ]/gi, '_') + '.transition';
     const result = await window.creatorhub.transitions.save(fp, teData).catch(() => ({ ok: false }));
-    if (result && result.ok) {
-      teFilePath = result.filePath || fp;
-      showToast('Transition saved!');
-    } else {
-      showToast('Save failed');
-    }
+    if (result && result.ok) { teFilePath = fp; showToast('Transition saved!'); }
+    else showToast('Save failed');
   }
 
   async function openTransitionPicker(clip, onPick) {
@@ -1082,16 +1101,10 @@ document.addEventListener('DOMContentLoaded', () => {
     list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">Loading…</div>';
     $('te-picker-modal').style.display = 'flex';
     list.innerHTML = '';
-
-    // Built-in templates
     TE_TEMPLATES.forEach(tpl => {
       const card = document.createElement('div');
-      card.className = 'te-template-card';
-      card.style.cursor = 'pointer';
-      card.innerHTML = `
-        <div class="te-template-preview" style="background:linear-gradient(to right,rgba(59,130,246,0.5),rgba(239,68,68,0.5));"></div>
-        <div class="te-template-name">${tpl.name}</div>
-        <div class="te-template-dur">${tpl.duration}s</div>`;
+      card.className = 'te-template-card'; card.style.cursor = 'pointer';
+      card.innerHTML = `<div class="te-template-preview" style="background:linear-gradient(to right,rgba(59,130,246,0.5),rgba(239,68,68,0.5));"></div><div class="te-template-name">${tpl.name}</div><div class="te-template-dur">${tpl.duration}s</div>`;
       card.addEventListener('click', () => {
         clip.transitionIn = { name: tpl.name, duration: tpl.duration, data: JSON.parse(JSON.stringify(tpl)) };
         $('te-picker-modal').style.display = 'none';
@@ -1099,19 +1112,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       list.appendChild(card);
     });
-
-    // Saved transitions
     const saved = await window.creatorhub.transitions.list().catch(() => []);
     for (const t of saved) {
       const res = await window.creatorhub.transitions.load(t.filePath).catch(() => null);
       if (!res || !res.ok) continue;
       const card = document.createElement('div');
-      card.className = 'te-template-card';
-      card.style.cursor = 'pointer';
-      card.innerHTML = `
-        <div class="te-template-preview" style="background:linear-gradient(135deg,rgba(59,130,246,0.5),rgba(239,68,68,0.5));"></div>
-        <div class="te-template-name">${t.name}</div>
-        <div class="te-template-dur">${t.duration}s · Custom</div>`;
+      card.className = 'te-template-card'; card.style.cursor = 'pointer';
+      card.innerHTML = `<div class="te-template-preview" style="background:linear-gradient(135deg,rgba(59,130,246,0.5),rgba(239,68,68,0.5));"></div><div class="te-template-name">${t.name}</div><div class="te-template-dur">${t.duration}s · Custom</div>`;
       card.addEventListener('click', () => {
         clip.transitionIn = { name: t.name, duration: t.duration, data: res.data };
         $('te-picker-modal').style.display = 'none';
@@ -1119,67 +1126,42 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       list.appendChild(card);
     }
-
-    if (!list.children.length) {
-      list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No transitions available. Create one in Assets → Transitions.</div>';
-    }
+    if (!list.children.length) list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No transitions available. Create one in Assets → Transitions.</div>';
   }
 
-  // Transition editor event listeners
-  $('te-back').addEventListener('click',    () => closeTransitionEditor());
-  $('te-save').addEventListener('click',    () => saveTransition());
+  // ── Transition editor event listeners ────────────────────────────────────
+  $('te-back').addEventListener('click',  () => closeTransitionEditor());
+  $('te-save').addEventListener('click',  () => saveTransition());
+  $('te-add-frame').addEventListener('click', () => teAddFrame());
+  $('te-del-frame').addEventListener('click', () => teDeleteFrame());
+
   $('te-new-blank').addEventListener('click', () => {
-    openTransitionEditor(null, { name: '', duration: 1.0, from: { keyframes: [] }, to: { keyframes: [] } });
+    openTransitionEditor(null, { name:'', duration:1.0, smooth:true, frames:[
+      { id:'f1', from:{x:0,y:0,w:100,h:100,opacity:100,rotation:0}, to:{x:0,y:0,w:100,h:100,opacity:0,  rotation:0} },
+      { id:'f2', from:{x:0,y:0,w:100,h:100,opacity:0,  rotation:0}, to:{x:0,y:0,w:100,h:100,opacity:100,rotation:0} },
+    ]});
   });
 
-  $('te-btn-play').addEventListener('click', () => {
-    teIsPlaying = !teIsPlaying;
-    $('te-btn-play').textContent = teIsPlaying ? '⏸' : '▶';
-    if (teIsPlaying) {
-      teLastTs = performance.now();
-      teRafId  = requestAnimationFrame(teTick);
-    } else {
-      if (teRafId) { cancelAnimationFrame(teRafId); teRafId = null; }
-    }
-  });
+  $('te-duration').addEventListener('change', function() { if (teData) teData.duration = parseFloat(this.value) || 1.0; });
+  $('te-smooth').addEventListener('change',   function() { if (teData) teData.smooth = this.checked; });
 
-  $('te-scrubber').addEventListener('input', function () {
-    const dur = parseFloat($('te-duration').value) || 1;
-    tePlayPos = (this.value / 1000) * dur;
-    $('te-timecode').textContent = tePlayPos.toFixed(2) + 's';
-    teRefreshProps(); teDrawPreview(); teDrawTimeline();
-  });
-
-  $('te-duration').addEventListener('change', function () {
-    if (teData) teData.duration = parseFloat(this.value) || 1.0;
-    teRefreshProps(); teDrawPreview(); teDrawTimeline();
-  });
-
-  document.querySelectorAll('.te-layer-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      teSelLayer = tab.dataset.teLayer;
-      document.querySelectorAll('.te-layer-tab').forEach(t => t.classList.toggle('active', t === tab));
-      teRefreshProps(); teDrawTimeline();
+  const TE_PROP_IDS = ['te-from-opacity','te-from-x','te-from-y','te-from-w','te-from-h','te-from-rotation','te-to-opacity','te-to-x','te-to-y','te-to-w','te-to-h','te-to-rotation'];
+  TE_PROP_IDS.forEach(id => {
+    $(id).addEventListener('input', () => {
+      teReadPropsIntoFrame();
+      const card = $('te-frame-strip').children[teSelFrameIdx];
+      if (card && teData) teDrawFrameCard(card.querySelector('canvas'), teData.frames[teSelFrameIdx]);
     });
+    $(id).addEventListener('wheel', function(e) {
+      e.preventDefault();
+      this.value = (parseFloat(this.value)||0) + (e.deltaY < 0 ? (e.shiftKey?10:1) : -(e.shiftKey?10:1));
+      this.dispatchEvent(new Event('input'));
+    }, { passive: false });
   });
 
-  $('te-add-kf').addEventListener('click', () => teAddKf());
-  $('te-clear-kf').addEventListener('click', () => {
-    if (!teData || !confirm('Remove all keyframes from this layer?')) return;
-    teData[teSelLayer].keyframes = [];
-    teRefreshProps(); teDrawTimeline();
-  });
+  $('te-picker-close').addEventListener('click', () => { $('te-picker-modal').style.display = 'none'; });
 
-  ['te-p-opacity', 'te-p-x', 'te-p-y', 'te-p-w', 'te-p-h', 'te-p-rotation'].forEach(id => {
-    $(id).addEventListener('input', () => { if (teData) teDrawPreview(); });
-  });
-
-  $('te-picker-close').addEventListener('click', () => {
-    $('te-picker-modal').style.display = 'none';
-  });
-
-  new ResizeObserver(() => { if (teData) { teDrawPreview(); teDrawTimeline(); } }).observe($('te-canvas-wrap'));
-  new ResizeObserver(() => { if (teData) teDrawTimeline(); }).observe($('te-timeline-wrap'));
+  new ResizeObserver(() => { if (teData) teDrawPreview(); }).observe($('te-canvas-wrap'));
 
   // ── Recordings Module ─────────────────────────────────────────────────────
   let recSelected = null;
@@ -2983,8 +2965,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (inTransition) {
           const tDur      = transIn.duration;
-          const toState   = teInterpolate(transIn.data.to   && transIn.data.to.keyframes,   tOffset);
-          const fromState = teInterpolate(transIn.data.from && transIn.data.from.keyframes, tOffset);
+          const _tState   = teGetTransitionStateAt(transIn.data, tOffset);
+          const toState   = _tState.to;
+          const fromState = _tState.from;
 
           // TO layer — main v1Wrap
           v1Wrap.style.display   = 'block';

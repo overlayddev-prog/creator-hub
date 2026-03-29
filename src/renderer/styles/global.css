@@ -2669,3 +2669,33 @@ body {
   font-weight: 600; cursor: pointer;
 }
 .te-new-blank-btn:hover { background: rgba(0,229,255,0.18); }
+
+/* ── Transition Editor v2 ─────────────────────────────────────────────────── */
+.te-smooth-wrap { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-muted); cursor:pointer; }
+.te-smooth-label { user-select:none; }
+
+.te-loop-bar { position:absolute; bottom:0; left:0; right:0; height:3px; background:rgba(255,255,255,0.08); }
+.te-loop-fill { height:100%; background:#00e5ff; width:0%; }
+
+.te-strip-bar { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--sidebar); border-top:1px solid var(--border); flex-shrink:0; }
+.te-frame-strip { display:flex; gap:6px; overflow-x:auto; flex:1; padding-bottom:2px; }
+.te-frame-strip::-webkit-scrollbar { height:4px; }
+.te-frame-strip::-webkit-scrollbar-track { background:transparent; }
+.te-frame-strip::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:2px; }
+
+.te-frame-card { display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; flex-shrink:0; padding:3px; border-radius:5px; border:2px solid transparent; transition:border-color 0.12s; }
+.te-frame-card:hover { border-color:rgba(0,229,255,0.4); }
+.te-frame-card.selected { border-color:#00e5ff; }
+.te-frame-card.dragging { opacity:0.4; }
+.te-frame-canvas { display:block; border-radius:3px; }
+.te-frame-label { font-size:9px; color:rgba(232,237,245,0.45); font-weight:700; }
+
+.te-add-frame-btn { background:rgba(0,229,255,0.08); border:1px solid rgba(0,229,255,0.25); color:#00e5ff; font-size:11px; padding:4px 10px; border-radius:5px; cursor:pointer; white-space:nowrap; flex-shrink:0; }
+.te-add-frame-btn:hover { background:rgba(0,229,255,0.16); }
+
+.te-del-frame-btn { background:rgba(255,51,85,0.08); border:1px solid rgba(255,51,85,0.2); color:var(--red); font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer; }
+.te-del-frame-btn:hover { background:rgba(255,51,85,0.18); }
+
+.te-props-layer-hdr { font-size:9px; font-weight:700; letter-spacing:0.08em; padding:5px 0 4px; border-bottom:1px solid var(--border); margin-bottom:4px; }
+.te-from-hdr { color:#3b82f6; }
+.te-to-hdr   { color:#ef4444; }

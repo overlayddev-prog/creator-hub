@@ -607,9 +607,9 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
     // Chain clips with xfade where transitionIn is set, concat otherwise
     function deriveXfadeType(ti) {
       if (!ti || !ti.data) return 'fade';
-      const fromKfs = (ti.data.from && ti.data.from.keyframes) || [];
-      if (fromKfs.length >= 2) {
-        const dx = fromKfs[fromKfs.length - 1].x - fromKfs[0].x;
+      const frames = (ti.data.frames) || [];
+      if (frames.length >= 2) {
+        const dx = frames[frames.length-1].from.x - frames[0].from.x;
         if (dx < -50) return 'slideleft';
         if (dx > 50)  return 'slideright';
       }
