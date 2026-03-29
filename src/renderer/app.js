@@ -896,13 +896,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const a   = Math.floor(raw), alpha = raw - a;
     const fa  = frames[a], fb = frames[Math.min(N, a+1)];
     function lerp(k) {
+      const sa = (fa && fa[k]) ? fa[k] : def;
+      const sb = (fb && fb[k]) ? fb[k] : def;
       return {
-        x:        fa[k].x        + (fb[k].x        - fa[k].x)        * alpha,
-        y:        fa[k].y        + (fb[k].y        - fa[k].y)        * alpha,
-        w:        fa[k].w        + (fb[k].w        - fa[k].w)        * alpha,
-        h:        fa[k].h        + (fb[k].h        - fa[k].h)        * alpha,
-        opacity:  fa[k].opacity  + (fb[k].opacity  - fa[k].opacity)  * alpha,
-        rotation: fa[k].rotation + (fb[k].rotation - fa[k].rotation) * alpha,
+        x:        sa.x        + (sb.x        - sa.x)        * alpha,
+        y:        sa.y        + (sb.y        - sa.y)        * alpha,
+        w:        sa.w        + (sb.w        - sa.w)        * alpha,
+        h:        sa.h        + (sb.h        - sa.h)        * alpha,
+        opacity:  sa.opacity  + (sb.opacity  - sa.opacity)  * alpha,
+        rotation: sa.rotation + (sb.rotation - sa.rotation) * alpha,
       };
     }
     return { from: lerp('from'), to: lerp('to') };
@@ -982,7 +984,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function teSelectFrame(idx) {
-    teSelFrameIdx = Math.max(0, Math.min((teData.frames.length || 1) - 1, idx));
+    if (!teData || !teData.frames.length) return;
+    teSelFrameIdx = Math.max(0, Math.min(teData.frames.length - 1, idx));
     teDrawFrameStrip();
     teRefreshPropsPanel();
     const N = teData.frames.length, dur = teData.duration || 1;
@@ -1032,7 +1035,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function teAddFrame() {
     if (!teData) return;
-    const last = teData.frames[teData.frames.length - 1];
+    const defFrame = {x:0,y:0,w:100,h:100,opacity:100,rotation:0};
+    const last = teData.frames.length ? teData.frames[teData.frames.length - 1] : { from:{...defFrame}, to:{...defFrame} };
     teData.frames.push({ id: Date.now().toString(36), from:{...last.from}, to:{...last.to} });
     teSelectFrame(teData.frames.length - 1);
   }
@@ -3087,7 +3091,7 @@ document.addEventListener('DOMContentLoaded', () => {
           layer.video.src = displayClip.fileUrl;
           layer.video.load();
           layer.video.playbackRate = speed;
-          layer.video.volume = outOfRange ? 0 : (displayClip.muted || displayClip.audioDetached ? 0 : (displayClip.volume || 1));
+          layer.video.volume = outOfRange ? 0 : (displayClip.muted || displayClip.audioDetached ? 0 : Math.max(0, Math.min(1, displayClip.volume || 1)));
           layer.video.addEventListener('loadedmetadata', () => {
             layer.video.currentTime = expectedTime;
             if (!outOfRange && isPlaying) layer.video.play().catch(() => {});
@@ -3125,7 +3129,7 @@ document.addEventListener('DOMContentLoaded', () => {
           vePlayPos >= a.timelineStart && vePlayPos < a.timelineStart + a.timelineDuration);
         if (!activeAudio) { if (!aud.paused) aud.pause(); continue; }
         const targetTime = (activeAudio.inPoint || 0) + (vePlayPos - activeAudio.timelineStart);
-        aud.volume = activeAudio.muted ? 0 : (activeAudio.volume || 1);
+        aud.volume = activeAudio.muted ? 0 : Math.max(0, Math.min(1, activeAudio.volume || 1));
         if (aud.src !== activeAudio.fileUrl) {
           aud.src = activeAudio.fileUrl; aud.load();
           aud.addEventListener('canplay', () => {
@@ -3232,7 +3236,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const target = Math.max(clip.inPoint, Math.min(clip.outPoint, fileTime));
       veActiveClip       = clip;
       video.playbackRate = clip.speed;
-      video.volume       = clip.muted ? 0 : (clip.volume || 1);
+      video.volume       = clip.muted ? 0 : Math.max(0, Math.min(1, clip.volume || 1));
       if (video.src !== clip.fileUrl) {
         // Must wait for metadata before setting currentTime — browser ignores it otherwise
         const onMeta = () => {

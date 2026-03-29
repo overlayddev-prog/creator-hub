@@ -486,8 +486,10 @@ ipcMain.handle('videoeditor:get-thumbnails', async (_e, filePath, count, duratio
   const ffmpegPath = require('ffmpeg-static');
   const os = require('os');
   const tmpDir = path.join(os.tmpdir(), `ch-thumbs-${Date.now()}`);
+  let dirCreated = false;
   try {
     fs.mkdirSync(tmpDir, { recursive: true });
+    dirCreated = true;
     const fps = count / Math.max(duration, 1);
     await new Promise((resolve) => {
       const proc = spawn(ffmpegPath, [
@@ -508,11 +510,17 @@ ipcMain.handle('videoeditor:get-thumbnails', async (_e, filePath, count, duratio
         return 'data:image/png;base64,' + data.toString('base64');
       } catch { return null; }
     }).filter(Boolean);
-    files.forEach(f => { try { fs.unlinkSync(path.join(tmpDir, f)); } catch {} });
-    try { fs.rmdirSync(tmpDir); } catch {}
     return dataUrls;
   } catch (e) {
     return [];
+  } finally {
+    if (dirCreated) {
+      try {
+        const leftover = fs.readdirSync(tmpDir);
+        leftover.forEach(f => { try { fs.unlinkSync(path.join(tmpDir, f)); } catch {} });
+        fs.rmdirSync(tmpDir);
+      } catch {}
+    }
   }
 });
 
