@@ -2277,6 +2277,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let veDragCurrentX = 0;
     let veDragCurrentY = 0;
     let veRafId        = null;
+    let transVideoReady = false; // true once transVideo has decoded at least one frame
     let veLoop         = false;
     let veFadeInEn     = false, veFadeInDur  = 0.5;
     let veFadeOutEn    = false, veFadeOutDur = 0.5;
@@ -2958,6 +2959,7 @@ document.addEventListener('DOMContentLoaded', () => {
         v1Wrap.style.display = 'none';
         transWrap.style.display = 'none';
         if (!transVideo.paused) transVideo.pause();
+        transVideoReady = false;
       } else {
         const tOffset    = vePlayPos - v1Active.timelineStart;
         const transIn    = v1Active.transitionIn;
@@ -2995,20 +2997,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const clampedFromTime = Math.max(prevClip.inPoint, Math.min(prevClip.outPoint, fromFileTime));
             transVideo.volume = 0; // mute FROM — only TO audio plays
             if (transVideo.src !== prevClip.fileUrl) {
+              transVideoReady = false;
               transVideo.src = prevClip.fileUrl;
               transVideo.load();
               transVideo.playbackRate = prevClip.speed || 1;
-              transVideo.addEventListener('loadedmetadata', () => {
+              transVideo.addEventListener('loadeddata', () => {
+                transVideoReady = true;
                 transVideo.currentTime = clampedFromTime;
                 if (isPlaying) transVideo.play().catch(() => {});
               }, { once: true });
-            } else if (!isPlaying) {
-              if (!transVideo.paused) transVideo.pause();
-              if (Math.abs(transVideo.currentTime - clampedFromTime) > 0.05) transVideo.currentTime = clampedFromTime;
-            } else {
-              if (transVideo.paused) { transVideo.currentTime = clampedFromTime; transVideo.play().catch(() => {}); }
-              else if (Math.abs(transVideo.currentTime - clampedFromTime) > 0.25) transVideo.currentTime = clampedFromTime;
+            } else if (transVideoReady) {
+              if (!isPlaying) {
+                if (!transVideo.paused) transVideo.pause();
+                if (Math.abs(transVideo.currentTime - clampedFromTime) > 0.05) transVideo.currentTime = clampedFromTime;
+              } else {
+                if (transVideo.paused) { transVideo.currentTime = clampedFromTime; transVideo.play().catch(() => {}); }
+                else if (Math.abs(transVideo.currentTime - clampedFromTime) > 0.25) transVideo.currentTime = clampedFromTime;
+              }
             }
+            // hide transWrap until video has decoded a frame to avoid black flash
+            if (!transVideoReady) transWrap.style.display = 'none';
           } else {
             transWrap.style.display = 'none';
           }
@@ -3018,6 +3026,20 @@ document.addEventListener('DOMContentLoaded', () => {
           if (!transVideo.paused) transVideo.pause();
           v1Wrap.style.opacity   = '';
           v1Wrap.style.transform = '';
+
+          // Pre-roll: if the next clip has a transitionIn and we're within PREROLL of this clip ending,
+          // silently load transVideo now so it's decoded and ready when the transition starts
+          const PRE_ROLL = 0.75; // seconds before transition starts to begin loading
+          const timeToEnd = (v1Active.timelineStart + v1Active.timelineDuration) - vePlayPos;
+          const nextClip  = v1Sorted[v1Sorted.findIndex(c => c.id === v1Active.id) + 1];
+          if (nextClip && nextClip.transitionIn && nextClip.transitionIn.data && timeToEnd <= PRE_ROLL) {
+            if (transVideo.src !== v1Active.fileUrl) {
+              transVideoReady = false;
+              transVideo.src = v1Active.fileUrl;
+              transVideo.load();
+              transVideo.addEventListener('loadeddata', () => { transVideoReady = true; }, { once: true });
+            }
+          }
           const kPos = getClipPosAt(v1Active, vePlayPos);
           v1Wrap.style.display  = 'block';
           v1Wrap.style.left     = pct(kPos.x)    + '%';
