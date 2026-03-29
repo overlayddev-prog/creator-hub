@@ -60,10 +60,6 @@
           <span class="nav-icon">🗂️</span>
           Assets
         </button>
-        <button class="nav-item" id="nav-recordings" data-module="recordings" data-accent="red">
-          <span class="nav-icon">⏺</span>
-          Recordings
-        </button>
         <button class="nav-item" disabled>
           <span class="nav-icon">📊</span>
           Analytics
@@ -166,7 +162,7 @@
                 <div class="dash-card-arrow">→</div>
               </div>
 
-              <div class="dash-module-card dash-accent-red" data-nav="recordings">
+              <div class="dash-module-card dash-accent-red" data-nav="assets-recordings">
                 <div class="dash-card-icon-wrap">⏺</div>
                 <div class="dash-card-body">
                   <div class="dash-card-name">Recordings</div>
@@ -456,6 +452,9 @@
           <button class="assets-tab active" data-assets-tab="images">Images <span class="assets-tab-count" id="assets-count-images">0</span></button>
           <button class="assets-tab" data-assets-tab="videos">Videos <span class="assets-tab-count" id="assets-count-videos">0</span></button>
           <button class="assets-tab" data-assets-tab="audio">Audio <span class="assets-tab-count" id="assets-count-audio">0</span></button>
+          <button class="assets-tab" data-assets-tab="recordings" data-accent="red">
+            ⏺ Recordings <span class="assets-tab-count" id="assets-count-recordings">0</span>
+          </button>
           <button class="assets-tab" data-assets-tab="transitions">Transitions <span class="assets-tab-count" id="assets-count-transitions">0</span></button>
         </div>
 
@@ -505,21 +504,18 @@
             </div>
           </div>
 
+          <!-- Recordings tab content -->
+          <div id="assets-recordings-wrap" style="display:none; flex:1; flex-direction:column; overflow-y:auto; padding:10px 20px;">
+            <div id="assets-recordings-list" class="assets-list"></div>
+          </div>
+
           <!-- Transitions tab content -->
-          <div id="assets-transitions-wrap" style="display:none; flex:1; flex-direction:column; overflow-y:auto; padding:14px; gap:18px;">
-            <div>
-              <div class="te-section-hdr">Templates</div>
-              <div class="te-templates-grid" id="te-templates-grid"></div>
+          <div id="assets-transitions-wrap" style="display:none; flex:1; flex-direction:column; overflow-y:auto; padding:14px 18px; gap:0;">
+            <div style="display:flex; align-items:center; justify-content:flex-end; margin-bottom:10px;">
+              <button class="te-new-blank-btn" id="te-new-blank">+ New Transition</button>
             </div>
-            <div>
-              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-                <div class="te-section-hdr" style="margin-bottom:0;">Saved Transitions</div>
-                <button class="te-new-blank-btn" id="te-new-blank">+ Blank</button>
-              </div>
-              <div class="te-saved-grid" id="te-saved-grid">
-                <div class="te-saved-empty" id="te-saved-empty">No saved transitions yet — create one above</div>
-              </div>
-            </div>
+            <div class="assets-grid" id="te-unified-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"></div>
+            <div class="te-saved-empty" id="te-saved-empty" style="display:none; text-align:center; padding:40px 0; color:rgba(232,237,245,0.25); font-size:13px;">No transitions yet</div>
           </div>
         </div>
 
@@ -589,33 +585,6 @@
           <div id="te-picker-list" style="flex:1; overflow-y:auto; padding:12px; display:flex; flex-wrap:wrap; gap:10px;"></div>
           <div style="padding:10px 12px; border-top:1px solid var(--border); font-size:11px; color:var(--muted);">No saved transitions? Create them in the Assets → Transitions tab.</div>
         </div>
-      </div>
-
-      <!-- ── Recordings Module ──────────────────────────────────────────── -->
-      <div id="module-recordings" style="display:none; flex:1; flex-direction:column; height:100%; overflow:hidden;">
-
-        <div class="assets-topbar">
-          <div class="assets-topbar-title">Recordings <span>Your recorded sessions</span></div>
-          <button class="assets-import-btn" id="recordings-open-folder">📂 Open Folder</button>
-        </div>
-
-        <div class="assets-filterbar">
-          <input class="assets-search" id="recordings-search" placeholder="Search recordings…">
-          <select class="assets-sort" id="recordings-sort">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="name">Name A–Z</option>
-            <option value="size">Largest first</option>
-          </select>
-        </div>
-
-        <div class="assets-body">
-          <div class="assets-grid-wrap" id="recordings-grid-wrap">
-            <div class="assets-list" id="recordings-list"></div>
-          </div>
-          <div class="assets-detail" id="recordings-detail" style="display:none;"></div>
-        </div>
-
       </div>
 
       <!-- ── Video Editor Module ────────────────────────────────────────── -->

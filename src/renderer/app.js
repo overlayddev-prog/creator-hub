@@ -12,6 +12,17 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.2': {
+    sections: [
+      {
+        title: 'Assets',
+        items: [
+          '<b>Recordings tab</b> — recordings now live inside Assets; the standalone Recordings page has been removed',
+          '<b>Unified transitions</b> — built-in templates and saved transitions are now in one grid with preview thumbnails',
+        ],
+      },
+    ],
+  },
   '0.10.1': {
     sections: [
       {
@@ -499,7 +510,6 @@ document.addEventListener('DOMContentLoaded', () => {
     recstream:          $('module-recstream'),
     editor:             $('module-editor'),
     assets:             $('module-assets'),
-    recordings:         $('module-recordings'),
     videoeditor:        $('module-videoeditor'),
     'transition-editor': $('module-transition-editor'),
   };
@@ -528,14 +538,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (name === 'videoeditor' && !switchModule._veInited) {
       switchModule._veInited = true;
       initVideoEditor();
-    }
-    if (name === 'recordings') {
-      if (!switchModule._recScanDone) {
-        switchModule._recScanDone = true;
-        scanRecordingsDir(studioRecDir).then(() => renderRecordings());
-      } else {
-        renderRecordings();
-      }
     }
   }
 
@@ -577,7 +579,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!_dashInited) {
       _dashInited = true;
       document.querySelectorAll('.dash-module-card[data-nav]').forEach(card => {
-        card.addEventListener('click', () => switchModule(card.dataset.nav));
+        card.addEventListener('click', () => {
+          const nav = card.dataset.nav;
+          if (nav === 'assets-recordings') {
+            switchModule('assets');
+            setTimeout(() => { const t = document.querySelector('[data-assets-tab="recordings"]'); if (t) t.click(); }, 50);
+          } else {
+            switchModule(nav);
+          }
+        });
       });
     }
 
@@ -691,51 +701,48 @@ document.addEventListener('DOMContentLoaded', () => {
   ];
 
   async function loadTransitionsList() {
-    const list = await window.creatorhub.transitions.list().catch(() => []);
-    $('assets-count-transitions').textContent = list.length;
-    const savedGrid = $('te-saved-grid');
-    const emptyEl   = $('te-saved-empty');
-    if (!list.length) {
-      emptyEl.style.display = '';
-      savedGrid.querySelectorAll('.te-saved-card').forEach(el => el.remove());
-      return;
-    }
-    emptyEl.style.display = 'none';
-    savedGrid.querySelectorAll('.te-saved-card').forEach(el => el.remove());
-    list.forEach(t => {
-      const card = document.createElement('div');
-      card.className = 'te-saved-card';
-      card.innerHTML = `
-        <span class="te-saved-card-name">${t.name}</span>
-        <span class="te-saved-card-dur">${t.duration}s</span>
-        <div class="te-saved-card-actions">
-          <button class="te-saved-card-btn edit-btn">✏️ Edit</button>
-          <button class="te-saved-card-btn del del-btn">🗑</button>
-        </div>`;
-      card.querySelector('.edit-btn').addEventListener('click', async () => {
-        const res = await window.creatorhub.transitions.load(t.filePath);
-        if (res.ok) openTransitionEditor(t.filePath, res.data);
-        else showToast('Failed to load transition');
-      });
-      card.querySelector('.del-btn').addEventListener('click', async () => {
-        await window.creatorhub.transitions.delete(t.filePath);
-        loadTransitionsList();
-      });
-      savedGrid.insertBefore(card, emptyEl);
-    });
+    return renderAllTransitions();
   }
 
   function renderTransitionTemplates() {
-    const grid = $('te-templates-grid');
+    return renderAllTransitions();
+  }
+
+  function teTransitionPreviewCSS(tpl) {
+    const name = (tpl.name || '').toLowerCase();
+    let style = '';
+    if (name.includes('fade')) {
+      style = 'background: linear-gradient(to right, rgba(59,130,246,0.6) 0%, rgba(239,68,68,0.6) 100%);';
+    } else if (name.includes('slide') && name.includes('left')) {
+      style = 'background: linear-gradient(to right, rgba(239,68,68,0.6) 0%, rgba(59,130,246,0.6) 100%);';
+    } else if (name.includes('slide') && name.includes('right')) {
+      style = 'background: linear-gradient(to right, rgba(59,130,246,0.6) 0%, rgba(239,68,68,0.6) 100%);';
+    } else if (name.includes('zoom')) {
+      style = 'background: radial-gradient(circle, rgba(139,92,246,0.7) 0%, rgba(59,130,246,0.5) 60%, rgba(239,68,68,0.4) 100%);';
+    } else {
+      style = 'background: linear-gradient(135deg, rgba(59,130,246,0.6) 50%, rgba(239,68,68,0.6) 50%);';
+    }
+    return `<div style="width:100%;height:100%;${style}"></div>`;
+  }
+
+  async function renderAllTransitions() {
+    const grid = $('te-unified-grid');
     if (!grid) return;
     grid.innerHTML = '';
+
+    // Templates first
     TE_TEMPLATES.forEach(tpl => {
       const card = document.createElement('div');
-      card.className = 'te-template-card';
+      card.className = 'asset-card';
       card.innerHTML = `
-        <div class="te-template-name">${tpl.name}</div>
-        <div class="te-template-dur">${tpl.duration}s</div>
-        <div class="te-template-preview" style="background:linear-gradient(to right,rgba(59,130,246,0.5),rgba(239,68,68,0.5));"></div>`;
+        <div class="asset-thumb" style="position:relative;">
+          ${teTransitionPreviewCSS(tpl)}
+          <span class="asset-type-badge" style="background:rgba(139,92,246,0.7);color:#fff;">Built-in</span>
+        </div>
+        <div class="asset-info">
+          <div class="asset-name">${tpl.name}</div>
+          <div class="asset-meta">${tpl.duration}s · Smooth</div>
+        </div>`;
       card.addEventListener('click', () => {
         const data = JSON.parse(JSON.stringify(tpl));
         delete data.id;
@@ -743,6 +750,140 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       grid.appendChild(card);
     });
+
+    // Saved transitions
+    const list = await window.creatorhub.transitions.list().catch(() => []);
+    const total = TE_TEMPLATES.length + list.length;
+    const countEl = $('assets-count-transitions');
+    if (countEl) countEl.textContent = total;
+
+    const emptyEl = $('te-saved-empty');
+    if (emptyEl) emptyEl.style.display = list.length === 0 && TE_TEMPLATES.length === 0 ? '' : 'none';
+
+    list.forEach(t => {
+      const card = document.createElement('div');
+      card.className = 'asset-card';
+      card.innerHTML = `
+        <div class="asset-thumb" style="position:relative;">
+          ${teTransitionPreviewCSS(t)}
+          <span class="asset-type-badge">${t.data && t.data.smooth !== false ? 'Smooth' : 'Hard cut'}</span>
+        </div>
+        <div class="asset-info">
+          <div class="asset-name">${t.name}</div>
+          <div class="asset-meta">${(t.duration||1).toFixed(1)}s · ${t.data && t.data.frames ? t.data.frames.length + ' frames' : ''}</div>
+        </div>`;
+      card.addEventListener('click', async () => {
+        const res = await window.creatorhub.transitions.load(t.filePath);
+        if (res.ok) openTransitionEditor(t.filePath, res.data);
+        else showToast('Failed to load transition');
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  let _recScanDone = false;
+
+  function renderAssetsRecordings() {
+    // Trigger a scan the first time the tab is opened
+    if (!_recScanDone) {
+      _recScanDone = true;
+      scanRecordingsDir(studioRecDir).then(() => _renderAssetsRecordingsList());
+    } else {
+      _renderAssetsRecordingsList();
+    }
+  }
+
+  function _renderAssetsRecordingsList() {
+    const list = $('assets-recordings-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    // Update badge
+    const badge = $('assets-count-recordings');
+    if (badge) badge.textContent = recordingsLib.length;
+
+    const items = recordingsLib.slice().sort((a, b) => b.addedAt - a.addedAt);
+
+    if (items.length === 0) {
+      list.innerHTML = `<div class="assets-empty">
+        <div class="assets-empty-icon">⏺</div>
+        <div class="assets-empty-text">No recordings yet — hit Record to start</div>
+      </div>`;
+      _renderAssetsRecordingDetail(null);
+      return;
+    }
+
+    items.forEach(rec => {
+      const sel = recSelected === rec.id;
+      const row = document.createElement('div');
+      row.className = 'audio-row' + (sel ? ' selected' : '');
+      row.innerHTML = `
+        ${rec.thumb
+          ? `<img src="${rec.thumb}" style="width:80px;height:45px;object-fit:cover;border-radius:5px;flex-shrink:0;" alt="">`
+          : `<div class="audio-icon">🎬</div>`}
+        <div class="audio-info">
+          <div class="audio-name">${rec.name}</div>
+          <div class="audio-meta">${formatBytes(rec.size)}${rec.duration ? ' · ' + rec.duration : ''} · ${new Date(rec.addedAt).toLocaleDateString()}</div>
+        </div>
+        <button class="audio-add-btn">Add to Canvas</button>`;
+      row.addEventListener('click', () => {
+        recSelected = recSelected === rec.id ? null : rec.id;
+        _renderAssetsRecordingsList();
+      });
+      row.querySelector('.audio-add-btn').addEventListener('click', e => {
+        e.stopPropagation();
+        addAssetToCanvas({ ...rec, category: 'videos' });
+      });
+      list.appendChild(row);
+    });
+
+    _renderAssetsRecordingDetail(recSelected ? recordingsLib.find(r => r.id === recSelected) : null);
+  }
+
+  function _renderAssetsRecordingDetail(rec) {
+    const panel = $('assets-detail');
+    if (!rec) { panel.style.display = 'none'; return; }
+    panel.style.display = 'flex';
+
+    const infoSection = $('detail-info-section');
+    if (infoSection) {
+      infoSection.innerHTML = `
+        <div class="detail-thumb">${rec.thumb ? `<img src="${rec.thumb}" alt="" onerror="this.style.display='none'">` : ''}<span>🎬</span></div>
+        <div class="detail-name">${rec.name}</div>
+        <div class="detail-row"><span class="detail-row-label">Type</span><span class="detail-row-val">${rec.ext.toUpperCase()}</span></div>
+        <div class="detail-row"><span class="detail-row-label">Size</span><span class="detail-row-val">${formatBytes(rec.size)}</span></div>
+        ${rec.duration ? `<div class="detail-row"><span class="detail-row-label">Duration</span><span class="detail-row-val">${rec.duration}</span></div>` : ''}
+        <div class="detail-row"><span class="detail-row-label">Recorded</span><span class="detail-row-val">${new Date(rec.addedAt).toLocaleDateString()}</span></div>
+        <div class="detail-actions" style="margin-top:auto;">
+          <button class="detail-add-btn" id="rec-asset-add">Add to Canvas</button>
+          <button class="studio-btn" id="rec-asset-folder" style="font-size:11px;padding:7px;">📂 Show in Folder</button>
+          <button class="detail-remove-btn" id="rec-asset-remove">Delete Recording</button>
+        </div>`;
+      infoSection.querySelector('#rec-asset-add').addEventListener('click', () => addAssetToCanvas({ ...rec, category: 'videos' }));
+      infoSection.querySelector('#rec-asset-folder').addEventListener('click', () => {
+        window.creatorhub.app.openFolder(rec.path.replace(/[\\/][^\\/]+$/, ''));
+      });
+      infoSection.querySelector('#rec-asset-remove').addEventListener('click', () => {
+        recordingsLib = recordingsLib.filter(r => r.id !== rec.id);
+        recSelected = null;
+        saveRecordings();
+        _renderAssetsRecordingsList();
+      });
+    }
+
+    // Reset to Info tab
+    const dTabInfo  = $('detail-tab-info');
+    const dTabNotes = $('detail-tab-notes');
+    const dSecInfo  = $('detail-info-section');
+    const dSecNotes = $('detail-notes-section');
+    if (dTabInfo) {
+      dTabInfo.classList.add('active');
+      dTabNotes.classList.remove('active');
+      dSecInfo.style.display = 'flex';
+      dSecNotes.style.display = 'none';
+      dTabInfo.onclick  = () => { dTabInfo.classList.add('active'); dTabNotes.classList.remove('active'); dSecInfo.style.display = 'flex'; dSecNotes.style.display = 'none'; };
+      dTabNotes.onclick = () => { dTabNotes.classList.add('active'); dTabInfo.classList.remove('active'); dSecNotes.style.display = 'flex'; dSecInfo.style.display = 'none'; };
+    }
   }
 
   function renderAssets() {
@@ -755,13 +896,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const counts = { images: 0, videos: 0, audio: 0 };
     assetsLib.forEach(a => counts[a.category] = (counts[a.category] || 0) + 1);
     ['images','videos','audio'].forEach(k => { $('assets-count-' + k).textContent = counts[k] || 0; });
+    const recBadge = $('assets-count-recordings');
+    if (recBadge) recBadge.textContent = recordingsLib.length;
 
-    // Show/hide transitions panel
+    // Show/hide panels
     $('assets-transitions-wrap').style.display = isTransitions ? 'flex' : 'none';
-    $('assets-grid-wrap').style.display = isTransitions ? 'none' : '';
+    const recWrap = $('assets-recordings-wrap');
+    if (recWrap) recWrap.style.display = isRecordings ? 'flex' : 'none';
+    $('assets-grid-wrap').style.display = (isTransitions || isRecordings) ? 'none' : '';
     const filterbarEl = document.querySelector('.assets-filterbar');
-    if (filterbarEl) filterbarEl.style.display = isTransitions ? 'none' : '';
-    if (isTransitions) { loadTransitionsList(); renderTransitionTemplates(); return; }
+    if (filterbarEl) filterbarEl.style.display = (isTransitions || isRecordings) ? 'none' : '';
+
+    if (isTransitions) { renderAllTransitions(); return; }
+
+    if (isRecordings) {
+      renderAssetsRecordings();
+      return;
+    }
 
     let items = assetsLib.filter(a => a.category === assetsTab && a.name.toLowerCase().includes(search));
     if (sort === 'newest') items = items.sort((a,b) => b.addedAt - a.addedAt);
