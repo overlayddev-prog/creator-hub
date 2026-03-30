@@ -14,6 +14,18 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.12': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Volume slider</b> — moved to clip properties panel; updates the selected clip\'s volume and persists per clip',
+          '<b>Blue corner orbs</b> — resize handles now only appear when a layer clip is selected, not on every visible clip',
+          '<b>Add Text</b> — replaced broken prompt() with a proper dialog; text now reliably adds to the T track at the playhead',
+        ],
+      },
+    ],
+  },
   '0.10.11': {
     sections: [
       {
@@ -3847,8 +3859,23 @@ document.addEventListener('DOMContentLoaded', () => {
       $('ve-info-dims').textContent = clip ? (clip.dims || '—') : '—';
 
       // Delete button — shown whenever any clip is selected
+      const aclip = selectedAudioClip();
       const delBtn = $('ve-btn-delete-clip');
-      if (delBtn) delBtn.style.display = (clip || selectedAudioClip()) ? '' : 'none';
+      if (delBtn) delBtn.style.display = (clip || aclip) ? '' : 'none';
+
+      // Volume row — shown for any selected clip
+      const volRow = $('ve-vol-row');
+      const volSlider = $('ve-volume');
+      const volLabel = $('ve-vol-label');
+      if (volRow) {
+        const anyClip = clip || aclip;
+        volRow.style.display = anyClip ? '' : 'none';
+        if (anyClip && volSlider) {
+          const pct = Math.round((anyClip.volume || 1) * 100);
+          volSlider.value = pct;
+          if (volLabel) volLabel.textContent = pct + '%';
+        }
+      }
 
       // Separate audio button — only for video clips that haven't detached audio yet
       const sepBtn = $('ve-sep-audio-btn');
@@ -4618,7 +4645,13 @@ document.addEventListener('DOMContentLoaded', () => {
     $('ve-btn-next-frame').addEventListener('click', () => { if (veClips.length) { stopPlayback(); seekToPos(vePlayPos + 1/30); } });
     $('ve-btn-loop').addEventListener('click',  () => { veLoop = !veLoop; $('ve-btn-loop').classList.toggle('ve-btn-active', veLoop); });
     $('ve-btn-split').addEventListener('click', () => splitClipsAtPlayhead());
-    $('ve-volume').addEventListener('input', function() { video.volume = this.value / 100; });
+    $('ve-volume').addEventListener('input', function() {
+      const vol = this.value / 100;
+      $('ve-vol-label').textContent = this.value + '%';
+      const clip = selectedClip() || selectedAudioClip();
+      if (clip) { clip.volume = vol; }
+      video.volume = vol;
+    });
 
     // ── Zoom controls ──────────────────────────────────────────────────────────
     $('ve-zoom-slider').addEventListener('input', function() { veZoom = parseFloat(this.value); clampScroll(); drawTimeline(); });
@@ -4972,13 +5005,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Add Text button ───────────────────────────────────────────────────────
     $('ve-btn-addtext').addEventListener('click', () => {
-      const text = prompt('Enter text overlay:');
-      if (!text || !text.trim()) return;
-      const start = vePlayPos;
-      const end   = Math.min(vePlayPos + 5, veTotalDur || vePlayPos + 5);
-      veTextOverlays.push({ id: genId(), text: text.trim(), pos: 'bottom', color: '#ffffff', startSec: start, endSec: end });
-      pushHistory(); renderTextList(); drawTimeline();
-      showToast('Text added — see T track on timeline');
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+      overlay.innerHTML = `
+        <div style="background:#0f1520;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:20px;width:360px;display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:13px;font-weight:700;">Add Text Overlay</div>
+          <input id="_txt-input" placeholder="Enter text…" style="background:#060810;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 12px;color:#e8edf5;font-family:Outfit,sans-serif;font-size:13px;outline:none;width:100%;">
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button id="_txt-cancel" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(232,237,245,0.5);font-family:Outfit,sans-serif;font-size:12px;padding:7px 16px;cursor:pointer;">Cancel</button>
+            <button id="_txt-confirm" style="background:#00e5ff;border:none;border-radius:8px;color:#0a0e14;font-family:Outfit,sans-serif;font-size:12px;font-weight:700;padding:7px 16px;cursor:pointer;">Add</button>
+          </div>
+        </div>`;
+      const input = overlay.querySelector('#_txt-input');
+      const doAdd = () => {
+        const text = input.value.trim();
+        if (!text) { input.focus(); return; }
+        document.body.removeChild(overlay);
+        const start = vePlayPos;
+        const end   = Math.max(start + 1, Math.min(start + 5, veTotalDur || start + 5));
+        veTextOverlays.push({ id: genId(), text, pos: 'bottom', color: '#ffffff', startSec: start, endSec: end });
+        pushHistory(); renderTextList(); drawTimeline();
+        showToast('Text added to T track');
+      };
+      overlay.querySelector('#_txt-cancel').addEventListener('click', () => document.body.removeChild(overlay));
+      overlay.querySelector('#_txt-confirm').addEventListener('click', doAdd);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); if (e.key === 'Escape') document.body.removeChild(overlay); });
+      overlay.addEventListener('click', e => { if (e.target === overlay) document.body.removeChild(overlay); });
+      document.body.appendChild(overlay);
+      setTimeout(() => input.focus(), 50);
     });
 
     // ── Init ───────────────────────────────────────────────────────────────────

@@ -2029,10 +2029,12 @@ body {
 .ve-ov-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 1px; }
 .ve-ov-wrap.ve-ov-selected { border-color: #00e5ff; }
 .ve-ov-handle {
+  display: none;
   position: absolute; width: 12px; height: 12px;
   background: #00e5ff; border-radius: 50%; border: 2px solid #0a0e14;
   box-shadow: 0 0 0 1px rgba(0,229,255,0.5);
 }
+.ve-ov-wrap.ve-ov-selected .ve-ov-handle { display: block; }
 .ve-ov-handle.nw { top: 0; left: 0; transform: translate(-50%,-50%); cursor: nwse-resize; }
 .ve-ov-handle.ne { top: 0; right: 0; transform: translate(50%,-50%);  cursor: nesw-resize; }
 .ve-ov-handle.sw { bottom: 0; left: 0; transform: translate(-50%,50%); cursor: nesw-resize; }

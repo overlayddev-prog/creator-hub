@@ -676,10 +676,6 @@
                 <button class="ve-transport-btn" id="ve-btn-toend" title="To end">⏭</button>
                 <button class="ve-transport-btn" id="ve-btn-loop" title="Loop">↻</button>
                 <button class="ve-transport-btn" id="ve-btn-split" title="Split clip at playhead (S)" style="margin-left:8px;font-size:13px;">✂ Split</button>
-                <div class="ve-vol-wrap">
-                  <span class="ve-vol-label">🔊</span>
-                  <input type="range" id="ve-volume" min="0" max="100" value="80" class="ve-vol">
-                </div>
               </div>
 
               <!-- Zoom + hype bar -->
@@ -731,6 +727,15 @@
                   <button class="ve-speed-btn" data-speed="1.5">1.5×</button>
                   <button class="ve-speed-btn" data-speed="2">2×</button>
                   <button class="ve-speed-btn" data-speed="4">4×</button>
+                </div>
+
+                <!-- Volume -->
+                <div id="ve-vol-row" style="display:none;margin-top:6px;">
+                  <div class="ve-tools-hdr" style="margin-bottom:4px;">Volume</div>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <input type="range" id="ve-volume" min="0" max="100" value="100" style="flex:1;accent-color:var(--cyan);">
+                    <span id="ve-vol-label" style="font-size:11px;color:var(--muted);width:32px;text-align:right;">100%</span>
+                  </div>
                 </div>
 
                 <!-- Separate audio / Mute -->
