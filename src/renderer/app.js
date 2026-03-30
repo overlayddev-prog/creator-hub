@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.7': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Audio preview</b> — audio files now have a play button in the list and detail panel',
+          '<b>Detail play button</b> — play button in the detail panel now always shows for audio and video',
+        ],
+      },
+    ],
+  },
   '0.10.6': {
     sections: [
       {
