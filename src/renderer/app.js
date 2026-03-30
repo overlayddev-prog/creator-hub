@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.14': {
+    sections: [
+      {
+        title: 'New',
+        items: [
+          '<b>Text on V layers</b> — Add Text now places text directly on a V2+ video layer so it can be positioned and z-ordered like any other clip; T track removed',
+        ],
+      },
+    ],
+  },
   '0.10.13': {
     sections: [
       {
@@ -2875,15 +2885,18 @@ document.addEventListener('DOMContentLoaded', () => {
       wrap.style.display = 'none';
       const vid = document.createElement('video');
       vid.muted = true; vid.playsInline = true;
+      const txtCanvas = document.createElement('canvas');
+      txtCanvas.width = 960; txtCanvas.height = 200;
+      txtCanvas.style.cssText = 'width:100%;height:100%;display:none;position:absolute;inset:0;pointer-events:none;';
       const ph = document.createElement('div');
       ph.className = 've-ov-placeholder';
       ph.innerHTML = '<span class="ve-ov-placeholder-hint">outside active range</span>';
       ['nw','ne','sw','se'].forEach(corner => {
         const h = document.createElement('div'); h.className = `ve-ov-handle ${corner}`; wrap.appendChild(h);
       });
-      wrap.appendChild(vid); wrap.appendChild(ph);
+      wrap.appendChild(vid); wrap.appendChild(txtCanvas); wrap.appendChild(ph);
       layersContainer.appendChild(wrap);
-      veLayers.push({ wrap, video: vid, placeholder: ph });
+      veLayers.push({ wrap, video: vid, textCanvas: txtCanvas, placeholder: ph });
     }
     layersContainer.style.pointerEvents = 'none';
 
@@ -2893,7 +2906,7 @@ document.addEventListener('DOMContentLoaded', () => {
     for (let ai = 0; ai < MAX_AUDIO_TRACKS; ai++) { veAudioEls.push(new Audio()); }
 
     // ── Timeline geometry ──────────────────────────────────────────────────────
-    const LW = 48, RULER_H = 22, VID_H = 50, TEXT_H = 28, AUD_H = 28, TRACK_GAP = 8, HANDLE_W = 12;
+    const LW = 48, RULER_H = 22, VID_H = 50, AUD_H = 28, TRACK_GAP = 8, HANDLE_W = 12;
     function numVideoTracks() {
       const mx = veClips.reduce((m, c) => Math.max(m, c.track || 0), 0);
       return mx + 2;
@@ -2904,8 +2917,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return mx + 2;
     }
     function videoRowY(track) { return RULER_H + 6 + track * VID_H; }
-    function textRowY()       { return RULER_H + 6 + numVideoTracks() * VID_H; }
-    function audioRowY(track) { return textRowY() + TEXT_H + TRACK_GAP + track * AUD_H; }
+    function audioRowY(track) { return RULER_H + 6 + numVideoTracks() * VID_H + TRACK_GAP + track * AUD_H; }
     function totalCanvasH()   { return audioRowY(numAudioTracks()) + 8; }
     function getVideoTrackAtY(y) {
       const n = numVideoTracks();
@@ -3282,32 +3294,6 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
 
-        // Text (T) track row
-        const tRy = textRowY();
-        bgCtx.fillStyle = '#0b0d10';
-        bgCtx.fillRect(LW, tRy, tw(), TEXT_H);
-        bgCtx.strokeStyle = 'rgba(255,255,255,0.04)'; bgCtx.lineWidth = 1;
-        bgCtx.beginPath(); bgCtx.moveTo(LW, tRy + TEXT_H); bgCtx.lineTo(W, tRy + TEXT_H); bgCtx.stroke();
-        bgCtx.fillStyle = 'rgba(245,158,11,0.4)';
-        bgCtx.font = 'bold 9px sans-serif'; bgCtx.textAlign = 'center';
-        bgCtx.fillText('T', LW/2, tRy + TEXT_H/2 + 3);
-        for (const ov of veTextOverlays) {
-          const tx1 = timeToX(ov.startSec), tx2 = timeToX(ov.endSec);
-          const tcw = tx2 - tx1;
-          if (tx2 < LW || tx1 > W) continue;
-          const isSel = ov.id === veSelId;
-          bgCtx.fillStyle = isSel ? 'rgba(245,158,11,0.35)' : 'rgba(245,158,11,0.18)';
-          bgCtx.fillRect(Math.max(LW, tx1), tRy + 2, Math.min(tcw, W - Math.max(LW, tx1)), TEXT_H - 4);
-          bgCtx.strokeStyle = isSel ? '#f59e0b' : 'rgba(245,158,11,0.5)';
-          bgCtx.lineWidth = isSel ? 2 : 1;
-          rrect(bgCtx, tx1, tRy + 2, tcw, TEXT_H - 4, 3); bgCtx.stroke();
-          bgCtx.save();
-          bgCtx.beginPath(); bgCtx.rect(Math.max(LW, tx1) + 4, tRy, tcw - 8, TEXT_H); bgCtx.clip();
-          bgCtx.fillStyle = 'rgba(232,237,245,0.8)'; bgCtx.font = '9px sans-serif'; bgCtx.textAlign = 'left';
-          bgCtx.fillText('T: ' + ov.text, Math.max(LW, tx1) + 5, tRy + TEXT_H / 2 + 3);
-          bgCtx.restore();
-        }
-
         // Audio section divider
         const audSecY = audioRowY(0) - TRACK_GAP;
         bgCtx.strokeStyle = 'rgba(255,255,255,0.06)'; bgCtx.lineWidth = 1;
@@ -3346,6 +3332,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             bgCtx.fillStyle = isSel ? 'rgba(0,229,255,0.1)' : 'rgba(0,0,0,0.32)';
             bgCtx.fillRect(Math.max(LW,cx1), ry, cw, VID_H);
+          } else if (clip.type === 'text') {
+            bgCtx.fillStyle = isSel ? 'rgba(245,158,11,0.35)' : 'rgba(245,158,11,0.18)';
+            bgCtx.fillRect(Math.max(LW,cx1), ry, cw, VID_H);
           } else {
             const g = bgCtx.createLinearGradient(cx1,0,cx2,0);
             g.addColorStop(0, isSel ? 'rgba(0,229,255,0.28)' : 'rgba(0,229,255,0.16)');
@@ -3358,7 +3347,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           bgCtx.restore();
 
-          bgCtx.strokeStyle = isSel ? '#00e5ff' : 'rgba(0,229,255,0.3)';
+          bgCtx.strokeStyle = clip.type === 'text' ? (isSel ? '#f59e0b' : 'rgba(245,158,11,0.5)') : (isSel ? '#00e5ff' : 'rgba(0,229,255,0.3)');
           bgCtx.lineWidth = isSel ? 2 : 1;
           rrect(bgCtx, cx1, ry, cw, VID_H, 4); bgCtx.stroke();
 
@@ -3667,40 +3656,57 @@ document.addEventListener('DOMContentLoaded', () => {
         layer.wrap.style.height   = pct(kPos.h, 5) + '%';
         layer.wrap.classList.toggle('ve-ov-selected', displayClip.id === veSelId);
 
-        // ── Video state sync ───────────────────────────────────────────────────
-        const outOfRange  = !activeClip && !!selClip;
-        const inPt        = displayClip.inPoint  || 0;
-        const outPt       = displayClip.outPoint || displayClip.fileDuration;
-        const speed       = displayClip.speed    || 1;
-        const expectedTime = outOfRange
-          ? inPt
-          : Math.max(inPt, Math.min(outPt, inPt + (vePlayPos - displayClip.timelineStart) * speed));
-
-        if (layer.video.src !== displayClip.fileUrl) {
-          // ── New file: load then seek + conditionally play ──────────────────
-          layer.video.src = displayClip.fileUrl;
-          layer.video.load();
-          layer.video.playbackRate = speed;
-          layer.video.volume = outOfRange ? 0 : (displayClip.muted || displayClip.audioDetached ? 0 : Math.max(0, Math.min(1, displayClip.volume || 1)));
-          layer.video.addEventListener('loadedmetadata', () => {
-            layer.video.currentTime = expectedTime;
-            if (!outOfRange && isPlaying) layer.video.play().catch(() => {});
-          }, { once: true });
-        } else if (outOfRange || !isPlaying) {
-          // ── Paused / out-of-range: hold at correct frame ───────────────────
+        if (displayClip.type === 'text') {
+          // ── Text clip: render onto textCanvas, hide video ──────────────────
+          layer.video.style.display      = 'none';
+          layer.textCanvas.style.display = 'block';
+          const tc = layer.textCanvas;
+          const tctx = tc.getContext('2d');
+          tctx.clearRect(0, 0, tc.width, tc.height);
+          tctx.font = 'bold 28px Outfit, sans-serif';
+          tctx.textAlign = 'center';
+          tctx.shadowColor = 'rgba(0,0,0,0.8)'; tctx.shadowBlur = 8;
+          tctx.fillStyle = displayClip.textColor || '#ffffff';
+          tctx.fillText(displayClip.text || '', tc.width / 2, tc.height / 2 + 10);
+          tctx.shadowBlur = 0;
           if (!layer.video.paused) layer.video.pause();
-          if (Math.abs(layer.video.currentTime - expectedTime) > 0.05) {
-            layer.video.currentTime = expectedTime;
-          }
         } else {
-          // ── Playing: start if stopped, correct drift if needed ─────────────
-          if (layer.video.playbackRate !== speed) layer.video.playbackRate = speed;
-          if (layer.video.paused) {
-            layer.video.currentTime = expectedTime;
-            layer.video.play().catch(() => {});
+          // ── Video clip: hide textCanvas, sync video ────────────────────────
+          layer.video.style.display      = '';
+          layer.textCanvas.style.display = 'none';
+
+          // ── Video state sync ─────────────────────────────────────────────
+          const outOfRange  = !activeClip && !!selClip;
+          const inPt        = displayClip.inPoint  || 0;
+          const outPt       = displayClip.outPoint || displayClip.fileDuration;
+          const speed       = displayClip.speed    || 1;
+          const expectedTime = outOfRange
+            ? inPt
+            : Math.max(inPt, Math.min(outPt, inPt + (vePlayPos - displayClip.timelineStart) * speed));
+
+          if (layer.video.src !== displayClip.fileUrl) {
+            layer.video.src = displayClip.fileUrl;
+            layer.video.load();
+            layer.video.playbackRate = speed;
+            layer.video.volume = outOfRange ? 0 : (displayClip.muted || displayClip.audioDetached ? 0 : Math.max(0, Math.min(1, displayClip.volume || 1)));
+            layer.video.addEventListener('loadedmetadata', () => {
+              layer.video.currentTime = expectedTime;
+              if (!outOfRange && isPlaying) layer.video.play().catch(() => {});
+            }, { once: true });
+          } else if (outOfRange || !isPlaying) {
+            if (!layer.video.paused) layer.video.pause();
+            if (Math.abs(layer.video.currentTime - expectedTime) > 0.05) {
+              layer.video.currentTime = expectedTime;
+            }
           } else {
-            const drift = Math.abs(layer.video.currentTime - expectedTime);
-            if (drift > 0.25) layer.video.currentTime = expectedTime;
+            if (layer.video.playbackRate !== speed) layer.video.playbackRate = speed;
+            if (layer.video.paused) {
+              layer.video.currentTime = expectedTime;
+              layer.video.play().catch(() => {});
+            } else {
+              const drift = Math.abs(layer.video.currentTime - expectedTime);
+              if (drift > 0.25) layer.video.currentTime = expectedTime;
+            }
           }
         }
       }
@@ -3899,11 +3905,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       $('ve-info-dims').textContent = clip ? (clip.dims || '—') : '—';
 
-      // Delete button — shown whenever any clip or text overlay is selected
+      // Delete button — shown whenever any clip is selected
       const aclip = selectedAudioClip();
-      const tov   = selectedTextOverlay();
       const delBtn = $('ve-btn-delete-clip');
-      if (delBtn) delBtn.style.display = (clip || aclip || tov) ? '' : 'none';
+      if (delBtn) delBtn.style.display = (clip || aclip) ? '' : 'none';
 
       // Volume row — shown for video/audio clips only
       const volRow = $('ve-vol-row');
@@ -4027,15 +4032,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (x > LW) {
-        // Check T track click
-        const tRy = textRowY();
-        if (y >= tRy && y < tRy + TEXT_H) {
-          const clickedText = veTextOverlays.find(ov => t >= ov.startSec && t < ov.endSec);
-          if (clickedText) { veSelId = clickedText.id; refreshClipPanel(); }
-          else { veSelId = null; refreshClipPanel(); veDragging = 'seek'; seekToPos(Math.max(0, Math.min(veTotalDur, t))); }
-          drawTimeline(); e.preventDefault(); return;
-        }
-
         // Check audio track click
         const audioTrack = getAudioTrackAtY(y);
         if (audioTrack !== null) {
@@ -5035,12 +5031,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Delete selected clip ──────────────────────────────────────────────────
-    function selectedTextOverlay() { return veTextOverlays.find(o => o.id === veSelId) || null; }
-
     function deleteSelectedClip() {
       const clip  = selectedClip();
       const aclip = selectedAudioClip();
-      const tov   = selectedTextOverlay();
       if (clip) {
         veClips = veClips.filter(c => c !== clip);
         veAudioClips = veAudioClips.filter(a => a.sourceClipId !== clip.id);
@@ -5050,10 +5043,6 @@ document.addEventListener('DOMContentLoaded', () => {
         veAudioClips = veAudioClips.filter(a => a !== aclip);
         veSelId = null; computeLayout(); refreshClipPanel(); drawTimeline(); pushHistory();
         showToast('Audio clip removed');
-      } else if (tov) {
-        veTextOverlays = veTextOverlays.filter(o => o !== tov);
-        veSelId = null; refreshClipPanel(); renderTextList(); drawTimeline(); pushHistory();
-        showToast('Text removed');
       }
     }
 
@@ -5087,10 +5076,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.removeChild(overlay);
         const v1End = veClips.filter(c => !c.track).reduce((m, c) => Math.max(m, c.timelineStart + c.timelineDuration), 0);
         const start = v1End || vePlayPos;
-        const end   = start + 5;
-        veTextOverlays.push({ id: genId(), text, pos: 'bottom', color: '#ffffff', startSec: start, endSec: end });
-        pushHistory(); renderTextList(); drawTimeline();
-        showToast('Text added to T track');
+        // Find next available V2+ track slot (track 1 = V2, track 2 = V3, ...)
+        let track = 1;
+        for (let t = 1; t <= MAX_LAYERS; t++) {
+          const overlap = veClips.find(c => c.track === t && c.timelineStart < start + 5 && c.timelineStart + c.timelineDuration > start);
+          if (!overlap) { track = t; break; }
+        }
+        veClips.push({ id: genId(), type: 'text', text, textColor: '#ffffff', track, timelineStart: start, timelineDuration: 5, fileName: 'T: ' + text, keyframes: [] });
+        pushHistory(); drawTimeline(); syncAllLayers();
+        showToast('Text added to V' + (track + 1));
       };
       overlay.querySelector('#_txt-cancel').addEventListener('click', () => document.body.removeChild(overlay));
       overlay.querySelector('#_txt-confirm').addEventListener('click', doAdd);
