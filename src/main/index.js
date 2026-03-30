@@ -1006,8 +1006,8 @@ ipcMain.handle('transitions:list', () => {
       const fp = path.join(dir, f);
       try {
         const data = JSON.parse(fs.readFileSync(fp, 'utf8'));
-        return { name: data.name || f.replace('.transition', ''), duration: data.duration || 1, filePath: fp };
-      } catch { return { name: f.replace('.transition', ''), duration: 1, filePath: fp }; }
+        return { name: data.name || f.replace('.transition', ''), duration: data.duration || 1, filePath: fp, data };
+      } catch { return { name: f.replace('.transition', ''), duration: 1, filePath: fp, data: null }; }
     });
 });
 
