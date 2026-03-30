@@ -1794,6 +1794,14 @@ body {
   flex-shrink: 0;
 }
 .audio-add-btn:hover { background: rgba(0,229,255,0.10); }
+.audio-play-btn {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(139,92,246,0.15); border: 1px solid rgba(139,92,246,0.35);
+  color: #a78bfa; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background 0.15s, border-color 0.15s;
+  padding: 0;
+}
+.audio-play-btn:hover { background: rgba(139,92,246,0.30); border-color: #a78bfa; }
 
 /* ── Empty state ── */
 .assets-empty {

@@ -1137,9 +1137,13 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="audio-name">${asset.name}</div>
             <div class="audio-meta">${formatBytes(asset.size)}${asset.dims ? ' · ' + asset.dims : ''}${asset.duration ? ' · ' + asset.duration : ''}</div>
           </div>
+          ${isAudio ? `<button class="audio-play-btn" title="Preview">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>` : ''}
           <button class="audio-add-btn">${isAudio ? '+ Add' : 'Add to Canvas'}</button>`;
         row.addEventListener('click', () => selectAsset(asset.id));
         row.querySelector('.audio-add-btn').addEventListener('click', e => { e.stopPropagation(); addAssetToCanvas(asset); });
+        row.querySelector('.audio-play-btn')?.addEventListener('click', e => { e.stopPropagation(); showAssetPreview(asset); });
         grid.appendChild(row);
       } else {
         // Grid card for images / videos
@@ -1191,7 +1195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Populate the info section (already in HTML from index.html)
     const infoSection = $('detail-info-section');
     if (infoSection) {
-      const playBtnHtml = detailThumbSrc ? `
+      const playBtnHtml = (isVideo || isAudio) ? `
         <div class="detail-play">
           <div class="detail-play-circle">
             <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
