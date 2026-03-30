@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.6': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Sign-in loop</b> — app no longer gets stuck on "Loading your account" after signing in',
+        ],
+      },
+    ],
+  },
   '0.10.5': {
     sections: [
       {
