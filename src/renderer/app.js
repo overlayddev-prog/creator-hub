@@ -12,6 +12,18 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.3': {
+    sections: [
+      {
+        title: 'Assets',
+        items: [
+          '<b>File-based persistence</b> — assets and recordings are now saved to disk and survive app restarts',
+          '<b>Video & audio preview</b> — click the play button on any video or audio asset to open an inline preview modal',
+          '<b>Transition hover preview</b> — hover any transition card to see an animated canvas preview of the transition',
+        ],
+      },
+    ],
+  },
   '0.10.2': {
     sections: [
       {
@@ -333,7 +345,21 @@ async function loadUserData() {
 }
 
 // ── Show main app ─────────────────────────────────────────────────────────────
-function showMainApp() {
+async function showMainApp() {
+  // Load persisted assets + recordings from disk
+  const saved = await window.creatorhub.app.loadUserData().catch(() => ({}));
+  if (saved.assets)     assetsLib     = saved.assets;
+  if (saved.recordings) recordingsLib = saved.recordings;
+  // Migrate from localStorage if file is empty
+  if (!assetsLib.length) {
+    const ls = localStorage.getItem('ch_assets');
+    if (ls) { try { assetsLib = JSON.parse(ls); saveUserData(); localStorage.removeItem('ch_assets'); } catch {} }
+  }
+  if (!recordingsLib.length) {
+    const ls = localStorage.getItem('ch_recordings');
+    if (ls) { try { recordingsLib = JSON.parse(ls); saveUserData(); localStorage.removeItem('ch_recordings'); } catch {} }
+  }
+
   $('auth-screen').style.display = 'none';
   $('main-app').style.display = 'flex';
 
@@ -555,8 +581,8 @@ document.addEventListener('DOMContentLoaded', () => {
     $('dash-greeting').textContent = 'Welcome back, ' + (userData?.username || userData?.email || 'there');
 
     // Count stats
-    const recCount = JSON.parse(localStorage.getItem('ch_recordings') || '[]').length;
-    const assetsCount = JSON.parse(localStorage.getItem('ch_assets') || '[]').length;
+    const recCount = recordingsLib.length;
+    const assetsCount = assetsLib.length;
 
     let projectCount = 0;
     try {
@@ -601,14 +627,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Assets Module ──────────────────────────────────────────────────────────
-  let assetsLib    = JSON.parse(localStorage.getItem('ch_assets')     || '[]');
-  let recordingsLib = JSON.parse(localStorage.getItem('ch_recordings') || '[]');
+  let assetsLib     = [];
+  let recordingsLib = [];
   let assetsTab    = 'images';
   let assetsView   = 'grid';
   let assetsSelected = null;
 
-  function saveAssets()     { localStorage.setItem('ch_assets',     JSON.stringify(assetsLib));     }
-  function saveRecordings() { localStorage.setItem('ch_recordings', JSON.stringify(recordingsLib)); }
+  function saveUserData() {
+    window.creatorhub.app.saveUserData({ assets: assetsLib, recordings: recordingsLib });
+  }
 
   async function addRecording(outputPath) {
     // Skip if already tracked
@@ -624,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
       duration: meta.duration || null,
       addedAt: Date.now(),
     });
-    saveRecordings();
+    saveUserData();
     // Update count badge if assets panel is open on recordings tab
     const badge = document.getElementById('assets-count-recordings');
     if (badge) badge.textContent = recordingsLib.length;
@@ -647,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       added++;
     }
-    if (added > 0) { recordingsLib.sort((a,b) => b.addedAt - a.addedAt); saveRecordings(); }
+    if (added > 0) { recordingsLib.sort((a,b) => b.addedAt - a.addedAt); saveUserData(); }
   }
 
   function formatBytes(b) {
@@ -659,6 +686,37 @@ document.addEventListener('DOMContentLoaded', () => {
   function assetUrl(filePath) {
     // Convert absolute path to asset:// URL served by Electron's custom protocol
     return 'asset:///' + filePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '$1');
+  }
+
+  function showAssetPreview(asset) {
+    const modal   = $('asset-preview-modal');
+    const title   = $('asset-preview-title');
+    const content = $('asset-preview-content');
+    const close   = $('asset-preview-close');
+
+    title.textContent = asset.name;
+    modal.style.display = 'flex';
+
+    const url = assetUrl(asset.path);
+
+    if (asset.category === 'videos') {
+      content.innerHTML = `<video controls autoplay style="width:100%;display:block;max-height:450px;background:#000;" src="${url}"></video>`;
+    } else if (asset.category === 'audio') {
+      content.innerHTML = `
+        <div style="padding:24px 20px; display:flex; flex-direction:column; align-items:center; gap:16px;">
+          <div style="font-size:48px;">🎵</div>
+          <div style="font-size:13px; color:rgba(232,237,245,0.7);">${asset.name}</div>
+          <audio controls autoplay style="width:100%;" src="${url}"></audio>
+        </div>`;
+    }
+
+    const closeModal = () => {
+      modal.style.display = 'none';
+      content.innerHTML = ''; // stop playback by removing element
+    };
+
+    close.onclick = closeModal;
+    modal.onclick = (e) => { if (e.target === modal) closeModal(); };
   }
 
   function assetTypeFromExt(ext) {
@@ -743,6 +801,30 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="asset-name">${tpl.name}</div>
           <div class="asset-meta">${tpl.duration}s · Smooth</div>
         </div>`;
+      // Canvas hover preview
+      const thumb = card.querySelector('.asset-thumb');
+      const previewDiv = document.createElement('div');
+      previewDiv.className = 'te-hover-preview';
+      const cvs = document.createElement('canvas');
+      cvs.width = 160; cvs.height = 90;
+      previewDiv.appendChild(cvs);
+      thumb.appendChild(previewDiv);
+      let rafId = null, startTime = null;
+      const transData = tpl;
+      const dur = transData.duration || 1;
+      card.addEventListener('mouseenter', () => {
+        startTime = performance.now();
+        function animate(now) {
+          const t = ((now - startTime) / 1000) % dur;
+          teDrawPreviewOnCanvas(cvs, transData, t);
+          rafId = requestAnimationFrame(animate);
+        }
+        rafId = requestAnimationFrame(animate);
+      });
+      card.addEventListener('mouseleave', () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+      });
       card.addEventListener('click', () => {
         const data = JSON.parse(JSON.stringify(tpl));
         delete data.id;
@@ -772,6 +854,30 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="asset-name">${t.name}</div>
           <div class="asset-meta">${(t.duration||1).toFixed(1)}s · ${t.data && t.data.frames ? t.data.frames.length + ' frames' : ''}</div>
         </div>`;
+      // Canvas hover preview
+      const thumb = card.querySelector('.asset-thumb');
+      const previewDiv = document.createElement('div');
+      previewDiv.className = 'te-hover-preview';
+      const cvs = document.createElement('canvas');
+      cvs.width = 160; cvs.height = 90;
+      previewDiv.appendChild(cvs);
+      thumb.appendChild(previewDiv);
+      let rafId = null, startTime = null;
+      const transData = t.data || t;
+      const dur = (transData.duration || t.duration || 1);
+      card.addEventListener('mouseenter', () => {
+        startTime = performance.now();
+        function animate(now) {
+          const t2 = ((now - startTime) / 1000) % dur;
+          teDrawPreviewOnCanvas(cvs, transData, t2);
+          rafId = requestAnimationFrame(animate);
+        }
+        rafId = requestAnimationFrame(animate);
+      });
+      card.addEventListener('mouseleave', () => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = null;
+      });
       card.addEventListener('click', async () => {
         const res = await window.creatorhub.transitions.load(t.filePath);
         if (res.ok) openTransitionEditor(t.filePath, res.data);
@@ -866,7 +972,7 @@ document.addEventListener('DOMContentLoaded', () => {
       infoSection.querySelector('#rec-asset-remove').addEventListener('click', () => {
         recordingsLib = recordingsLib.filter(r => r.id !== rec.id);
         recSelected = null;
-        saveRecordings();
+        saveUserData();
         _renderAssetsRecordingsList();
       });
     }
@@ -984,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="asset-meta">${formatBytes(asset.size)}${asset.dims ? ' · ' + asset.dims : ''}</div>
           </div>`;
         card.addEventListener('click', () => selectAsset(asset.id));
-        card.querySelector('.asset-play-circle').addEventListener('click', e => { e.stopPropagation(); showToast('Opening preview…'); });
+        card.querySelector('.asset-play-circle').addEventListener('click', e => { e.stopPropagation(); showAssetPreview(asset); });
         card.querySelector('.asset-thumb-btn').addEventListener('click', e => { e.stopPropagation(); addAssetToCanvas(asset); });
         grid.appendChild(card);
       }
@@ -1036,15 +1142,15 @@ document.addEventListener('DOMContentLoaded', () => {
       infoSection.querySelector('#detail-remove')?.addEventListener('click', () => {
         assetsLib = assetsLib.filter(a => a.id !== asset.id);
         assetsSelected = null;
-        saveAssets();
+        saveUserData();
         renderAssets();
       });
 
       // Play button in detail thumb
       const detailThumbWrap = infoSection.querySelector('#detail-thumb-wrap');
-      if (detailThumbWrap) {
+      if (detailThumbWrap && (isVideo || isAudio)) {
         detailThumbWrap.addEventListener('click', () => {
-          showToast('Opening preview…');
+          showAssetPreview(asset);
         });
       }
     }
@@ -1137,7 +1243,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       added++;
     }
-    saveAssets();
+    saveUserData();
     renderAssets();
     if (added > 0) showToast(`Imported ${added} file${added > 1 ? 's' : ''}`);
     else showToast('Files already in library');
@@ -1216,6 +1322,37 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
     return { from: lerp('from'), to: lerp('to') };
+  }
+
+  function teDrawPreviewOnCanvas(canvas, data, t) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const state = teGetTransitionStateAt(data, t);
+    if (!state) return;
+    const { from: f, to: to_ } = state;
+    ctx.clearRect(0, 0, W, H);
+
+    // Draw FROM layer (blue-tinted rect)
+    ctx.save();
+    ctx.globalAlpha = (f.opacity ?? 100) / 100;
+    const fx = (f.x / 100) * W, fy = (f.y / 100) * H;
+    const fw = (f.w / 100) * W, fh = (f.h / 100) * H;
+    ctx.translate(fx + fw/2, fy + fh/2);
+    ctx.rotate((f.rotation || 0) * Math.PI / 180);
+    ctx.fillStyle = 'rgba(59,130,246,0.75)';
+    ctx.fillRect(-fw/2, -fh/2, fw, fh);
+    ctx.restore();
+
+    // Draw TO layer (red-tinted rect)
+    ctx.save();
+    ctx.globalAlpha = (to_.opacity ?? 100) / 100;
+    const tx = (to_.x / 100) * W, ty = (to_.y / 100) * H;
+    const tw = (to_.w / 100) * W, th = (to_.h / 100) * H;
+    ctx.translate(tx + tw/2, ty + th/2);
+    ctx.rotate((to_.rotation || 0) * Math.PI / 180);
+    ctx.fillStyle = 'rgba(239,68,68,0.75)';
+    ctx.fillRect(-tw/2, -th/2, tw, th);
+    ctx.restore();
   }
 
   function teDrawPreview() {
@@ -1545,7 +1682,7 @@ document.addEventListener('DOMContentLoaded', () => {
     panel.querySelector('#rec-detail-remove').addEventListener('click', () => {
       recordingsLib = recordingsLib.filter(r => r.id !== rec.id);
       recSelected = null;
-      saveRecordings();
+      saveUserData();
       renderRecordings();
     });
   }

@@ -965,6 +965,17 @@
   </div>
 </div>
 
+<!-- ── Asset Preview Modal ── -->
+<div id="asset-preview-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center; flex-direction:column; gap:12px;">
+  <div id="asset-preview-box" style="background:#0f1520; border:1px solid rgba(255,255,255,0.08); border-radius:12px; overflow:hidden; max-width:800px; width:90%; position:relative;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.06);">
+      <span id="asset-preview-title" style="font-size:13px; font-weight:600; color:#e8edf5;"></span>
+      <button id="asset-preview-close" style="background:none; border:none; color:rgba(232,237,245,0.5); cursor:pointer; font-size:18px; line-height:1;">×</button>
+    </div>
+    <div id="asset-preview-content" style="padding:0;"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <script src="studio-engine.js"></script>
 <script src="app.js"></script>

@@ -382,6 +382,20 @@ ipcMain.handle('app:open-file-dialog', async (_e, options = {}) => {
   return multi ? { filePaths: result.filePaths } : result.filePaths[0];
 });
 
+// ── User data persistence (assets + recordings) ───────────────────────────────
+const USER_DATA_PATH = path.join(app.getPath('userData'), 'userdata.json');
+
+function readUserData() {
+  try { return JSON.parse(fs.readFileSync(USER_DATA_PATH, 'utf8')); }
+  catch { return {}; }
+}
+function writeUserData(data) {
+  fs.writeFileSync(USER_DATA_PATH, JSON.stringify(data, null, 2), 'utf8');
+}
+
+ipcMain.handle('userdata:load', () => readUserData());
+ipcMain.handle('userdata:save', (_, data) => { writeUserData(data); return true; });
+
 // ── Scene persistence ─────────────────────────────────────────────────────────
 const scenesFilePath = () => path.join(app.getPath('userData'), 'scenes.json');
 
