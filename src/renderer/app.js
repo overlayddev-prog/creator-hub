@@ -12,6 +12,16 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.4': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Overlayd Add buttons</b> — Add buttons in the Record / Stream studio now correctly add overlays to the canvas',
+        ],
+      },
+    ],
+  },
   '0.10.3': {
     sections: [
       {
@@ -271,7 +281,7 @@ function authHeaders() {
 }
 
 // ── Studio overlay panel ──────────────────────────────────────────────────────
-function renderStudioOverlays() {
+function renderStudioOverlays(onAdd) {
   const list = $('studio-overlay-list');
   if (!list) return;
   if (!overlays.length) {
@@ -290,15 +300,15 @@ function renderStudioOverlays() {
       <div class="studio-ov-sources" style="display:none;">
         <div class="studio-ov-src-row" data-url="${baseUrl}/overlay/${o.token}" data-label="${o.name} — Alerts">
           <span class="studio-ov-src-icon">🔔</span><span class="studio-ov-src-name">Alerts / Overlay</span>
-          <button class="studio-overlay-addbtn">Add</button>
+          <button class="studio-overlay-addbtn"${!onAdd ? ' disabled title="Open Record / Stream first"' : ''}>Add</button>
         </div>
         <div class="studio-ov-src-row" data-url="${baseUrl}/background/${o.token}" data-label="${o.name} — Background">
           <span class="studio-ov-src-icon">🖼️</span><span class="studio-ov-src-name">Background</span>
-          <button class="studio-overlay-addbtn">Add</button>
+          <button class="studio-overlay-addbtn"${!onAdd ? ' disabled title="Open Record / Stream first"' : ''}>Add</button>
         </div>
         <div class="studio-ov-src-row" data-url="${baseUrl}/goals/${o.token}" data-label="${o.name} — Goals">
           <span class="studio-ov-src-icon">🎯</span><span class="studio-ov-src-name">Goals</span>
-          <button class="studio-overlay-addbtn">Add</button>
+          <button class="studio-overlay-addbtn"${!onAdd ? ' disabled title="Open Record / Stream first"' : ''}>Add</button>
         </div>
       </div>`;
     const hdr     = item.querySelector('.studio-ov-hdr');
@@ -309,25 +319,25 @@ function renderStudioOverlays() {
       sources.style.display = open ? 'none' : 'block';
       arrow.textContent = open ? '▶' : '▼';
     });
-    item.querySelectorAll('.studio-ov-src-row').forEach(row => {
-      row.querySelector('.studio-overlay-addbtn').addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const btn = e.currentTarget;
-        btn.disabled = true;
-        btn.textContent = '…';
-        try {
-          const src = await engine.addBrowserSource(row.dataset.url, row.dataset.label);
-          renderLayerList();
-          selectSource(src.id);
-          btn.textContent = '✓';
-          setTimeout(() => { btn.textContent = 'Add'; btn.disabled = false; }, 1500);
-        } catch (err) {
-          console.error('browser source failed', err);
-          btn.textContent = 'Add';
-          btn.disabled = false;
-        }
+    if (onAdd) {
+      item.querySelectorAll('.studio-ov-src-row').forEach(row => {
+        row.querySelector('.studio-overlay-addbtn').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            await onAdd(row.dataset.url, row.dataset.label);
+            btn.textContent = '✓';
+            setTimeout(() => { btn.textContent = 'Add'; btn.disabled = false; }, 1500);
+          } catch (err) {
+            console.error('browser source failed', err);
+            btn.textContent = 'Add';
+            btn.disabled = false;
+          }
+        });
       });
-    });
+    }
     list.appendChild(item);
   });
 }
@@ -1938,6 +1948,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     canvas.addEventListener('mouseup',    () => { if (canvasDrag) saveScenes(); canvasDrag = null; canvas.style.cursor = ''; });
     canvas.addEventListener('mouseleave', () => { canvasDrag = null; canvas.style.cursor = ''; });
+
+    // Wire up Overlayd Add buttons now that engine is ready
+    renderStudioOverlays(async (url, label) => {
+      const src = await engine.addBrowserSource(url, label);
+      renderLayerList();
+      selectSource(src.id);
+    });
   }
 
   // ── Layer list helpers ────────────────────────────────────────────────────
@@ -2224,7 +2241,11 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshOverlaysBtn.addEventListener('click', async () => {
         refreshOverlaysBtn.disabled = true;
         await loadUserData();
-        renderStudioOverlays();
+        renderStudioOverlays(async (url, label) => {
+          const src = await engine.addBrowserSource(url, label);
+          renderLayerList();
+          selectSource(src.id);
+        });
         refreshOverlaysBtn.disabled = false;
       });
     }
