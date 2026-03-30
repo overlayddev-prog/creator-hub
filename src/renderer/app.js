@@ -585,47 +585,33 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Check for updates button ──────────────────────────────────────────────
   const updateBtn   = $('update-check-btn');
   const updateLabel = $('update-check-label');
-  let updateReady   = false;
 
-  window.creatorhub.app.onUpdaterStatus(({ status }) => {
-    updateBtn.classList.remove('spinning', 'success', 'has-update');
-    if (status === 'checking') {
-      updateBtn.classList.add('spinning');
-      updateLabel.textContent = 'Checking…';
-      updateBtn.disabled = true;
-    } else if (status === 'available') {
+  updateBtn.addEventListener('click', async () => {
+    updateBtn.classList.add('spinning');
+    updateBtn.disabled = true;
+    updateLabel.textContent = 'Checking…';
+
+    const res = await window.creatorhub.app.checkForUpdates();
+    updateBtn.classList.remove('spinning');
+    updateBtn.disabled = false;
+
+    if (!res.ok) {
+      updateLabel.textContent = 'Check failed';
+      setTimeout(() => { updateLabel.textContent = 'Check for updates'; }, 3000);
+      return;
+    }
+    if (res.hasUpdate) {
       updateBtn.classList.add('has-update');
-      updateLabel.textContent = 'Downloading update…';
-      updateBtn.disabled = true;
-    } else if (status === 'downloaded') {
-      updateBtn.classList.add('has-update');
-      updateLabel.textContent = 'Restart to update';
-      updateBtn.disabled = false;
-      updateReady = true;
-    } else if (status === 'up-to-date') {
+      updateLabel.textContent = `v${res.latest} available — Download`;
+      updateBtn.onclick = () => window.creatorhub.app.openExternal(res.url);
+    } else {
       updateBtn.classList.add('success');
       updateLabel.textContent = 'Up to date ✓';
-      updateBtn.disabled = false;
       setTimeout(() => {
         updateBtn.classList.remove('success');
         updateLabel.textContent = 'Check for updates';
+        updateBtn.onclick = null;
       }, 3000);
-    } else if (status === 'error') {
-      updateLabel.textContent = 'Update error';
-      updateBtn.disabled = false;
-      setTimeout(() => { updateLabel.textContent = 'Check for updates'; }, 3000);
-    }
-  });
-
-  updateBtn.addEventListener('click', async () => {
-    if (updateReady) {
-      // A download is ready — relaunch to apply
-      window.creatorhub.win.close();
-      return;
-    }
-    const res = await window.creatorhub.app.checkForUpdates();
-    if (!res.ok && res.reason === 'dev') {
-      showToast('Auto-update only works in packaged builds');
     }
   });
 

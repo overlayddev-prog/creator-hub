@@ -132,12 +132,10 @@ app.on('before-quit', () => {
 
 // ── Auto-updater ──────────────────────────────────────────────────────────────
 // Checks GitHub Releases on launch and downloads updates in the background.
-let _autoUpdater = null;
 function initAutoUpdater() {
   if (!app.isPackaged) return;
   const { updateElectronApp } = require('update-electron-app');
   const { autoUpdater } = require('electron');
-  _autoUpdater = autoUpdater;
   const send = (status, detail) => {
     console.log('[updater]', status, detail || '');
     mainWin?.webContents?.send('updater:status', { status, detail });
@@ -150,11 +148,30 @@ function initAutoUpdater() {
   updateElectronApp({ updateInterval: '1 hour' });
 }
 
-ipcMain.handle('updater:check', () => {
-  if (!_autoUpdater) return { ok: false, reason: 'dev' };
-  try { _autoUpdater.checkForUpdates(); return { ok: true }; }
-  catch (e) { return { ok: false, reason: e.message }; }
+ipcMain.handle('updater:check', async () => {
+  try {
+    const res = await net.fetch('https://api.github.com/repos/overlayddev-prog/creator-hub/releases/latest', {
+      headers: { 'User-Agent': 'CreatorHub-App', 'Accept': 'application/vnd.github+json' },
+    });
+    if (!res.ok) return { ok: false, reason: 'GitHub API error ' + res.status };
+    const release = await res.json();
+    const latest  = (release.tag_name || '').replace(/^v/, '');
+    const current = app.getVersion();
+    const hasUpdate = latest && latest !== current && compareVersions(latest, current) > 0;
+    return { ok: true, hasUpdate, latest, current, url: release.html_url };
+  } catch (e) {
+    return { ok: false, reason: e.message };
+  }
 });
+
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
 
 app.whenReady().then(() => {
   // ── asset:// protocol — serves local media files with Range support ──────────

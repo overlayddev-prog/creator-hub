@@ -44,7 +44,6 @@ contextBridge.exposeInMainWorld('creatorhub', {
     openFolder:     (path)   => ipcRenderer.invoke('app:open-folder', path),
     getVersion:         ()     => ipcRenderer.invoke('app:get-version'),
     checkForUpdates:    ()     => ipcRenderer.invoke('updater:check'),
-    onUpdaterStatus:    (cb)   => ipcRenderer.on('updater:status', (_e, data) => cb(data)),
     loadUserData:   ()       => ipcRenderer.invoke('userdata:load'),
     saveUserData:   (data)   => ipcRenderer.invoke('userdata:save', data),
   },
