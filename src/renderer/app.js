@@ -585,34 +585,51 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Check for updates button ──────────────────────────────────────────────
   const updateBtn   = $('update-check-btn');
   const updateLabel = $('update-check-label');
+  let updateReady   = false;
 
-  updateBtn.addEventListener('click', async () => {
-    updateBtn.classList.add('spinning');
-    updateBtn.disabled = true;
-    updateLabel.textContent = 'Checking…';
-
-    const res = await window.creatorhub.app.checkForUpdates();
-    updateBtn.classList.remove('spinning');
+  window.creatorhub.app.onUpdaterStatus(({ status }) => {
+    updateBtn.classList.remove('spinning', 'success', 'has-update');
     updateBtn.disabled = false;
-
-    if (!res.ok) {
-      updateLabel.textContent = 'Check failed';
-      setTimeout(() => { updateLabel.textContent = 'Check for updates'; }, 3000);
-      return;
-    }
-    if (res.hasUpdate) {
+    if (status === 'checking') {
+      updateBtn.classList.add('spinning');
+      updateLabel.textContent = 'Checking…';
+      updateBtn.disabled = true;
+    } else if (status === 'available') {
       updateBtn.classList.add('has-update');
-      updateLabel.textContent = `v${res.latest} available — Download`;
-      updateBtn.onclick = () => window.creatorhub.app.openExternal(res.url);
-    } else {
+      updateLabel.textContent = 'Downloading update…';
+      updateBtn.disabled = true;
+    } else if (status === 'downloaded') {
+      updateBtn.classList.add('has-update');
+      updateLabel.textContent = 'Restart to update';
+      updateReady = true;
+    } else if (status === 'up-to-date') {
       updateBtn.classList.add('success');
       updateLabel.textContent = 'Up to date ✓';
       setTimeout(() => {
         updateBtn.classList.remove('success');
         updateLabel.textContent = 'Check for updates';
-        updateBtn.onclick = null;
       }, 3000);
+    } else if (status === 'error') {
+      updateLabel.textContent = 'Update check failed';
+      setTimeout(() => { updateLabel.textContent = 'Check for updates'; }, 3000);
     }
+  });
+
+  updateBtn.addEventListener('click', async () => {
+    if (updateReady) {
+      window.creatorhub.win.close();
+      return;
+    }
+    updateBtn.classList.add('spinning');
+    updateBtn.disabled = true;
+    updateLabel.textContent = 'Checking…';
+    const res = await window.creatorhub.app.checkForUpdates();
+    if (!res.ok) {
+      updateBtn.classList.remove('spinning');
+      updateBtn.disabled = false;
+      if (res.reason === 'dev') showToast('Updates only work in packaged builds');
+    }
+    // If ok, status events from main will drive the UI from here
   });
 
   // ── Module routing ────────────────────────────────────────────────────────

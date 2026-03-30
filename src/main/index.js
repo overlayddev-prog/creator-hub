@@ -132,10 +132,12 @@ app.on('before-quit', () => {
 
 // ── Auto-updater ──────────────────────────────────────────────────────────────
 // Checks GitHub Releases on launch and downloads updates in the background.
+let _autoUpdater = null;
 function initAutoUpdater() {
   if (!app.isPackaged) return;
   const { updateElectronApp } = require('update-electron-app');
   const { autoUpdater } = require('electron');
+  _autoUpdater = autoUpdater;
   const send = (status, detail) => {
     console.log('[updater]', status, detail || '');
     mainWin?.webContents?.send('updater:status', { status, detail });
@@ -148,22 +150,6 @@ function initAutoUpdater() {
   updateElectronApp({ updateInterval: '1 hour' });
 }
 
-ipcMain.handle('updater:check', async () => {
-  try {
-    const res = await net.fetch('https://api.github.com/repos/overlayddev-prog/creator-hub/releases/latest', {
-      headers: { 'User-Agent': 'CreatorHub-App', 'Accept': 'application/vnd.github+json' },
-    });
-    if (!res.ok) return { ok: false, reason: 'GitHub API error ' + res.status };
-    const release = await res.json();
-    const latest  = (release.tag_name || '').replace(/^v/, '');
-    const current = app.getVersion();
-    const hasUpdate = latest && latest !== current && compareVersions(latest, current) > 0;
-    return { ok: true, hasUpdate, latest, current, url: release.html_url };
-  } catch (e) {
-    return { ok: false, reason: e.message };
-  }
-});
-
 function compareVersions(a, b) {
   const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -172,6 +158,31 @@ function compareVersions(a, b) {
   }
   return 0;
 }
+
+ipcMain.handle('updater:check', async () => {
+  if (!_autoUpdater) return { ok: false, reason: 'dev' };
+  try {
+    // First confirm via GitHub API that a newer version actually exists
+    const res = await net.fetch('https://api.github.com/repos/overlayddev-prog/creator-hub/releases/latest', {
+      headers: { 'User-Agent': 'CreatorHub-App', 'Accept': 'application/vnd.github+json' },
+    });
+    if (!res.ok) throw new Error('GitHub API error ' + res.status);
+    const release = await res.json();
+    const latest  = (release.tag_name || '').replace(/^v/, '');
+    const current = app.getVersion();
+    if (!latest || compareVersions(latest, current) <= 0) {
+      // Already up to date — fire the event so the UI updates
+      mainWin?.webContents?.send('updater:status', { status: 'up-to-date' });
+      return { ok: true };
+    }
+    // Newer version exists — hand off to auto-updater to download + install
+    _autoUpdater.checkForUpdates();
+    return { ok: true };
+  } catch (e) {
+    mainWin?.webContents?.send('updater:status', { status: 'error', detail: e.message });
+    return { ok: false, reason: e.message };
+  }
+});
 
 app.whenReady().then(() => {
   // ── asset:// protocol — serves local media files with Range support ──────────
