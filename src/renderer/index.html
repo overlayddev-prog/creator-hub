@@ -621,10 +621,12 @@
           <!-- Topbar -->
           <div class="ve-topbar">
             <div class="ve-topbar-left">
+              <button class="ve-icon-btn" id="ve-btn-back-arrow" title="Back to projects">←</button>
+              <div class="ve-topbar-sep"></div>
               <button class="ve-icon-btn" id="ve-btn-undo" title="Undo">↩</button>
               <button class="ve-icon-btn" id="ve-btn-redo" title="Redo">↪</button>
               <div class="ve-topbar-sep"></div>
-              <div class="ve-topbar-title" id="ve-project-name-display" title="Back to projects">Untitled Project</div>
+              <div class="ve-topbar-title" id="ve-project-name-display">Untitled Project</div>
             </div>
             <div class="ve-topbar-actions">
               <button class="ve-btn ve-btn-outline" id="ve-btn-addtext">T+ Add Text</button>
@@ -736,6 +738,7 @@
                   <button class="ve-sep-audio-btn" id="ve-sep-audio-btn" style="display:none;">⚟ Separate Audio</button>
                   <button class="ve-mute-btn" id="ve-mute-btn" style="display:none;">🔇 Mute Clip</button>
                 </div>
+                <button id="ve-btn-delete-clip" style="display:none;width:100%;margin-top:6px;padding:7px;border-radius:8px;background:rgba(255,51,85,0.08);border:1px solid rgba(255,51,85,0.25);color:#ff3355;font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;">🗑 Remove Clip</button>
 
                 <!-- Transition in (V1 non-first clips) -->
                 <div id="ve-transition-panel" style="display:none; margin-top:6px;">

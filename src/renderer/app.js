@@ -14,6 +14,19 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.11': {
+    sections: [
+      {
+        title: 'New',
+        items: [
+          '<b>Delete clips</b> — press Delete/Backspace or click "Remove Clip" in the properties panel to remove any selected clip',
+          '<b>T+ Add Text</b> — click the button in the toolbar, type your text, and it\'s added to the T track at the playhead',
+          '<b>Back arrow</b> — dedicated ← button in the editor topbar to return to the dashboard',
+          '<b>Audio assets</b> — double-clicking an audio file in the Assets panel now places it directly on the A track (no more separating required)',
+        ],
+      },
+    ],
+  },
   '0.10.10': {
     sections: [
       {
@@ -3833,6 +3846,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       $('ve-info-dims').textContent = clip ? (clip.dims || '—') : '—';
 
+      // Delete button — shown whenever any clip is selected
+      const delBtn = $('ve-btn-delete-clip');
+      if (delBtn) delBtn.style.display = (clip || selectedAudioClip()) ? '' : 'none';
+
       // Separate audio button — only for video clips that haven't detached audio yet
       const sepBtn = $('ve-sep-audio-btn');
       if (sepBtn) sepBtn.style.display = (clip && !clip.audioDetached) ? '' : 'none';
@@ -4843,8 +4860,7 @@ document.addEventListener('DOMContentLoaded', () => {
       $('ve-progress-fill').style.width = pct + '%';
       $('ve-progress-label').textContent = pct + '%';
     });
-    $('ve-project-name-display').style.cursor = 'pointer';
-    $('ve-project-name-display').addEventListener('click', backToDashboard);
+    $('ve-btn-back-arrow').addEventListener('click', backToDashboard);
 
     // ── Panel tabs (Properties | Assets) ──────────────────────────────────────
     document.querySelectorAll('.ve-panel-tab').forEach(tab => {
@@ -4883,22 +4899,87 @@ document.addEventListener('DOMContentLoaded', () => {
         row.className = 've-asset-row';
         row.draggable = true;
         const isAudio = asset.category === 'audio';
-        const icon = isAudio ? '🎵' : asset.category === 'images' ? '🖼️' : '🎬';
+        const typeClass = isAudio ? 'aud' : asset.category === 'images' ? 'img' : 'vid';
+        const icon = isAudio ? '🎵' : asset.category === 'images' ? '🖼' : '🎬';
         const thumbHtml = asset.thumb
           ? `<img class="ve-asset-thumb" src="${asset.thumb}" alt="">`
-          : `<div class="ve-asset-thumb-icon">${icon}</div>`;
-        row.innerHTML = `${thumbHtml}<span class="ve-asset-name" title="${asset.name}">${asset.name}</span>`;
+          : `<div class="ve-asset-thumb-icon ${typeClass}">${icon}</div>`;
+        row.innerHTML = `${thumbHtml}<div class="ve-asset-info"><div class="ve-asset-name" title="${asset.name}">${asset.name}</div></div>`;
         row.addEventListener('dragstart', e => {
           e.dataTransfer.setData('text/plain', asset.path);
           e.dataTransfer.setData('application/x-ch-asset', JSON.stringify({ path: asset.path, name: asset.name, category: asset.category }));
         });
-        row.addEventListener('dblclick', () => addClipFromFile(asset.path, 0));
+        row.addEventListener('dblclick', () => {
+          if (isAudio) addAudioFromFile(asset.path);
+          else addClipFromFile(asset.path, 0);
+        });
         list.appendChild(row);
       });
     }
 
+    async function addAudioFromFile(fp) {
+      const fileName = fp.split(/[\\/]/).pop();
+      const fileUrl  = assetUrl(fp);
+      const dur = await new Promise(resolve => {
+        const tmp = document.createElement('audio');
+        tmp.preload = 'metadata'; tmp.src = fileUrl;
+        tmp.onloadedmetadata = () => resolve(tmp.duration || 0);
+        tmp.onerror = () => resolve(0);
+      });
+      const usedTracks = new Set(veAudioClips.map(a => a.audioTrack || 0));
+      let audioTrack = 0;
+      while (usedTracks.has(audioTrack)) audioTrack++;
+      const aclip = {
+        id: genId(), sourceClipId: null,
+        filePath: fp, fileName, fileUrl, fileDuration: dur, audioTrack,
+        timelineStart: vePlayPos,
+        timelineDuration: dur,
+        inPoint: 0, outPoint: dur, volume: 1, waveform: null,
+      };
+      veAudioClips.push(aclip);
+      veSelId = aclip.id;
+      loadWaveform(aclip);
+      computeLayout(); pushHistory(); refreshClipPanel(); drawTimeline();
+      showToast(`Added "${fileName}" to A${audioTrack + 1}`);
+    }
+
+    // ── Delete selected clip ──────────────────────────────────────────────────
+    function deleteSelectedClip() {
+      const clip = selectedClip();
+      const aclip = selectedAudioClip();
+      if (clip) {
+        veClips = veClips.filter(c => c !== clip);
+        // also remove any detached audio tied to this clip
+        veAudioClips = veAudioClips.filter(a => a.sourceClipId !== clip.id);
+        veSelId = null; computeLayout(); updateAllLayerVideos(); refreshClipPanel(); drawTimeline(); pushHistory();
+        showToast('Clip removed');
+      } else if (aclip) {
+        veAudioClips = veAudioClips.filter(a => a !== aclip);
+        veSelId = null; computeLayout(); refreshClipPanel(); drawTimeline(); pushHistory();
+        showToast('Audio clip removed');
+      }
+    }
+
+    $('ve-btn-delete-clip').addEventListener('click', deleteSelectedClip);
+
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      const tag = document.activeElement.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (!$('ve-editor') || $('ve-editor').style.display === 'none') return;
+      deleteSelectedClip();
+    });
+
     // ── Add Text button ───────────────────────────────────────────────────────
-    $('ve-btn-addtext').addEventListener('click', () => showToast('Text overlays coming soon'));
+    $('ve-btn-addtext').addEventListener('click', () => {
+      const text = prompt('Enter text overlay:');
+      if (!text || !text.trim()) return;
+      const start = vePlayPos;
+      const end   = Math.min(vePlayPos + 5, veTotalDur || vePlayPos + 5);
+      veTextOverlays.push({ id: genId(), text: text.trim(), pos: 'bottom', color: '#ffffff', startSec: start, endSec: end });
+      pushHistory(); renderTextList(); drawTimeline();
+      showToast('Text added — see T track on timeline');
+    });
 
     // ── Init ───────────────────────────────────────────────────────────────────
     updateUndoRedo();
