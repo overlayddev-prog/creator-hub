@@ -9,6 +9,8 @@ let overlays      = [];
 let currentToken  = '';
 let selectedPreset = null;
 let baseUrl       = 'https://overlayd.gg';
+let assetsLib     = [];
+let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
@@ -693,8 +695,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Assets Module ──────────────────────────────────────────────────────────
-  let assetsLib     = [];
-  let recordingsLib = [];
   let assetsTab    = 'images';
   let assetsView   = 'grid';
   let assetsSelected = null;
