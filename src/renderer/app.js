@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.15': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Timeline zoom</b> — zooming out via scroll wheel no longer pushes all clips off screen',
+        ],
+      },
+    ],
+  },
   '0.10.14': {
     sections: [
       {
@@ -4280,6 +4290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const factor = e.deltaY > 0 ? 0.85 : 1.18;
         veZoom = Math.max(1, Math.min(40, veZoom * factor));
         $('ve-zoom-slider').value = String(veZoom);
+        clampScroll();
       } else {
         // Scroll
         veScrollOff += (e.deltaY / canvas.width) * visibleDur() * 3;
