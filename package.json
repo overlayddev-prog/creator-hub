@@ -1,6 +1,6 @@
 {
   "name": "creatorhub",
-  "version": "0.10.12",
+  "version": "0.10.13",
   "description": "CreatorHub - All-in-one creator studio",
   "main": "src/main/index.js",
   "scripts": {

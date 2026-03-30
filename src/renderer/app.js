@@ -14,6 +14,19 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.13': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Volume slider</b> — now correctly adjusts video clip volume or audio clip volume independently',
+          '<b>T track</b> — text overlays now appear as visible amber clips on the T track row in the timeline; click to select, Delete to remove',
+          '<b>Text placement</b> — new text is placed at the end of your V1 clips instead of at the playhead',
+          '<b>Audio pause</b> — audio clips from the Assets panel now correctly pause when you hit pause',
+        ],
+      },
+    ],
+  },
   '0.10.12': {
     sections: [
       {
@@ -2880,7 +2893,7 @@ document.addEventListener('DOMContentLoaded', () => {
     for (let ai = 0; ai < MAX_AUDIO_TRACKS; ai++) { veAudioEls.push(new Audio()); }
 
     // ── Timeline geometry ──────────────────────────────────────────────────────
-    const LW = 48, RULER_H = 22, VID_H = 50, AUD_H = 28, TRACK_GAP = 8, HANDLE_W = 12;
+    const LW = 48, RULER_H = 22, VID_H = 50, TEXT_H = 28, AUD_H = 28, TRACK_GAP = 8, HANDLE_W = 12;
     function numVideoTracks() {
       const mx = veClips.reduce((m, c) => Math.max(m, c.track || 0), 0);
       return mx + 2;
@@ -2891,7 +2904,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return mx + 2;
     }
     function videoRowY(track) { return RULER_H + 6 + track * VID_H; }
-    function audioRowY(track) { return RULER_H + 6 + numVideoTracks() * VID_H + TRACK_GAP + track * AUD_H; }
+    function textRowY()       { return RULER_H + 6 + numVideoTracks() * VID_H; }
+    function audioRowY(track) { return textRowY() + TEXT_H + TRACK_GAP + track * AUD_H; }
     function totalCanvasH()   { return audioRowY(numAudioTracks()) + 8; }
     function getVideoTrackAtY(y) {
       const n = numVideoTracks();
@@ -3266,6 +3280,32 @@ document.addEventListener('DOMContentLoaded', () => {
             rrect(bgCtx, gx1, ry+2, gx2-gx1, VID_H-4, 3); bgCtx.stroke();
             bgCtx.globalAlpha = 1;
           }
+        }
+
+        // Text (T) track row
+        const tRy = textRowY();
+        bgCtx.fillStyle = '#0b0d10';
+        bgCtx.fillRect(LW, tRy, tw(), TEXT_H);
+        bgCtx.strokeStyle = 'rgba(255,255,255,0.04)'; bgCtx.lineWidth = 1;
+        bgCtx.beginPath(); bgCtx.moveTo(LW, tRy + TEXT_H); bgCtx.lineTo(W, tRy + TEXT_H); bgCtx.stroke();
+        bgCtx.fillStyle = 'rgba(245,158,11,0.4)';
+        bgCtx.font = 'bold 9px sans-serif'; bgCtx.textAlign = 'center';
+        bgCtx.fillText('T', LW/2, tRy + TEXT_H/2 + 3);
+        for (const ov of veTextOverlays) {
+          const tx1 = timeToX(ov.startSec), tx2 = timeToX(ov.endSec);
+          const tcw = tx2 - tx1;
+          if (tx2 < LW || tx1 > W) continue;
+          const isSel = ov.id === veSelId;
+          bgCtx.fillStyle = isSel ? 'rgba(245,158,11,0.35)' : 'rgba(245,158,11,0.18)';
+          bgCtx.fillRect(Math.max(LW, tx1), tRy + 2, Math.min(tcw, W - Math.max(LW, tx1)), TEXT_H - 4);
+          bgCtx.strokeStyle = isSel ? '#f59e0b' : 'rgba(245,158,11,0.5)';
+          bgCtx.lineWidth = isSel ? 2 : 1;
+          rrect(bgCtx, tx1, tRy + 2, tcw, TEXT_H - 4, 3); bgCtx.stroke();
+          bgCtx.save();
+          bgCtx.beginPath(); bgCtx.rect(Math.max(LW, tx1) + 4, tRy, tcw - 8, TEXT_H); bgCtx.clip();
+          bgCtx.fillStyle = 'rgba(232,237,245,0.8)'; bgCtx.font = '9px sans-serif'; bgCtx.textAlign = 'left';
+          bgCtx.fillText('T: ' + ov.text, Math.max(LW, tx1) + 5, tRy + TEXT_H / 2 + 3);
+          bgCtx.restore();
         }
 
         // Audio section divider
@@ -3726,6 +3766,7 @@ document.addEventListener('DOMContentLoaded', () => {
       veRafId = null;
       veGapLastTs = null;
       if (!video.paused) video.pause();
+      syncAudioElements();
       drawTimeline(); updateTimecode(); updateAllLayerVideos();
     }
 
@@ -3858,12 +3899,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       $('ve-info-dims').textContent = clip ? (clip.dims || '—') : '—';
 
-      // Delete button — shown whenever any clip is selected
+      // Delete button — shown whenever any clip or text overlay is selected
       const aclip = selectedAudioClip();
+      const tov   = selectedTextOverlay();
       const delBtn = $('ve-btn-delete-clip');
-      if (delBtn) delBtn.style.display = (clip || aclip) ? '' : 'none';
+      if (delBtn) delBtn.style.display = (clip || aclip || tov) ? '' : 'none';
 
-      // Volume row — shown for any selected clip
+      // Volume row — shown for video/audio clips only
       const volRow = $('ve-vol-row');
       const volSlider = $('ve-volume');
       const volLabel = $('ve-vol-label');
@@ -3962,7 +4004,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Timeline mouse interactions ───────────────────────────────────────────
     canvas.addEventListener('mousedown', e => {
-      if (!veClips.length && !veAudioClips.length) return;
+      if (!veClips.length && !veAudioClips.length && !veTextOverlays.length) return;
       const rect = canvas.getBoundingClientRect();
       const x    = (e.clientX - rect.left) * (canvas.width / rect.width);
       const y    = (e.clientY - rect.top)  * (canvas.height / rect.height);
@@ -3985,6 +4027,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (x > LW) {
+        // Check T track click
+        const tRy = textRowY();
+        if (y >= tRy && y < tRy + TEXT_H) {
+          const clickedText = veTextOverlays.find(ov => t >= ov.startSec && t < ov.endSec);
+          if (clickedText) { veSelId = clickedText.id; refreshClipPanel(); }
+          else { veSelId = null; refreshClipPanel(); veDragging = 'seek'; seekToPos(Math.max(0, Math.min(veTotalDur, t))); }
+          drawTimeline(); e.preventDefault(); return;
+        }
+
         // Check audio track click
         const audioTrack = getAudioTrackAtY(y);
         if (audioTrack !== null) {
@@ -4648,9 +4699,16 @@ document.addEventListener('DOMContentLoaded', () => {
     $('ve-volume').addEventListener('input', function() {
       const vol = this.value / 100;
       $('ve-vol-label').textContent = this.value + '%';
-      const clip = selectedClip() || selectedAudioClip();
-      if (clip) { clip.volume = vol; }
-      video.volume = vol;
+      const clip = selectedClip();
+      const aclip = selectedAudioClip();
+      if (clip) {
+        clip.volume = vol;
+        video.volume = clip.muted ? 0 : vol;
+      } else if (aclip) {
+        aclip.volume = vol;
+        const aud = veAudioEls[aclip.audioTrack || 0];
+        if (aud) aud.volume = vol;
+      }
     });
 
     // ── Zoom controls ──────────────────────────────────────────────────────────
@@ -4977,12 +5035,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── Delete selected clip ──────────────────────────────────────────────────
+    function selectedTextOverlay() { return veTextOverlays.find(o => o.id === veSelId) || null; }
+
     function deleteSelectedClip() {
-      const clip = selectedClip();
+      const clip  = selectedClip();
       const aclip = selectedAudioClip();
+      const tov   = selectedTextOverlay();
       if (clip) {
         veClips = veClips.filter(c => c !== clip);
-        // also remove any detached audio tied to this clip
         veAudioClips = veAudioClips.filter(a => a.sourceClipId !== clip.id);
         veSelId = null; computeLayout(); updateAllLayerVideos(); refreshClipPanel(); drawTimeline(); pushHistory();
         showToast('Clip removed');
@@ -4990,6 +5050,10 @@ document.addEventListener('DOMContentLoaded', () => {
         veAudioClips = veAudioClips.filter(a => a !== aclip);
         veSelId = null; computeLayout(); refreshClipPanel(); drawTimeline(); pushHistory();
         showToast('Audio clip removed');
+      } else if (tov) {
+        veTextOverlays = veTextOverlays.filter(o => o !== tov);
+        veSelId = null; refreshClipPanel(); renderTextList(); drawTimeline(); pushHistory();
+        showToast('Text removed');
       }
     }
 
@@ -5021,8 +5085,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = input.value.trim();
         if (!text) { input.focus(); return; }
         document.body.removeChild(overlay);
-        const start = vePlayPos;
-        const end   = Math.max(start + 1, Math.min(start + 5, veTotalDur || start + 5));
+        const v1End = veClips.filter(c => !c.track).reduce((m, c) => Math.max(m, c.timelineStart + c.timelineDuration), 0);
+        const start = v1End || vePlayPos;
+        const end   = start + 5;
         veTextOverlays.push({ id: genId(), text, pos: 'bottom', color: '#ffffff', startSec: start, endSec: end });
         pushHistory(); renderTextList(); drawTimeline();
         showToast('Text added to T track');
