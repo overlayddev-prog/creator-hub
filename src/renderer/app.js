@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.16': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Text clip drag</b> — text clips can no longer be dragged to V1; ghost no longer appears on V1 row when clicking a text clip',
+        ],
+      },
+    ],
+  },
   '0.10.15': {
     sections: [
       {
@@ -4145,7 +4155,9 @@ document.addEventListener('DOMContentLoaded', () => {
         computeLayout();
       } else if (veDragging === 'clipMove' && veDragClip) {
         const hovTrack = getVideoTrackAtY(y);
-        veDragTargetTrack = (hovTrack !== null) ? hovTrack : (veDragClip.track || 0);
+        const rawTarget = (hovTrack !== null) ? hovTrack : (veDragClip.track || 0);
+        // Text clips can only live on V2+ tracks — prevent dragging to V1
+        veDragTargetTrack = (veDragClip.type === 'text' && rawTarget === 0) ? 1 : rawTarget;
         if (veDragTargetTrack === (veDragClip.track || 0)) {
           if (veDragTargetTrack === 0) {
             veDragClip.timelineStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
@@ -4175,7 +4187,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (veDragging === 'clipMove' && veDragClip) {
         const srcTrack = veDragClip.track || 0;
         if (veDragTargetTrack !== null && veDragTargetTrack !== srcTrack) {
-          if (veDragTargetTrack === 0) {
+          if (veDragTargetTrack === 0 && veDragClip.type !== 'text') {
             // Moving V2+ clip back to V1 — preserve its current size/position
             veDragClip.track = 0;
             showToast(`${veDragClip.fileName} moved to V1`);
