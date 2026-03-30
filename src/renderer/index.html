@@ -621,12 +621,13 @@
           <!-- Topbar -->
           <div class="ve-topbar">
             <div class="ve-topbar-left">
-              <button class="ve-icon-btn" id="ve-btn-back-dash" title="Back to projects">←</button>
               <button class="ve-icon-btn" id="ve-btn-undo" title="Undo">↩</button>
               <button class="ve-icon-btn" id="ve-btn-redo" title="Redo">↪</button>
-              <div class="ve-topbar-title" id="ve-project-name-display">Untitled Project</div>
+              <div class="ve-topbar-sep"></div>
+              <div class="ve-topbar-title" id="ve-project-name-display" title="Back to projects">Untitled Project</div>
             </div>
             <div class="ve-topbar-actions">
+              <button class="ve-btn ve-btn-outline" id="ve-btn-addtext">T+ Add Text</button>
               <button class="ve-btn ve-btn-outline" id="ve-btn-addclip">+ Add Clip</button>
               <button class="ve-btn ve-btn-outline" id="ve-btn-fromrec">From Recordings</button>
               <button class="ve-btn ve-btn-outline" id="ve-btn-save">💾 Save</button>
@@ -699,121 +700,112 @@
             <!-- Tools panel -->
             <div class="ve-tools">
 
-              <div class="ve-tools-hdr">Selected Clip</div>
-              <div class="ve-info-row"><span class="ve-info-label">File</span><span class="ve-info-val ve-clip-name-val" id="ve-clip-name">—</span></div>
-              <div class="ve-trim-inputs">
-                <div class="ve-trim-input-row">
-                  <span class="ve-trim-input-label">In</span>
-                  <input class="ve-trim-input" id="ve-in-input" value="00:00:00">
-                </div>
-                <div class="ve-trim-input-row">
-                  <span class="ve-trim-input-label">Out</span>
-                  <input class="ve-trim-input" id="ve-out-input" value="00:00:00">
-                </div>
+              <!-- Tab bar -->
+              <div class="ve-panel-tabs">
+                <button class="ve-panel-tab active" id="ve-tab-props" data-tab="props">Properties</button>
+                <button class="ve-panel-tab" id="ve-tab-assets" data-tab="assets">Assets</button>
               </div>
 
-              <div class="ve-tools-hdr" style="margin-top:8px;">Speed</div>
-              <div class="ve-speed-row">
-                <button class="ve-speed-btn" data-speed="0.25">0.25×</button>
-                <button class="ve-speed-btn" data-speed="0.5">0.5×</button>
-                <button class="ve-speed-btn active" data-speed="1">1×</button>
-                <button class="ve-speed-btn" data-speed="1.5">1.5×</button>
-                <button class="ve-speed-btn" data-speed="2">2×</button>
-                <button class="ve-speed-btn" data-speed="4">4×</button>
-              </div>
-
-              <!-- Separate audio / Mute -->
-              <div style="display:flex;gap:6px;margin-top:4px;">
-                <button class="ve-sep-audio-btn" id="ve-sep-audio-btn" style="display:none;">⚟ Separate Audio</button>
-                <button class="ve-mute-btn" id="ve-mute-btn" style="display:none;">🔇 Mute Clip</button>
-              </div>
-
-              <!-- Transition in (V1 non-first clips) -->
-              <div id="ve-transition-panel" style="display:none; margin-top:6px;">
-                <hr class="ve-divider" style="margin:6px 0;">
-                <div class="ve-tools-hdr">Transition In</div>
-                <div class="ve-info-row">
-                  <span class="ve-info-label">Current</span>
-                  <span class="ve-info-val" id="ve-trans-name">None</span>
-                </div>
-                <div style="display:flex; gap:6px; margin-top:4px;">
-                  <button class="ve-btn ve-btn-outline" id="ve-trans-pick" style="flex:1; font-size:10px;">🎬 Pick Transition</button>
-                  <button class="ve-btn ve-btn-outline" id="ve-trans-remove" style="flex:1; font-size:10px; display:none; color:var(--red); border-color:rgba(255,51,85,0.3);">✕ Remove</button>
-                </div>
-              </div>
-
-              <!-- Layer clip panel (V2+ selected) -->
-              <div id="ve-layer-panel" style="display:none;">
-                <div class="ve-tools-hdr" style="color:#10b981; margin-top:8px;">Layer Clip</div>
-                <div class="ve-info-row"><span class="ve-info-label">File</span><span class="ve-info-val ve-clip-name-val" id="ve-layer-name">—</span></div>
-                <div class="ve-info-row"><span class="ve-info-label">Pos</span><span class="ve-info-val" id="ve-layer-pos">—</span></div>
-                <div class="ve-info-row"><span class="ve-info-label">Size</span><span class="ve-info-val" id="ve-layer-size">—</span></div>
-                <div class="ve-ovl-btns">
-                  <button class="ve-btn ve-btn-outline ve-ovl-action-btn" id="ve-layer-goto">⏩ Go to clip</button>
-                  <button class="ve-btn ve-btn-outline ve-ovl-action-btn" id="ve-layer-toV1">↑ Move to V1</button>
-                  <button class="ve-btn ve-btn-outline ve-ovl-action-btn ve-ovl-del-btn" id="ve-layer-delete">🗑 Remove clip</button>
-                </div>
-                <div class="ve-ovl-hint">Drag preview to reposition · Drag corners to resize</div>
-
-                <!-- Keyframe controls -->
-                <div id="ve-kf-section" style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;">
-                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                    <span style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:rgba(232,237,245,0.45);">KEYFRAMES</span>
-                    <div style="display:flex;gap:5px;align-items:center;">
-                      <button class="ve-kf-help-btn" id="ve-kf-help" title="How keyframes work">?</button>
-                      <button class="ve-kf-clear-btn" id="ve-kf-clear" style="display:none;" title="Remove all keyframes">Clear all</button>
-                    </div>
+              <!-- PROPERTIES TAB -->
+              <div class="ve-panel-body active" id="ve-panel-props">
+                <div class="ve-tools-hdr">Selected Clip</div>
+                <div class="ve-info-row"><span class="ve-info-label">File</span><span class="ve-info-val ve-clip-name-val" id="ve-clip-name">—</span></div>
+                <div class="ve-trim-inputs">
+                  <div class="ve-trim-input-row">
+                    <span class="ve-trim-input-label">In</span>
+                    <input class="ve-trim-input" id="ve-in-input" value="00:00:00">
                   </div>
-                  <button class="ve-btn ve-btn-primary" id="ve-kf-add" style="width:100%;font-size:11px;padding:6px 0;margin-bottom:6px;">◆ Record Keyframe Here</button>
-                  <div class="ve-kf-list" id="ve-kf-list"></div>
-                  <div class="ve-kf-empty" id="ve-kf-empty">No keyframes yet — drag the clip in the preview, then record.</div>
+                  <div class="ve-trim-input-row">
+                    <span class="ve-trim-input-label">Out</span>
+                    <input class="ve-trim-input" id="ve-out-input" value="00:00:00">
+                  </div>
                 </div>
-              </div>
 
-              <hr class="ve-divider">
-              <div class="ve-tools-hdr">Text Overlay</div>
-              <input class="ve-trim-input" id="ve-text-input" placeholder="Enter text…" style="margin-bottom:4px;">
-              <div class="ve-text-options">
-                <select class="ve-text-select" id="ve-text-pos">
-                  <option value="bottom">Bottom</option>
-                  <option value="center">Center</option>
-                  <option value="top">Top</option>
-                </select>
-                <input type="color" id="ve-text-color" value="#ffffff" class="ve-text-color-pick" title="Text color">
-              </div>
-              <div class="ve-trim-inputs" style="margin-top:4px;">
-                <div class="ve-trim-input-row">
-                  <span class="ve-trim-input-label">From</span>
-                  <input class="ve-trim-input" id="ve-text-start" placeholder="00:00:00">
+                <div class="ve-tools-hdr" style="margin-top:8px;">Speed</div>
+                <div class="ve-speed-row">
+                  <button class="ve-speed-btn" data-speed="0.25">0.25×</button>
+                  <button class="ve-speed-btn" data-speed="0.5">0.5×</button>
+                  <button class="ve-speed-btn active" data-speed="1">1×</button>
+                  <button class="ve-speed-btn" data-speed="1.5">1.5×</button>
+                  <button class="ve-speed-btn" data-speed="2">2×</button>
+                  <button class="ve-speed-btn" data-speed="4">4×</button>
                 </div>
-                <div class="ve-trim-input-row">
-                  <span class="ve-trim-input-label">To</span>
-                  <input class="ve-trim-input" id="ve-text-end" placeholder="00:00:00">
+
+                <!-- Separate audio / Mute -->
+                <div style="display:flex;gap:6px;margin-top:4px;">
+                  <button class="ve-sep-audio-btn" id="ve-sep-audio-btn" style="display:none;">⚟ Separate Audio</button>
+                  <button class="ve-mute-btn" id="ve-mute-btn" style="display:none;">🔇 Mute Clip</button>
                 </div>
-              </div>
-              <button class="ve-tool-btn" id="ve-text-add-btn" style="margin-top:5px;"><span class="ve-tool-icon">+</span>Add Text</button>
-              <div id="ve-text-list" class="ve-text-list"></div>
 
-              <hr class="ve-divider">
-              <div class="ve-tools-hdr">Transitions</div>
-              <div class="ve-fade-row">
-                <label class="ve-fade-label"><input type="checkbox" id="ve-fade-in-en"> Fade In</label>
-                <input type="number" class="ve-fade-dur" id="ve-fade-in-dur" value="0.5" min="0.1" max="10" step="0.1">
-                <span class="ve-fade-unit">s</span>
-              </div>
-              <div class="ve-fade-row">
-                <label class="ve-fade-label"><input type="checkbox" id="ve-fade-out-en"> Fade Out</label>
-                <input type="number" class="ve-fade-dur" id="ve-fade-out-dur" value="0.5" min="0.1" max="10" step="0.1">
-                <span class="ve-fade-unit">s</span>
-              </div>
+                <!-- Transition in (V1 non-first clips) -->
+                <div id="ve-transition-panel" style="display:none; margin-top:6px;">
+                  <hr class="ve-divider" style="margin:6px 0;">
+                  <div class="ve-tools-hdr">Transition In</div>
+                  <div class="ve-info-row">
+                    <span class="ve-info-label">Current</span>
+                    <span class="ve-info-val" id="ve-trans-name">None</span>
+                  </div>
+                  <div style="display:flex; gap:6px; margin-top:4px;">
+                    <button class="ve-btn ve-btn-outline" id="ve-trans-pick" style="flex:1; font-size:10px;">🎬 Pick Transition</button>
+                    <button class="ve-btn ve-btn-outline" id="ve-trans-remove" style="flex:1; font-size:10px; display:none; color:var(--red); border-color:rgba(255,51,85,0.3);">✕ Remove</button>
+                  </div>
+                </div>
 
-              <hr class="ve-divider">
-              <div class="ve-tools-hdr">File Info</div>
-              <div class="ve-info-row"><span class="ve-info-label">Total</span><span class="ve-info-val" id="ve-info-duration">—</span></div>
-              <div class="ve-info-row"><span class="ve-info-label">Clips</span><span class="ve-info-val" id="ve-info-clips">0</span></div>
-              <div class="ve-info-row"><span class="ve-info-label">Res</span><span class="ve-info-val" id="ve-info-dims">—</span></div>
+                <!-- Layer clip panel (V2+ selected) -->
+                <div id="ve-layer-panel" style="display:none;">
+                  <div class="ve-tools-hdr" style="color:#10b981; margin-top:8px;">Layer Clip</div>
+                  <div class="ve-info-row"><span class="ve-info-label">File</span><span class="ve-info-val ve-clip-name-val" id="ve-layer-name">—</span></div>
+                  <div class="ve-info-row"><span class="ve-info-label">Pos</span><span class="ve-info-val" id="ve-layer-pos">—</span></div>
+                  <div class="ve-info-row"><span class="ve-info-label">Size</span><span class="ve-info-val" id="ve-layer-size">—</span></div>
+                  <div class="ve-ovl-btns">
+                    <button class="ve-btn ve-btn-outline ve-ovl-action-btn" id="ve-layer-goto">⏩ Go to clip</button>
+                    <button class="ve-btn ve-btn-outline ve-ovl-action-btn" id="ve-layer-toV1">↑ Move to V1</button>
+                    <button class="ve-btn ve-btn-outline ve-ovl-action-btn ve-ovl-del-btn" id="ve-layer-delete">🗑 Remove clip</button>
+                  </div>
+                  <div class="ve-ovl-hint">Drag preview to reposition · Drag corners to resize</div>
 
-              <div class="ve-canvas-section">
+                  <!-- Keyframe controls -->
+                  <div id="ve-kf-section" style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:8px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                      <span style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:rgba(232,237,245,0.45);">KEYFRAMES</span>
+                      <div style="display:flex;gap:5px;align-items:center;">
+                        <button class="ve-kf-help-btn" id="ve-kf-help" title="How keyframes work">?</button>
+                        <button class="ve-kf-clear-btn" id="ve-kf-clear" style="display:none;" title="Remove all keyframes">Clear all</button>
+                      </div>
+                    </div>
+                    <button class="ve-btn ve-btn-primary" id="ve-kf-add" style="width:100%;font-size:11px;padding:6px 0;margin-bottom:6px;">◆ Record Keyframe Here</button>
+                    <div class="ve-kf-list" id="ve-kf-list"></div>
+                    <div class="ve-kf-empty" id="ve-kf-empty">No keyframes yet — drag the clip in the preview, then record.</div>
+                  </div>
+                </div>
+
+                <!-- Text overlay (hidden inputs kept for backend wiring) -->
+                <input type="hidden" id="ve-text-input">
+                <input type="hidden" id="ve-text-pos" value="bottom">
+                <input type="hidden" id="ve-text-color" value="#ffffff">
+                <input type="hidden" id="ve-text-start">
+                <input type="hidden" id="ve-text-end">
+                <div id="ve-text-list" style="display:none;"></div>
+
+                <hr class="ve-divider">
+                <div class="ve-tools-hdr">Transitions</div>
+                <div class="ve-fade-row">
+                  <label class="ve-fade-label"><input type="checkbox" id="ve-fade-in-en"> Fade In</label>
+                  <input type="number" class="ve-fade-dur" id="ve-fade-in-dur" value="0.5" min="0.1" max="10" step="0.1">
+                  <span class="ve-fade-unit">s</span>
+                </div>
+                <div class="ve-fade-row">
+                  <label class="ve-fade-label"><input type="checkbox" id="ve-fade-out-en"> Fade Out</label>
+                  <input type="number" class="ve-fade-dur" id="ve-fade-out-dur" value="0.5" min="0.1" max="10" step="0.1">
+                  <span class="ve-fade-unit">s</span>
+                </div>
+
+                <hr class="ve-divider">
+                <div class="ve-tools-hdr">File Info</div>
+                <div class="ve-info-row"><span class="ve-info-label">Total</span><span class="ve-info-val" id="ve-info-duration">—</span></div>
+                <div class="ve-info-row"><span class="ve-info-label">Clips</span><span class="ve-info-val" id="ve-info-clips">0</span></div>
+                <div class="ve-info-row"><span class="ve-info-label">Res</span><span class="ve-info-val" id="ve-info-dims">—</span></div>
+
                 <hr class="ve-divider">
                 <div class="ve-tools-hdr">Canvas</div>
                 <select id="ve-canvas-select" class="ve-canvas-select">
@@ -823,23 +815,34 @@
                   <option value="2560x1440">2560 × 1440 — 1440p</option>
                   <option value="3840x2160">3840 × 2160 — 4K</option>
                 </select>
-              </div>
 
-              <div class="ve-export-section">
-                <hr class="ve-divider">
-                <div class="ve-tools-hdr">Export</div>
-                <div class="ve-export-label">Format</div>
-                <div class="ve-format-row">
-                  <button class="ve-format-btn active" data-fmt="mp4">MP4</button>
-                  <button class="ve-format-btn" data-fmt="mkv">MKV</button>
-                  <button class="ve-format-btn" data-fmt="mov">MOV</button>
+                <div class="ve-export-section">
+                  <hr class="ve-divider">
+                  <div class="ve-tools-hdr">Export</div>
+                  <div class="ve-export-label">Format</div>
+                  <div class="ve-format-row">
+                    <button class="ve-format-btn active" data-fmt="mp4">MP4</button>
+                    <button class="ve-format-btn" data-fmt="mkv">MKV</button>
+                    <button class="ve-format-btn" data-fmt="mov">MOV</button>
+                  </div>
+                  <button class="ve-export-btn" id="ve-export-btn">⬇ Export</button>
+                  <div id="ve-export-progress" style="display:none;">
+                    <div class="ve-progress-bar"><div class="ve-progress-fill" id="ve-progress-fill"></div></div>
+                    <div class="ve-progress-pct" id="ve-progress-label">0%</div>
+                  </div>
                 </div>
-                <button class="ve-export-btn" id="ve-export-btn">⬇ Export</button>
-                <div id="ve-export-progress" style="display:none;">
-                  <div class="ve-progress-bar"><div class="ve-progress-fill" id="ve-progress-fill"></div></div>
-                  <div class="ve-progress-pct" id="ve-progress-label">0%</div>
+              </div><!-- end props tab -->
+
+              <!-- ASSETS TAB -->
+              <div class="ve-panel-body" id="ve-panel-assets">
+                <div class="ve-assets-sub-tabs">
+                  <button class="ve-assets-sub-tab active" data-cat="videos">Videos</button>
+                  <button class="ve-assets-sub-tab" data-cat="audio">Audio</button>
+                  <button class="ve-assets-sub-tab" data-cat="images">Images</button>
                 </div>
-              </div>
+                <div class="ve-assets-list" id="ve-assets-list"></div>
+              </div><!-- end assets tab -->
+
             </div><!-- end tools -->
 
           </div><!-- end ve-main -->

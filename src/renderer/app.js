@@ -14,6 +14,24 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.9': {
+    sections: [
+      {
+        title: 'New',
+        items: [
+          '<b>Editor redesign</b> — tools panel now has Properties and Assets tabs; open your library clips directly in the editor',
+          '<b>Assets panel</b> — browse Videos, Audio, and Images from your library; drag to timeline or double-click to add',
+          '<b>T+ Add Text</b> — text overlay button added to editor toolbar (full text editing coming soon)',
+        ],
+      },
+      {
+        title: 'Fix',
+        items: [
+          '<b>Back to projects</b> — click the project name in the editor topbar to return to the dashboard',
+        ],
+      },
+    ],
+  },
   '0.10.8': {
     sections: [
       {
@@ -4806,7 +4824,62 @@ document.addEventListener('DOMContentLoaded', () => {
       $('ve-progress-fill').style.width = pct + '%';
       $('ve-progress-label').textContent = pct + '%';
     });
-    $('ve-btn-back-dash').addEventListener('click',  backToDashboard);
+    $('ve-project-name-display').style.cursor = 'pointer';
+    $('ve-project-name-display').addEventListener('click', backToDashboard);
+
+    // ── Panel tabs (Properties | Assets) ──────────────────────────────────────
+    document.querySelectorAll('.ve-panel-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.ve-panel-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.ve-panel-body').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        $('ve-panel-' + tab.dataset.tab).classList.add('active');
+        if (tab.dataset.tab === 'assets') renderVeAssetsList();
+      });
+    });
+
+    // ── Assets sub-tabs ───────────────────────────────────────────────────────
+    let veAssetsTab = 'videos';
+    document.querySelectorAll('.ve-assets-sub-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.ve-assets-sub-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        veAssetsTab = btn.dataset.cat;
+        renderVeAssetsList();
+      });
+    });
+
+    function renderVeAssetsList() {
+      const list = $('ve-assets-list');
+      if (!list) return;
+      const catMap = { videos: 'videos', audio: 'audio', images: 'images' };
+      const items = assetsLib.filter(a => a.category === catMap[veAssetsTab]);
+      list.innerHTML = '';
+      if (!items.length) {
+        list.innerHTML = `<div style="text-align:center;color:var(--dim);font-size:11px;padding:24px 0;">No ${veAssetsTab} in library</div>`;
+        return;
+      }
+      items.forEach(asset => {
+        const row = document.createElement('div');
+        row.className = 've-asset-row';
+        row.draggable = true;
+        const isAudio = asset.category === 'audio';
+        const icon = isAudio ? '🎵' : asset.category === 'images' ? '🖼️' : '🎬';
+        const thumbHtml = asset.thumb
+          ? `<img class="ve-asset-thumb" src="${asset.thumb}" alt="">`
+          : `<div class="ve-asset-thumb-icon">${icon}</div>`;
+        row.innerHTML = `${thumbHtml}<span class="ve-asset-name" title="${asset.name}">${asset.name}</span>`;
+        row.addEventListener('dragstart', e => {
+          e.dataTransfer.setData('text/plain', asset.path);
+          e.dataTransfer.setData('application/x-ch-asset', JSON.stringify({ path: asset.path, name: asset.name, category: asset.category }));
+        });
+        row.addEventListener('dblclick', () => addClipFromFile(asset.path, 0));
+        list.appendChild(row);
+      });
+    }
+
+    // ── Add Text button ───────────────────────────────────────────────────────
+    $('ve-btn-addtext').addEventListener('click', () => showToast('Text overlays coming soon'));
 
     // ── Init ───────────────────────────────────────────────────────────────────
     updateUndoRedo();
