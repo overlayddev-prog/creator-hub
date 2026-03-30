@@ -132,20 +132,29 @@ app.on('before-quit', () => {
 
 // ── Auto-updater ──────────────────────────────────────────────────────────────
 // Checks GitHub Releases on launch and downloads updates in the background.
-// To activate: replace YOUR_USERNAME/YOUR_REPO_NAME in package.json with your
-// actual GitHub repo, then publish releases with `npm run make` artifacts.
+let _autoUpdater = null;
 function initAutoUpdater() {
   if (!app.isPackaged) return;
   const { updateElectronApp } = require('update-electron-app');
   const { autoUpdater } = require('electron');
-  const sendLog = (msg) => { console.log(msg); mainWin?.webContents?.send('updater:log', msg); };
-  autoUpdater.on('checking-for-update',  () => sendLog('[updater] checking...'));
-  autoUpdater.on('update-available',     () => sendLog('[updater] update available — downloading...'));
-  autoUpdater.on('update-not-available', () => sendLog('[updater] up to date'));
-  autoUpdater.on('update-downloaded',    () => sendLog('[updater] downloaded — will install on next launch'));
-  autoUpdater.on('error',                (e) => sendLog('[updater] error: ' + e.message));
+  _autoUpdater = autoUpdater;
+  const send = (status, detail) => {
+    console.log('[updater]', status, detail || '');
+    mainWin?.webContents?.send('updater:status', { status, detail });
+  };
+  autoUpdater.on('checking-for-update',  ()  => send('checking'));
+  autoUpdater.on('update-available',     ()  => send('available'));
+  autoUpdater.on('update-not-available', ()  => send('up-to-date'));
+  autoUpdater.on('update-downloaded',    ()  => send('downloaded'));
+  autoUpdater.on('error',                (e) => send('error', e.message));
   updateElectronApp({ updateInterval: '1 hour' });
 }
+
+ipcMain.handle('updater:check', () => {
+  if (!_autoUpdater) return { ok: false, reason: 'dev' };
+  try { _autoUpdater.checkForUpdates(); return { ok: true }; }
+  catch (e) { return { ok: false, reason: e.message }; }
+});
 
 app.whenReady().then(() => {
   // ── asset:// protocol — serves local media files with Range support ──────────

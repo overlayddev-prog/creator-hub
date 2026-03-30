@@ -228,6 +228,37 @@ body {
 }
 .sign-out-btn:hover { color: var(--red); }
 
+.update-check-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--dim);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s;
+  width: 100%;
+}
+.update-check-btn:hover { color: var(--cyan); }
+.update-check-btn:disabled { opacity: 0.5; cursor: default; }
+.update-check-icon {
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 0.3s;
+}
+.update-check-btn.spinning .update-check-icon {
+  display: inline-block;
+  animation: spin 1s linear infinite;
+}
+.update-check-btn.success { color: var(--green); }
+.update-check-btn.has-update { color: #ffbb00; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ── Content Area ─────────────────────────────────────────────────────────── */
 .content-area {
   flex: 1;

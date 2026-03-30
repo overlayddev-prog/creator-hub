@@ -12,6 +12,16 @@ let baseUrl       = 'https://overlayd.gg';
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.5': {
+    sections: [
+      {
+        title: 'App',
+        items: [
+          '<b>Manual update check</b> — new "Check for updates" button in the sidebar footer; shows live download progress and prompts restart when ready',
+        ],
+      },
+    ],
+  },
   '0.10.4': {
     sections: [
       {
@@ -538,6 +548,53 @@ document.addEventListener('DOMContentLoaded', () => {
   $('autolaunch-checkbox').addEventListener('change', function () {
     window.creatorhub.app.setAutoLaunch(this.checked);
     showToast(this.checked ? 'Will launch on startup' : 'Startup launch disabled');
+  });
+
+  // ── Check for updates button ──────────────────────────────────────────────
+  const updateBtn   = $('update-check-btn');
+  const updateLabel = $('update-check-label');
+  let updateReady   = false;
+
+  window.creatorhub.app.onUpdaterStatus(({ status }) => {
+    updateBtn.classList.remove('spinning', 'success', 'has-update');
+    if (status === 'checking') {
+      updateBtn.classList.add('spinning');
+      updateLabel.textContent = 'Checking…';
+      updateBtn.disabled = true;
+    } else if (status === 'available') {
+      updateBtn.classList.add('has-update');
+      updateLabel.textContent = 'Downloading update…';
+      updateBtn.disabled = true;
+    } else if (status === 'downloaded') {
+      updateBtn.classList.add('has-update');
+      updateLabel.textContent = 'Restart to update';
+      updateBtn.disabled = false;
+      updateReady = true;
+    } else if (status === 'up-to-date') {
+      updateBtn.classList.add('success');
+      updateLabel.textContent = 'Up to date ✓';
+      updateBtn.disabled = false;
+      setTimeout(() => {
+        updateBtn.classList.remove('success');
+        updateLabel.textContent = 'Check for updates';
+      }, 3000);
+    } else if (status === 'error') {
+      updateLabel.textContent = 'Update error';
+      updateBtn.disabled = false;
+      setTimeout(() => { updateLabel.textContent = 'Check for updates'; }, 3000);
+    }
+  });
+
+  updateBtn.addEventListener('click', async () => {
+    if (updateReady) {
+      // A download is ready — relaunch to apply
+      window.creatorhub.win.close();
+      return;
+    }
+    const res = await window.creatorhub.app.checkForUpdates();
+    if (!res.ok && res.reason === 'dev') {
+      showToast('Auto-update only works in packaged builds');
+    }
   });
 
   // ── Module routing ────────────────────────────────────────────────────────
