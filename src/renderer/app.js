@@ -492,10 +492,9 @@ async function boot() {
 
     window.creatorhub.auth.onToken(async (token) => {
       sessionToken = token;
-      $('auth-status').textContent = 'Loading your overlays…';
+      $('auth-status').textContent = 'Loading your account…';
       const ok = await loadUserData();
-      if (ok && overlays.length) { showMainApp(); }
-      else if (ok) { $('auth-status').textContent = 'No overlays yet — create one at overlayd.gg'; }
+      if (ok) { showMainApp(); }
       else { $('auth-status').textContent = 'Could not load data — try again'; }
     });
 
@@ -504,7 +503,7 @@ async function boot() {
     if (savedToken) {
       sessionToken = savedToken;
       const ok = await loadUserData();
-      if (ok && overlays.length) { showMainApp(); return; }
+      if (ok) { showMainApp(); return; }
     }
     $('auth-status').textContent = '';
     $('sign-in-btn').style.display = '';
