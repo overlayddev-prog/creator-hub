@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.8': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Transition hover previews</b> — user-created transitions now animate on hover in the Assets library',
+        ],
+      },
+    ],
+  },
   '0.10.7': {
     sections: [
       {
