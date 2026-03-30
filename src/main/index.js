@@ -111,7 +111,10 @@ if (tray) tray.setContextMenu(tray.getContextMenu ? tray.getContextMenu() : unde
   mainWin.loadURL(`http://127.0.0.1:${port}`);
   mainWin.webContents.once('did-finish-load', () => setTimeout(initAutoUpdater, 3000));
   mainWin.webContents.on('before-input-event', (_e, input) => {
-    if (input.type === 'keyDown' && input.key === 'F12') {
+    if (input.type !== 'keyDown') return;
+    const isF12 = input.key === 'F12';
+    const isCtrlShiftI = (input.control || input.meta) && input.shift && input.key === 'I';
+    if (isF12 || isCtrlShiftI) {
       mainWin.webContents.isDevToolsOpened()
         ? mainWin.webContents.closeDevTools()
         : mainWin.webContents.openDevTools();

@@ -14,6 +14,25 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.10': {
+    sections: [
+      {
+        title: 'New',
+        items: [
+          '<b>Editor redesign</b> — tools panel redesigned to match app aesthetic: pill buttons, tabbed Properties/Assets panel, darker surface',
+          '<b>Dashboard redesign</b> — project cards now show gradient thumbnails, larger title, hover effects',
+          '<b>Assets panel</b> — browse Videos, Audio, Images from your library directly in the editor; drag to timeline or double-click to add',
+        ],
+      },
+      {
+        title: 'Fix',
+        items: [
+          '<b>DevTools</b> — Ctrl+Shift+I now opens developer tools in the installed app',
+          '<b>Back to projects</b> — click project name in editor topbar to return to dashboard',
+        ],
+      },
+    ],
+  },
   '0.10.9': {
     sections: [
       {
@@ -4490,7 +4509,7 @@ document.addEventListener('DOMContentLoaded', () => {
         card.className = 've-dash-card';
         const thumbHtml = p.thumbnail
           ? `<img src="${p.thumbnail}" alt="">`
-          : `<div class="ve-dash-thumb-empty">🎬</div>`;
+          : `<div class="ve-dash-thumb-gradient"></div><div class="ve-dash-thumb-empty">🎬</div>`;
         card.innerHTML = `
           <div class="ve-dash-thumb">${thumbHtml}</div>
           <div class="ve-dash-info">
