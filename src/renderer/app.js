@@ -4079,6 +4079,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (clip && x > LW) {
         const clipRy = videoRowY(clip.track || 0);
         if (y >= clipRy && y < clipRy + VID_H) {
+          console.log(`[DBG] Trim zone hit: clip="${clip.fileName}" type=${clip.type||'video'} track=${clip.track||0} y=${Math.round(y)} clipRy=${clipRy}`);
           const lx = timeToX(clip.timelineStart);
           const rx = timeToX(clip.timelineStart + clip.timelineDuration);
           if (clip.type === 'text') {
@@ -4117,8 +4118,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Check video track click
         const videoTrack = getVideoTrackAtY(y);
+        // DEBUG: show what was detected (remove after confirming fix works)
+        if (videoTrack === null) {
+          showToast(`[DBG] y=${Math.round(y)} → no track (gap/ruler)`);
+        }
         if (videoTrack !== null) {
           const clickedClip = veClips.find(c => (c.track||0) === videoTrack && t >= c.timelineStart && t < c.timelineStart + c.timelineDuration);
+          // DEBUG: show what clip was found
+          if (clickedClip) {
+            showToast(`[DBG] V${videoTrack+1}: "${clickedClip.fileName}" type=${clickedClip.type||'video'}`);
+          } else {
+            const allOnTrack = veClips.filter(c => (c.track||0) === videoTrack);
+            showToast(`[DBG] V${videoTrack+1}: no clip at t=${t.toFixed(1)}s (${allOnTrack.length} clips on track)`);
+          }
           if (clickedClip) {
             veSelId = clickedClip.id; refreshClipPanel(); syncAllLayers();
             veDragging = 'clipMove'; veDragClip = clickedClip;
