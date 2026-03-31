@@ -645,13 +645,11 @@
 
               <div class="ve-preview-wrap">
                 <div class="ve-video-container" id="ve-video-container">
-                  <!-- Dynamic layer wraps injected by JS -->
-                  <div id="ve-layers-container" style="position:absolute;inset:0;pointer-events:none;overflow:visible;"></div>
-                  <!-- V1 transition FROM layer — sits below V1 wrap during transitions -->
+                  <!-- V1 transition FROM layer — sits below everything during transitions -->
                   <div id="ve-v1-trans-wrap" style="display:none;position:absolute;overflow:hidden;box-sizing:border-box;pointer-events:none;">
                     <video id="ve-v1-trans-video" preload="auto" style="width:100%;height:100%;object-fit:contain;display:block;"></video>
                   </div>
-                  <!-- V1 track wrap — rendered after V2+ layers so it paints on top -->
+                  <!-- V1 track wrap — base layer, rendered FIRST so V2+ overlays paint on top -->
                   <div id="ve-v1-wrap" style="display:none;position:absolute;overflow:hidden;box-sizing:border-box;cursor:move;">
                     <video id="ve-video" preload="auto" style="width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;"></video>
                     <div class="ve-ov-handle nw" data-corner="nw"></div>
@@ -659,6 +657,8 @@
                     <div class="ve-ov-handle sw" data-corner="sw"></div>
                     <div class="ve-ov-handle se" data-corner="se"></div>
                   </div>
+                  <!-- V2+ overlay layers — rendered AFTER V1 so they appear on top and capture clicks -->
+                  <div id="ve-layers-container" style="position:absolute;inset:0;pointer-events:none;overflow:visible;"></div>
                   <canvas id="ve-overlay-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
                   <div id="ve-fade-overlay" style="position:absolute;inset:0;background:#000;pointer-events:none;opacity:0;transition:none;"></div>
                   <div class="ve-timecode" id="ve-timecode">00:00:00 / 00:00:00</div>
