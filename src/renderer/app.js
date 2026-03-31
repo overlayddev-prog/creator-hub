@@ -3385,12 +3385,12 @@ document.addEventListener('DOMContentLoaded', () => {
             bgCtx.fillStyle = isSel ? 'rgba(0,229,255,0.1)' : 'rgba(0,0,0,0.32)';
             bgCtx.fillRect(Math.max(LW,cx1), ry, cw, VID_H);
           } else if (clip.type === 'text') {
-            bgCtx.fillStyle = isSel ? 'rgba(245,158,11,0.35)' : 'rgba(245,158,11,0.18)';
+            bgCtx.fillStyle = isSel ? 'rgba(245,158,11,0.35)' : 'rgba(245,158,11,0.08)';
             bgCtx.fillRect(Math.max(LW,cx1), ry, cw, VID_H);
           } else {
             const g = bgCtx.createLinearGradient(cx1,0,cx2,0);
-            g.addColorStop(0, isSel ? 'rgba(0,229,255,0.28)' : 'rgba(0,229,255,0.16)');
-            g.addColorStop(1, isSel ? 'rgba(139,92,246,0.28)' : 'rgba(139,92,246,0.16)');
+            g.addColorStop(0, isSel ? 'rgba(0,229,255,0.28)' : 'rgba(0,229,255,0.08)');
+            g.addColorStop(1, isSel ? 'rgba(139,92,246,0.28)' : 'rgba(139,92,246,0.08)');
             bgCtx.fillStyle = g; bgCtx.fillRect(Math.max(LW,cx1), ry, cw, VID_H);
             bgCtx.strokeStyle = 'rgba(0,0,0,0.18)'; bgCtx.lineWidth = 1;
             for (let x = cx1+40; x < cx2-2; x += 40) {
@@ -3399,7 +3399,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           bgCtx.restore();
 
-          bgCtx.strokeStyle = clip.type === 'text' ? (isSel ? '#f59e0b' : 'rgba(245,158,11,0.5)') : (isSel ? '#00e5ff' : 'rgba(0,229,255,0.3)');
+          bgCtx.strokeStyle = clip.type === 'text' ? (isSel ? '#f59e0b' : 'rgba(245,158,11,0.18)') : (isSel ? '#00e5ff' : 'rgba(0,229,255,0.12)');
           bgCtx.lineWidth = isSel ? 2 : 1;
           rrect(bgCtx, cx1, ry, cw, VID_H, 4); bgCtx.stroke();
 
@@ -4039,9 +4039,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
       // Pointer events: container is always 'none' so misses pass through to V1;
-      // individual V2+ layer wraps get 'auto' when visible (set in syncAllLayers);
+      // individual V2+ layer wraps get 'auto' when visible so they are always clickable;
       // V1 wrap is always interactive when visible.
       layersContainer.style.pointerEvents = 'none';
+      veLayers.forEach(l => {
+        l.wrap.style.pointerEvents = l.wrap.style.display !== 'none' ? 'auto' : 'none';
+      });
       const v1WrapEl = $('ve-v1-wrap');
       if (v1WrapEl) v1WrapEl.style.pointerEvents = 'auto';
     }
@@ -4117,7 +4120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (videoTrack !== null) {
           const clickedClip = veClips.find(c => (c.track||0) === videoTrack && t >= c.timelineStart && t < c.timelineStart + c.timelineDuration);
           if (clickedClip) {
-            veSelId = clickedClip.id; refreshClipPanel();
+            veSelId = clickedClip.id; refreshClipPanel(); syncAllLayers();
             veDragging = 'clipMove'; veDragClip = clickedClip;
             veDragOffsetSec = t - clickedClip.timelineStart;
             veDragTargetTrack = clickedClip.track || 0;
