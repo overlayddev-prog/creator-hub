@@ -3399,9 +3399,11 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           bgCtx.restore();
 
-          bgCtx.strokeStyle = clip.type === 'text' ? (isSel ? '#f59e0b' : 'rgba(245,158,11,0.18)') : (isSel ? '#00e5ff' : 'rgba(0,229,255,0.12)');
-          bgCtx.lineWidth = isSel ? 2 : 1;
-          rrect(bgCtx, cx1, ry, cw, VID_H, 4); bgCtx.stroke();
+          if (isSel) {
+            bgCtx.strokeStyle = clip.type === 'text' ? '#f59e0b' : '#00e5ff';
+            bgCtx.lineWidth = 2;
+            rrect(bgCtx, cx1, ry, cw, VID_H, 4); bgCtx.stroke();
+          }
 
           bgCtx.save();
           bgCtx.beginPath(); bgCtx.rect(Math.max(LW,cx1)+4, ry, cw-8, VID_H); bgCtx.clip();
