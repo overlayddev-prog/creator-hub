@@ -19,8 +19,9 @@ const PATCH_NOTES = {
       {
         title: 'Fix',
         items: [
-          '<b>Text clip selection</b> — added 5px gap between video track rows so clicks on the boundary between V1 and V2 no longer accidentally trigger V1 trim handles',
-          '<b>Text clip handles</b> — selected text clip now shows amber handles (matching its color) instead of cyan, making it clearly distinct from a selected video clip',
+          '<b>Text clip selection</b> — clicking a text overlay in the preview now selects the text clip, even when a V1 clip was previously selected; V2+ layer wraps are always clickable when visible',
+          '<b>Track gaps</b> — added 5px gap between video track rows to prevent misclicks at V1/V2 boundary',
+          '<b>Text clip handles</b> — selected text clip now shows amber handles instead of cyan, making it clearly distinct from a selected video clip',
         ],
       },
     ],
@@ -3694,6 +3695,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!displayClip) {
           layer.wrap.style.display = 'none';
+          layer.wrap.style.pointerEvents = 'none';
           if (!layer.video.paused) layer.video.pause();
           continue;
         }
@@ -3701,6 +3703,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // ── CSS position / visibility — uses keyframe interpolation ───────────
         const kPos = getClipPosAt(displayClip, vePlayPos);
         layer.wrap.style.display  = 'block';
+        layer.wrap.style.pointerEvents = 'auto';
         layer.wrap.style.left     = pct(kPos.x)    + '%';
         layer.wrap.style.top      = pct(kPos.y)     + '%';
         layer.wrap.style.width    = pct(kPos.w, 5) + '%';
@@ -4035,10 +4038,12 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         }
       }
-      // Enable overlay interaction for V2+ layers; V1 wrap always accepts events when visible
-      layersContainer.style.pointerEvents = isV2plus ? 'auto' : 'none';
+      // Pointer events: container is always 'none' so misses pass through to V1;
+      // individual V2+ layer wraps get 'auto' when visible (set in syncAllLayers);
+      // V1 wrap is always interactive when visible.
+      layersContainer.style.pointerEvents = 'none';
       const v1WrapEl = $('ve-v1-wrap');
-      if (v1WrapEl) v1WrapEl.style.pointerEvents = (clip && clip.track === 0) ? 'auto' : 'none';
+      if (v1WrapEl) v1WrapEl.style.pointerEvents = 'auto';
     }
 
     function renderTextList() {
