@@ -14,6 +14,18 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.17': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Text clip selection</b> — clicking a text clip no longer accidentally activates trim handles on an adjacent V1 clip (trim handles now check the correct timeline row)',
+          '<b>Text clip duration</b> — drag the left/right edge of a text clip in the timeline to change its duration',
+          '<b>Text clip preview drag</b> — text clips are now selected immediately on add; click+drag in preview to reposition',
+        ],
+      },
+    ],
+  },
   '0.10.16': {
     sections: [
       {
@@ -4036,13 +4048,22 @@ document.addEventListener('DOMContentLoaded', () => {
       const y    = (e.clientY - rect.top)  * (canvas.height / rect.height);
       const t    = xToTime(x);
 
-      // Trim handles on selected clip (priority; text clips are not trimmable)
+      // Trim/duration handles on selected clip — only when y is in the clip's own row
       const clip = selectedClip();
-      if (clip && clip.type !== 'text' && x > LW) {
-        const lx = timeToX(clip.timelineStart);
-        const rx = timeToX(clip.timelineStart + clip.timelineDuration);
-        if (Math.abs(x - lx) < HANDLE_W + 4) { veDragging = 'trimL'; e.preventDefault(); return; }
-        if (Math.abs(x - rx) < HANDLE_W + 4) { veDragging = 'trimR'; e.preventDefault(); return; }
+      if (clip && x > LW) {
+        const clipRy = videoRowY(clip.track || 0);
+        if (y >= clipRy && y < clipRy + VID_H) {
+          const lx = timeToX(clip.timelineStart);
+          const rx = timeToX(clip.timelineStart + clip.timelineDuration);
+          if (clip.type === 'text') {
+            // Text clips: drag edges to change timelineDuration / timelineStart
+            if (Math.abs(x - rx) < HANDLE_W + 4) { veDragging = 'textDurR'; e.preventDefault(); return; }
+            if (Math.abs(x - lx) < HANDLE_W + 4) { veDragging = 'textDurL'; e.preventDefault(); return; }
+          } else {
+            if (Math.abs(x - lx) < HANDLE_W + 4) { veDragging = 'trimL'; e.preventDefault(); return; }
+            if (Math.abs(x - rx) < HANDLE_W + 4) { veDragging = 'trimR'; e.preventDefault(); return; }
+          }
+        }
       }
       const aclip = selectedAudioClip();
       if (aclip && x > LW) {
@@ -4133,7 +4154,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      if (veDragging === 'trimL' && clip && clip.type !== 'text') {
+      if (veDragging === 'textDurR' && clip && clip.type === 'text') {
+        const newDur = Math.max(0.5, t - clip.timelineStart);
+        clip.timelineDuration = newDur;
+        veTotalDur = Math.max(veTotalDur, clip.timelineStart + newDur);
+        clampScroll(); drawTimeline();
+      } else if (veDragging === 'textDurL' && clip && clip.type === 'text') {
+        const origEnd = clip.timelineStart + clip.timelineDuration;
+        const newStart = Math.max(0, Math.min(origEnd - 0.5, t));
+        clip.timelineStart = newStart;
+        clip.timelineDuration = origEnd - newStart;
+        clampScroll(); drawTimeline();
+      } else if (veDragging === 'trimL' && clip && clip.type !== 'text') {
         clip.inPoint = Math.max(0, Math.min(clip.outPoint - 0.1, (t - clip.timelineStart) * clip.speed));
         computeLayout(); clampScroll();
         $('ve-in-input').value = veSecsToHMS(clip.inPoint);
@@ -4182,7 +4214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateAllLayerVideos();
       }
-      if (veDragging === 'trimL' || veDragging === 'trimR' || veDragging === 'audioTrimL' || veDragging === 'audioTrimR') pushHistory();
+      if (veDragging === 'trimL' || veDragging === 'trimR' || veDragging === 'audioTrimL' || veDragging === 'audioTrimR' || veDragging === 'textDurL' || veDragging === 'textDurR') pushHistory();
       if (veDragging === 'audioMove') { pushHistory(); veDragClip = null; }
       if (veDragging === 'clipMove' && veDragClip) {
         const srcTrack = veDragClip.track || 0;
@@ -4282,8 +4314,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const clip = selectedClip();
       let cur = 'default';
       if (clip && x > LW) {
+        const clipRy = videoRowY(clip.track || 0);
+        const inRow = y >= clipRy && y < clipRy + VID_H;
         const lx = timeToX(clip.timelineStart), rx = timeToX(clip.timelineStart + clip.timelineDuration);
-        if (Math.abs(x - lx) < HANDLE_W+4 || Math.abs(x - rx) < HANDLE_W+4) cur = 'ew-resize';
+        if (inRow && (Math.abs(x - lx) < HANDLE_W+4 || Math.abs(x - rx) < HANDLE_W+4)) cur = 'ew-resize';
         else if (y > RULER_H && veClips.some(c => t >= c.timelineStart && t < c.timelineStart + c.timelineDuration)) cur = veDragging === 'clipMove' ? 'grabbing' : 'grab';
         else cur = 'pointer';
       } else if (x > LW) {
@@ -5083,8 +5117,10 @@ document.addEventListener('DOMContentLoaded', () => {
           const overlap = veClips.find(c => c.track === t && c.timelineStart < start + 5 && c.timelineStart + c.timelineDuration > start);
           if (!overlap) { track = t; break; }
         }
-        veClips.push({ id: genId(), type: 'text', text, textColor: '#ffffff', track, timelineStart: start, timelineDuration: 5, fileName: 'T: ' + text, keyframes: [] });
-        pushHistory(); drawTimeline(); syncAllLayers();
+        const txtClip = { id: genId(), type: 'text', text, textColor: '#ffffff', track, timelineStart: start, timelineDuration: 5, fileName: 'T: ' + text, keyframes: [] };
+        veClips.push(txtClip);
+        veSelId = txtClip.id;
+        computeLayout(); pushHistory(); refreshClipPanel(); drawTimeline(); syncAllLayers();
         showToast('Text added to V' + (track + 1));
       };
       overlay.querySelector('#_txt-cancel').addEventListener('click', () => document.body.removeChild(overlay));
