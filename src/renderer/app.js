@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.19': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Text clip selection</b> — V1 video element no longer steals clicks from V2+ text/overlay clips in the preview; Chromium compositing layer workaround intercepts V1 mousedown and delegates to the correct V2+ clip when one is under the cursor',
+          '<b>Layers compositing</b> — V2+ layers container now uses will-change:transform to force its own GPU compositing layer, ensuring correct z-order above V1',
+        ],
+      },
+    ],
+  },
   '0.10.18': {
     sections: [
       {
@@ -4273,6 +4284,27 @@ document.addEventListener('DOMContentLoaded', () => {
     v1Wrap.addEventListener('mousedown', e => {
       if (e.target.dataset.corner) return; // handles handled below
       e.stopPropagation(); e.preventDefault();
+      // Check if a visible V2+ layer wrap is under the click — video compositing layers
+      // can steal pointer events from higher-z-index elements in Chromium/Electron
+      for (let li = 0; li < veLayers.length; li++) {
+        const lw = veLayers[li].wrap;
+        if (lw.style.display === 'none' || lw.style.pointerEvents === 'none') continue;
+        const wr = lw.getBoundingClientRect();
+        if (e.clientX >= wr.left && e.clientX <= wr.right && e.clientY >= wr.top && e.clientY <= wr.bottom) {
+          // Delegate to the V2+ layer — find the clip for this layer
+          const trackIdx = li + 1;
+          const layerClip = veClips.find(c => c.track === trackIdx &&
+            vePlayPos >= c.timelineStart && vePlayPos < c.timelineStart + c.timelineDuration);
+          if (layerClip) {
+            veSelId = layerClip.id; drawTimeline(); refreshClipPanel();
+            const cRect = $('ve-video-container').getBoundingClientRect();
+            const kf = getOrCreateDragKeyframe(layerClip);
+            const src = kf || layerClip;
+            veOvDrag = { type: 'move', startX: (e.clientX-cRect.left)/cRect.width*100, startY: (e.clientY-cRect.top)/cRect.height*100, origX: src.x??50, origY: src.y??5, clip: layerClip, kf };
+            return;
+          }
+        }
+      }
       const clip1 = veClips.filter(c => !c.track).find(c =>
         vePlayPos >= c.timelineStart && vePlayPos < c.timelineStart + c.timelineDuration);
       if (!clip1) return;
@@ -4286,6 +4318,25 @@ document.addEventListener('DOMContentLoaded', () => {
     v1Wrap.querySelectorAll('[data-corner]').forEach(handle => {
       handle.addEventListener('mousedown', e => {
         e.stopPropagation(); e.preventDefault();
+        // Check if a visible V2+ layer wrap is under the click (same compositing workaround)
+        for (let li = 0; li < veLayers.length; li++) {
+          const lw = veLayers[li].wrap;
+          if (lw.style.display === 'none' || lw.style.pointerEvents === 'none') continue;
+          const wr = lw.getBoundingClientRect();
+          if (e.clientX >= wr.left && e.clientX <= wr.right && e.clientY >= wr.top && e.clientY <= wr.bottom) {
+            const trackIdx = li + 1;
+            const layerClip = veClips.find(c => c.track === trackIdx &&
+              vePlayPos >= c.timelineStart && vePlayPos < c.timelineStart + c.timelineDuration);
+            if (layerClip) {
+              veSelId = layerClip.id; drawTimeline(); refreshClipPanel();
+              const cRect = $('ve-video-container').getBoundingClientRect();
+              const kf = getOrCreateDragKeyframe(layerClip);
+              const src = kf || layerClip;
+              veOvDrag = { type: 'move', startX: (e.clientX-cRect.left)/cRect.width*100, startY: (e.clientY-cRect.top)/cRect.height*100, origX: src.x??50, origY: src.y??5, clip: layerClip, kf };
+              return;
+            }
+          }
+        }
         const clip1 = veClips.filter(c => !c.track).find(c =>
           vePlayPos >= c.timelineStart && vePlayPos < c.timelineStart + c.timelineDuration);
         if (!clip1) return;

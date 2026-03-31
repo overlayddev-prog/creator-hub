@@ -658,7 +658,7 @@
                     <div class="ve-ov-handle se" data-corner="se"></div>
                   </div>
                   <!-- V2+ overlay layers — rendered AFTER V1 so they appear on top and capture clicks -->
-                  <div id="ve-layers-container" style="position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:10;"></div>
+                  <div id="ve-layers-container" style="position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:10;will-change:transform;"></div>
                   <canvas id="ve-overlay-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
                   <div id="ve-fade-overlay" style="position:absolute;inset:0;background:#000;pointer-events:none;opacity:0;transition:none;"></div>
                   <div class="ve-timecode" id="ve-timecode">00:00:00 / 00:00:00</div>
