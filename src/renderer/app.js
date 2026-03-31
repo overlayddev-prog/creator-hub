@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.10.18': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Text clip selection</b> — added 5px gap between video track rows so clicks on the boundary between V1 and V2 no longer accidentally trigger V1 trim handles',
+          '<b>Text clip handles</b> — selected text clip now shows amber handles (matching its color) instead of cyan, making it clearly distinct from a selected video clip',
+        ],
+      },
+    ],
+  },
   '0.10.17': {
     sections: [
       {
@@ -2938,7 +2949,7 @@ document.addEventListener('DOMContentLoaded', () => {
     for (let ai = 0; ai < MAX_AUDIO_TRACKS; ai++) { veAudioEls.push(new Audio()); }
 
     // ── Timeline geometry ──────────────────────────────────────────────────────
-    const LW = 48, RULER_H = 22, VID_H = 50, AUD_H = 28, TRACK_GAP = 8, HANDLE_W = 12;
+    const LW = 48, RULER_H = 22, VID_H = 50, AUD_H = 28, TRACK_GAP = 8, HANDLE_W = 12, TRACK_VID_GAP = 5;
     function numVideoTracks() {
       const mx = veClips.reduce((m, c) => Math.max(m, c.track || 0), 0);
       return mx + 2;
@@ -2948,8 +2959,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const mx = veAudioClips.reduce((m, a) => Math.max(m, a.audioTrack || 0), 0);
       return mx + 2;
     }
-    function videoRowY(track) { return RULER_H + 6 + track * VID_H; }
-    function audioRowY(track) { return RULER_H + 6 + numVideoTracks() * VID_H + TRACK_GAP + track * AUD_H; }
+    function videoRowY(track) { return RULER_H + 6 + track * (VID_H + TRACK_VID_GAP); }
+    function audioRowY(track) { return videoRowY(numVideoTracks() - 1) + VID_H + TRACK_GAP + track * AUD_H; }
     function totalCanvasH()   { return audioRowY(numAudioTracks()) + 8; }
     function getVideoTrackAtY(y) {
       const n = numVideoTracks();
@@ -3312,6 +3323,13 @@ document.addEventListener('DOMContentLoaded', () => {
           bgCtx.fillRect(LW, ry, tw(), VID_H);
           bgCtx.strokeStyle = 'rgba(255,255,255,0.04)'; bgCtx.lineWidth = 1;
           bgCtx.beginPath(); bgCtx.moveTo(LW, ry+VID_H); bgCtx.lineTo(W, ry+VID_H); bgCtx.stroke();
+          // Draw gap between video tracks (dead zone — no clip can be clicked here)
+          if (TRACK_VID_GAP > 0 && track < nVT - 1) {
+            bgCtx.fillStyle = '#070b10';
+            bgCtx.fillRect(0, ry + VID_H, W, TRACK_VID_GAP);
+            bgCtx.strokeStyle = 'rgba(255,255,255,0.07)'; bgCtx.lineWidth = 1;
+            bgCtx.beginPath(); bgCtx.moveTo(0, ry + VID_H + TRACK_VID_GAP); bgCtx.lineTo(W, ry + VID_H + TRACK_VID_GAP); bgCtx.stroke();
+          }
           bgCtx.fillStyle = isDropTarget ? 'rgba(0,229,255,0.6)' : 'rgba(232,237,245,0.2)';
           bgCtx.font = 'bold 9px sans-serif'; bgCtx.textAlign = 'center';
           bgCtx.fillText(label, LW/2, ry + VID_H/2 + 3);
@@ -3425,7 +3443,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (isSel) {
             const lx = timeToX(clip.timelineStart);
             const rx2 = timeToX(clip.timelineStart + clip.timelineDuration);
-            bgCtx.fillStyle = '#00e5ff';
+            bgCtx.fillStyle = clip.type === 'text' ? '#f59e0b' : '#00e5ff';
             rrect(bgCtx, lx-HANDLE_W/2, ry, HANDLE_W, VID_H, 3); bgCtx.fill();
             rrect(bgCtx, rx2-HANDLE_W/2, ry, HANDLE_W, VID_H, 3); bgCtx.fill();
             bgCtx.fillStyle = '#0a0e14'; bgCtx.font = 'bold 11px monospace'; bgCtx.textAlign = 'center';
@@ -4057,8 +4075,8 @@ document.addEventListener('DOMContentLoaded', () => {
           const rx = timeToX(clip.timelineStart + clip.timelineDuration);
           if (clip.type === 'text') {
             // Text clips: drag edges to change timelineDuration / timelineStart
-            if (Math.abs(x - rx) < HANDLE_W + 4) { veDragging = 'textDurR'; e.preventDefault(); return; }
-            if (Math.abs(x - lx) < HANDLE_W + 4) { veDragging = 'textDurL'; e.preventDefault(); return; }
+            if (Math.abs(x - rx) < HANDLE_W + 4) { veSelId = clip.id; veDragging = 'textDurR'; refreshClipPanel(); drawTimeline(); e.preventDefault(); return; }
+            if (Math.abs(x - lx) < HANDLE_W + 4) { veSelId = clip.id; veDragging = 'textDurL'; refreshClipPanel(); drawTimeline(); e.preventDefault(); return; }
           } else {
             if (Math.abs(x - lx) < HANDLE_W + 4) { veDragging = 'trimL'; e.preventDefault(); return; }
             if (Math.abs(x - rx) < HANDLE_W + 4) { veDragging = 'trimR'; e.preventDefault(); return; }
