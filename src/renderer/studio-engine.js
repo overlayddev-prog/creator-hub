@@ -318,8 +318,22 @@ class StudioEngine {
     srcNode.connect(gainNode);
     gainNode.connect(this.audioDest);
     if (this._monitorGain) gainNode.connect(this._monitorGain);
+    // Analyser tapped off the gain node (NOT from captureStream — that causes glitching)
+    const analyser = this.audioCtx.createAnalyser();
+    analyser.fftSize = 32;
+    gainNode.connect(analyser);
     this._audioNodes.set(key, { source: srcNode, gain: gainNode, stream: null, _audioEl: audio });
-    return { key, audio };
+    return { key, audio, analyser };
+  }
+
+  // Get an analyser for any audio source key (tapped off its gain node)
+  getAnalyser(key) {
+    const node = this._audioNodes.get(key);
+    if (!node) return null;
+    const analyser = this.audioCtx.createAnalyser();
+    analyser.fftSize = 32;
+    node.gain.connect(analyser);
+    return analyser;
   }
 
   // ── Microphone (standalone, not tied to a scene source) ───────────────────
@@ -373,6 +387,7 @@ class StudioEngine {
     if (!node) return;
     try { node.source.disconnect(); node.gain.disconnect(); } catch (e) {}
     if (node.stream) node.stream.getTracks().forEach(t => t.stop());
+    if (node._audioEl) { node._audioEl.pause(); node._audioEl.src = ''; }
     this._audioNodes.delete(key);
   }
 

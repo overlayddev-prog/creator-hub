@@ -2633,6 +2633,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <button class="studio-mute-btn" title="Mute">🔊</button>
       <button class="studio-rm-btn" title="Remove">✕</button>`;
     let lastVol = 0.8;
+    engine.setVolume(key, lastVol); // sync initial slider position with gain
     row.querySelector('.studio-vol').addEventListener('input', function () {
       lastVol = Number(this.value) / 100;
       engine.setVolume(key, lastVol);
@@ -2715,15 +2716,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
         try {
           const name = file.replace(/.*[\\/]/, '');
-          const { key, audio } = await engine.addMediaAudioTrack(file, name);
-          // Create analyser for the media audio
-          const mediaStream = audio.captureStream ? audio.captureStream() : null;
-          let analyser = null;
-          if (mediaStream && mediaStream.getAudioTracks().length) {
-            analyser = engine.audioCtx.createAnalyser();
-            analyser.fftSize = 32;
-            engine.audioCtx.createMediaStreamSource(mediaStream).connect(analyser);
-          }
+          const { key, analyser } = await engine.addMediaAudioTrack(file, name);
           addAudioTrackUI(key, '🎵 ' + name, analyser);
         } catch (err) { showToast('Could not open file: ' + err.message); }
       });
@@ -2741,10 +2734,8 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast('That device is already added'); return;
           }
           try {
-            const stream = await engine.addMicrophoneTrack(dev.deviceId);
-            const analyser = engine.audioCtx.createAnalyser();
-            analyser.fftSize = 32;
-            engine.audioCtx.createMediaStreamSource(stream).connect(analyser);
+            await engine.addMicrophoneTrack(dev.deviceId);
+            const analyser = engine.getAnalyser(key);
             addAudioTrackUI(key, dev.label || dev.deviceId.slice(0, 16), analyser);
           } catch (err) { showToast('Could not open device: ' + err.message); }
         });
