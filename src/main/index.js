@@ -8,6 +8,15 @@ const http = require('http');
 const { spawn } = require('child_process');
 const { app, BrowserWindow, ipcMain, shell, net, Tray, Menu, nativeImage, session, protocol, globalShortcut } = require('electron');
 
+// ffmpeg-static returns a path inside app.asar in packaged builds — resolve to the unpacked copy
+function getFFmpegPath() {
+  let p = require('ffmpeg-static');
+  if (p && p.includes('app.asar')) {
+    p = p.replace('app.asar', 'app.asar.unpacked');
+  }
+  return p;
+}
+
 
 // --- Tiny local HTTP server so the renderer loads from http://localhost ---
 const MIME = {
@@ -496,7 +505,7 @@ ipcMain.handle('assets:get-metadata', async (_e, filePath, category) => {
   } else if (category === 'videos') {
     // Extract frame at 0s using FFmpeg, output as PNG to stdout
     try {
-      const ffmpegBin = require('ffmpeg-static');
+      const ffmpegBin = getFFmpegPath();
       meta.thumb = await new Promise((resolve) => {
         const chunks = [];
         const proc = spawn(ffmpegBin, [
@@ -515,7 +524,7 @@ ipcMain.handle('assets:get-metadata', async (_e, filePath, category) => {
       // Get duration using ffprobe-style ffmpeg output
       meta.duration = await new Promise((resolve) => {
         let out = '';
-        const proc = spawn(require('ffmpeg-static'), [
+        const proc = spawn(getFFmpegPath(), [
           '-i', filePath,
         ], { stdio: ['ignore', 'ignore', 'pipe'] });
         proc.stderr.on('data', d => out += d.toString());
@@ -537,7 +546,7 @@ ipcMain.handle('assets:get-metadata', async (_e, filePath, category) => {
 
 // ── Video Editor — thumbnail extraction ───────────────────────────────────────
 ipcMain.handle('videoeditor:get-thumbnails', async (_e, filePath, count, duration) => {
-  const ffmpegPath = require('ffmpeg-static');
+  const ffmpegPath = getFFmpegPath();
   const os = require('os');
   const tmpDir = path.join(os.tmpdir(), `ch-thumbs-${Date.now()}`);
   let dirCreated = false;
@@ -581,7 +590,7 @@ ipcMain.handle('videoeditor:get-thumbnails', async (_e, filePath, count, duratio
 // ── Video Editor — multi-clip export via FFmpeg ───────────────────────────────
 // clips = [{ filePath, inPoint, outPoint, speed, textOverlays }]
 ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fadeIn, fadeOut, overlayClips, canvasW, canvasH) => {
-  const ffmpegPath = require('ffmpeg-static');
+  const ffmpegPath = getFFmpegPath();
   if (!clips || !clips.length) return { ok: false, error: 'No clips' };
 
   const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -814,7 +823,7 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir) => {
        '-c:a', 'aac', '-b:a', '192k',
        outPath, '-y'];
 
-  const ffmpegPath = require('ffmpeg-static');
+  const ffmpegPath = getFFmpegPath();
   return new Promise(resolve => {
     const proc = spawn(ffmpegPath, args);
     proc.on('close', code => {
@@ -856,7 +865,7 @@ function buildFfmpegArgs(dest, opts) {
 }
 
 function spawnStreamProc(dest, opts) {
-  const ffmpegPath = require('ffmpeg-static');
+  const ffmpegPath = getFFmpegPath();
   const args = buildFfmpegArgs(dest, opts);
   const proc = spawn(ffmpegPath, args);
   let stderrBuf = '';
@@ -1144,7 +1153,7 @@ ipcMain.handle('transitions:delete', (_e, filePath) => {
 
 ipcMain.handle('project:updateThumbnail', async (_e, filePath, videoPath) => {
   try {
-    const ffmpegPath = require('ffmpeg-static');
+    const ffmpegPath = getFFmpegPath();
     const thumb = await new Promise((resolve) => {
       const chunks = [];
       const proc = spawn(ffmpegPath, [

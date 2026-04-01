@@ -274,8 +274,9 @@ class StudioEngine {
     const offscreen = new OffscreenCanvas(this.outW, this.outH);
     const src = new StudioSource(id, name, 'browser', offscreen);
     src.width = this.outW;  src.height = this.outH;
-    src._browserId = id;
-    src._hasFrame  = false;
+    src._browserId  = id;
+    src._browserUrl = url;
+    src._hasFrame   = false;
     // One shared IPC listener for all browser sources
     if (!this._browserFrameListenerSet) {
       this._browserFrameListenerSet = true;
@@ -306,13 +307,18 @@ class StudioEngine {
     audio.autoplay   = true;
     audio.loop       = true;
     audio.playsInline = true;
+    audio.crossOrigin = 'anonymous';
     await audio.play().catch(() => {});
     const key = 'media_' + Date.now();
-    const mediaStream = audio.captureStream ? audio.captureStream() : null;
-    if (mediaStream) {
-      this._connectAudio(key, mediaStream);
-      this._audioNodes.get(key)._audioEl = audio;
-    }
+    // Route through Web Audio graph instead of default output
+    // MediaElementSource disconnects the element from speakers — audio only goes through gain nodes
+    const srcNode  = this.audioCtx.createMediaElementSource(audio);
+    const gainNode = this.audioCtx.createGain();
+    gainNode._lastVol = 1;
+    srcNode.connect(gainNode);
+    gainNode.connect(this.audioDest);
+    if (this._monitorGain) gainNode.connect(this._monitorGain);
+    this._audioNodes.set(key, { source: srcNode, gain: gainNode, stream: null, _audioEl: audio });
     return { key, audio };
   }
 

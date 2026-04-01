@@ -1,6 +1,8 @@
 module.exports = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: '**/node_modules/ffmpeg-static/**',
+    },
     name: 'CreatorHub',
     executableName: 'creatorhub',
     // icon: './assets/icon', // ← uncomment and add icon.ico to assets/ when ready
