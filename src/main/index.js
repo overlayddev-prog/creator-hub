@@ -845,26 +845,21 @@ function buildFfmpegArgs(dest, opts) {
   const gop = String(opts.fps * 2); // 2 second keyframe interval
   const args = ['-i', 'pipe:0'];
 
-  if (opts._passthrough) {
-    // MediaRecorder already outputs H.264 — just copy video, no re-encode
-    args.push('-c:v', 'copy');
+  // Encoder selection
+  if (opts.encoder === 'h264_nvenc') {
+    args.push('-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'cbr');
+  } else if (opts.encoder === 'h264_amf') {
+    args.push('-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cbr');
+  } else if (opts.encoder === 'libx265') {
+    args.push('-c:v', 'libx265', '-preset', 'veryfast', '-tune', 'zerolatency');
   } else {
-    // MediaRecorder outputs VP8 — must re-encode
-    if (opts.encoder === 'h264_nvenc') {
-      args.push('-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'cbr');
-    } else if (opts.encoder === 'h264_amf') {
-      args.push('-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cbr');
-    } else if (opts.encoder === 'libx265') {
-      args.push('-c:v', 'libx265', '-preset', 'veryfast', '-tune', 'zerolatency');
-    } else {
-      args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency');
-    }
-    args.push(
-      '-b:v', opts.videoBitrate, '-maxrate', opts.videoBitrate,
-      '-bufsize', String(parseInt(opts.videoBitrate) * 2) + 'k',
-      '-pix_fmt', 'yuv420p', '-g', gop,
-    );
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency');
   }
+  args.push(
+    '-b:v', opts.videoBitrate, '-maxrate', opts.videoBitrate,
+    '-bufsize', String(parseInt(opts.videoBitrate) * 2) + 'k',
+    '-pix_fmt', 'yuv420p', '-g', gop,
+  );
   args.push(
     '-c:a', 'aac', '-b:a', opts.audioBitrate, '-ar', '48000',
     '-f', 'flv', rtmp,
