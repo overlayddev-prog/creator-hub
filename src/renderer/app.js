@@ -17,10 +17,11 @@ const PATCH_NOTES = {
   '0.10.19': {
     sections: [
       {
-        title: 'Fix',
+        title: 'Change',
         items: [
-          '<b>Text clip selection</b> — V1 video element no longer steals clicks from V2+ text/overlay clips in the preview; Chromium compositing layer workaround intercepts V1 mousedown and delegates to the correct V2+ clip when one is under the cursor',
-          '<b>Layers compositing</b> — V2+ layers container now uses will-change:transform to force its own GPU compositing layer, ensuring correct z-order above V1',
+          '<b>Text overlays removed</b> — the text clip / text overlay feature has been removed while we redesign it; existing text clips in saved projects are stripped on load',
+          '<b>V2+ click fix</b> — V1 video element no longer steals clicks from V2+ overlay clips in the preview',
+          '<b>Layers compositing</b> — V2+ layers container now uses will-change:transform for correct GPU stacking above V1',
         ],
       },
     ],
@@ -2922,7 +2923,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let veHistory      = [];
     let veHistIdx      = -1;
     let veHypeMarkers  = [];
-    let veTextOverlays = [];
     let veOvDrag       = null;
     let veIdSeq        = 0;
     let veProjectName  = 'Untitled Project';
@@ -2940,18 +2940,15 @@ document.addEventListener('DOMContentLoaded', () => {
       wrap.style.display = 'none';
       const vid = document.createElement('video');
       vid.muted = true; vid.playsInline = true;
-      const txtCanvas = document.createElement('canvas');
-      txtCanvas.width = 960; txtCanvas.height = 200;
-      txtCanvas.style.cssText = 'width:100%;height:100%;display:none;position:absolute;inset:0;pointer-events:none;';
       const ph = document.createElement('div');
       ph.className = 've-ov-placeholder';
       ph.innerHTML = '<span class="ve-ov-placeholder-hint">outside active range</span>';
       ['nw','ne','sw','se'].forEach(corner => {
         const h = document.createElement('div'); h.className = `ve-ov-handle ${corner}`; wrap.appendChild(h);
       });
-      wrap.appendChild(vid); wrap.appendChild(txtCanvas); wrap.appendChild(ph);
+      wrap.appendChild(vid); wrap.appendChild(ph);
       layersContainer.appendChild(wrap);
-      veLayers.push({ wrap, video: vid, textCanvas: txtCanvas, placeholder: ph });
+      veLayers.push({ wrap, video: vid, placeholder: ph });
     }
     layersContainer.style.pointerEvents = 'none';
 
@@ -3043,7 +3040,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function computeLayout() {
       // All clips keep their own timelineStart — just recalculate duration
       for (const c of veClips) {
-        if (c.type === 'text') continue; // text clips own their timelineDuration directly
         c.timelineDuration = (c.outPoint - c.inPoint) / (c.speed || 1);
       }
       // Audio clips: recalc duration
@@ -3149,7 +3145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const start = clip.timelineStart;
         const end   = clip.timelineStart + clip.timelineDuration;
         // Must be strictly inside — not at the very edges
-        if (t <= start + 0.02 || t >= end - 0.02 || clip.type === 'text') { newClips.push(clip); continue; }
+        if (t <= start + 0.02 || t >= end - 0.02) { newClips.push(clip); continue; }
         const speed       = clip.speed || 1;
         const splitInFile = clip.inPoint + (t - start) * speed;
         const splitLocalT = t - start; // time relative to clip start, in timeline seconds
@@ -3204,7 +3200,6 @@ document.addEventListener('DOMContentLoaded', () => {
       veHistory.push(JSON.stringify({
         clips:      veClips.map(_serializeClip),
         audioClips: veAudioClips.map(_serializeAudio),
-        overlays:   veTextOverlays,
       }));
       veHistIdx = veHistory.length - 1;
       updateUndoRedo();
@@ -3227,10 +3222,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ...a,
         waveform: audioCache.get(a.id)?.waveform ?? null,
       }));
-      veTextOverlays = s.overlays;
       veTimelineBg = null; // invalidate static bg cache
       computeLayout(); clampScroll();
-      refreshClipPanel(); renderTextList();
+      refreshClipPanel();
       drawTimeline(); updateTimecode(); updateAllLayerVideos();
     }
 
@@ -3395,9 +3389,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             bgCtx.fillStyle = isSel ? 'rgba(0,229,255,0.1)' : 'rgba(0,0,0,0.32)';
             bgCtx.fillRect(Math.max(LW,cx1), ry, cw, VID_H);
-          } else if (clip.type === 'text') {
-            bgCtx.fillStyle = isSel ? 'rgba(245,158,11,0.35)' : 'rgba(245,158,11,0.08)';
-            bgCtx.fillRect(Math.max(LW,cx1), ry, cw, VID_H);
           } else {
             const g = bgCtx.createLinearGradient(cx1,0,cx2,0);
             g.addColorStop(0, isSel ? 'rgba(0,229,255,0.28)' : 'rgba(0,229,255,0.08)');
@@ -3411,7 +3402,7 @@ document.addEventListener('DOMContentLoaded', () => {
           bgCtx.restore();
 
           if (isSel) {
-            bgCtx.strokeStyle = clip.type === 'text' ? '#f59e0b' : '#00e5ff';
+            bgCtx.strokeStyle = '#00e5ff';
             bgCtx.lineWidth = 2;
             rrect(bgCtx, cx1, ry, cw, VID_H, 4); bgCtx.stroke();
           }
@@ -3457,7 +3448,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (isSel) {
             const lx = timeToX(clip.timelineStart);
             const rx2 = timeToX(clip.timelineStart + clip.timelineDuration);
-            bgCtx.fillStyle = clip.type === 'text' ? '#f59e0b' : '#00e5ff';
+            bgCtx.fillStyle = '#00e5ff';
             rrect(bgCtx, lx-HANDLE_W/2, ry, HANDLE_W, VID_H, 3); bgCtx.fill();
             rrect(bgCtx, rx2-HANDLE_W/2, ry, HANDLE_W, VID_H, 3); bgCtx.fill();
             bgCtx.fillStyle = '#0a0e14'; bgCtx.font = 'bold 11px monospace'; bgCtx.textAlign = 'center';
@@ -3723,24 +3714,9 @@ document.addEventListener('DOMContentLoaded', () => {
         layer.wrap.style.height   = pct(kPos.h, 5) + '%';
         layer.wrap.classList.toggle('ve-ov-selected', displayClip.id === veSelId);
 
-        if (displayClip.type === 'text') {
-          // ── Text clip: render onto textCanvas, hide video ──────────────────
-          layer.video.style.display      = 'none';
-          layer.textCanvas.style.display = 'block';
-          const tc = layer.textCanvas;
-          const tctx = tc.getContext('2d');
-          tctx.clearRect(0, 0, tc.width, tc.height);
-          tctx.font = 'bold 28px Outfit, sans-serif';
-          tctx.textAlign = 'center';
-          tctx.shadowColor = 'rgba(0,0,0,0.8)'; tctx.shadowBlur = 8;
-          tctx.fillStyle = displayClip.textColor || '#ffffff';
-          tctx.fillText(displayClip.text || '', tc.width / 2, tc.height / 2 + 10);
-          tctx.shadowBlur = 0;
-          if (!layer.video.paused) layer.video.pause();
-        } else {
-          // ── Video clip: hide textCanvas, sync video ────────────────────────
+        {
+          // ── Video clip: sync video ────────────────────────────────────────
           layer.video.style.display      = '';
-          layer.textCanvas.style.display = 'none';
 
           // ── Video state sync ─────────────────────────────────────────────
           const outOfRange  = !activeClip && !!selClip;
@@ -3888,7 +3864,7 @@ document.addEventListener('DOMContentLoaded', () => {
           else { stopPlayback(); vePlayPos = veTotalDur; }
         }
       }
-      drawTimeline(true); updateTimecode(); updateFadeOverlay(); updateTextOverlay();
+      drawTimeline(true); updateTimecode(); updateFadeOverlay();
       syncAllLayers(); syncAudioElements();
       if ((!video.paused && !video.ended) || (veIsPlaying && !veActiveClip)) {
         veRafId = requestAnimationFrame(tick);
@@ -3941,22 +3917,6 @@ document.addEventListener('DOMContentLoaded', () => {
       el.style.opacity = Math.max(0, Math.min(1, opacity)).toFixed(3);
     }
 
-    function updateTextOverlay() {
-      if (!overlayCanvas || !overlayCanvas.width) return;
-      const ctx = overlayCanvas.getContext('2d');
-      ctx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-      const active = veTextOverlays.filter(o => vePlayPos >= o.startSec && vePlayPos < o.endSec);
-      for (const ov of active) {
-        ctx.font = 'bold 28px Outfit, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
-        const x = overlayCanvas.width / 2;
-        const y = ov.pos === 'top' ? 52 : ov.pos === 'center' ? overlayCanvas.height/2 : overlayCanvas.height - 52;
-        ctx.fillStyle = ov.color || '#ffffff';
-        ctx.fillText(ov.text, x, y);
-        ctx.shadowBlur = 0;
-      }
-    }
 
     // (syncOvWrap/updateOvVideo/addOverlayFromFile/refreshOvlPanel removed — replaced by layer system)
 
@@ -3993,12 +3953,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Separate audio button — only for video clips (not text) that haven't detached audio yet
       const sepBtn = $('ve-sep-audio-btn');
-      if (sepBtn) sepBtn.style.display = (clip && clip.type !== 'text' && !clip.audioDetached) ? '' : 'none';
+      if (sepBtn) sepBtn.style.display = (clip && !clip.audioDetached) ? '' : 'none';
 
       // Mute button — shown for video clips only (not text)
       const muteBtn = $('ve-mute-btn');
       if (muteBtn) {
-        muteBtn.style.display = (clip && clip.type !== 'text') ? '' : 'none';
+        muteBtn.style.display = clip ? '' : 'none';
         muteBtn.textContent   = (clip && clip.muted) ? '🔊 Unmute Clip' : '🔇 Mute Clip';
         muteBtn.classList.toggle('active', !!(clip && clip.muted));
       }
@@ -4062,26 +4022,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (v1WrapEl) v1WrapEl.style.pointerEvents = 'auto';
     }
 
-    function renderTextList() {
-      const list = $('ve-text-list');
-      list.innerHTML = '';
-      veTextOverlays.forEach(ov => {
-        const el = document.createElement('div');
-        el.className = 've-text-item';
-        el.innerHTML = `
-          <span class="ve-text-item-label" title="${ov.text} (${veSecsToHMS(ov.startSec)}–${veSecsToHMS(ov.endSec)})">${ov.text}</span>
-          <button class="ve-text-item-del" data-id="${ov.id}">×</button>`;
-        el.querySelector('.ve-text-item-del').addEventListener('click', () => {
-          veTextOverlays = veTextOverlays.filter(o => o.id !== ov.id);
-          pushHistory(); renderTextList(); drawTimeline();
-        });
-        list.appendChild(el);
-      });
-    }
-
     // ── Timeline mouse interactions ───────────────────────────────────────────
     canvas.addEventListener('mousedown', e => {
-      if (!veClips.length && !veAudioClips.length && !veTextOverlays.length) return;
+      if (!veClips.length && !veAudioClips.length) return;
       const rect = canvas.getBoundingClientRect();
       const x    = (e.clientX - rect.left) * (canvas.width / rect.width);
       const y    = (e.clientY - rect.top)  * (canvas.height / rect.height);
@@ -4094,14 +4037,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (y >= clipRy && y < clipRy + VID_H) {
           const lx = timeToX(clip.timelineStart);
           const rx = timeToX(clip.timelineStart + clip.timelineDuration);
-          if (clip.type === 'text') {
-            // Text clips: drag edges to change timelineDuration / timelineStart
-            if (Math.abs(x - rx) < HANDLE_W + 4) { veSelId = clip.id; veDragging = 'textDurR'; refreshClipPanel(); drawTimeline(); e.preventDefault(); return; }
-            if (Math.abs(x - lx) < HANDLE_W + 4) { veSelId = clip.id; veDragging = 'textDurL'; refreshClipPanel(); drawTimeline(); e.preventDefault(); return; }
-          } else {
-            if (Math.abs(x - lx) < HANDLE_W + 4) { veDragging = 'trimL'; e.preventDefault(); return; }
-            if (Math.abs(x - rx) < HANDLE_W + 4) { veDragging = 'trimR'; e.preventDefault(); return; }
-          }
+          if (Math.abs(x - lx) < HANDLE_W + 4) { veDragging = 'trimL'; e.preventDefault(); return; }
+          if (Math.abs(x - rx) < HANDLE_W + 4) { veDragging = 'trimR'; e.preventDefault(); return; }
         }
       }
       const aclip = selectedAudioClip();
@@ -4193,22 +4130,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      if (veDragging === 'textDurR' && clip && clip.type === 'text') {
-        const newDur = Math.max(0.5, t - clip.timelineStart);
-        clip.timelineDuration = newDur;
-        veTotalDur = Math.max(veTotalDur, clip.timelineStart + newDur);
-        clampScroll(); drawTimeline();
-      } else if (veDragging === 'textDurL' && clip && clip.type === 'text') {
-        const origEnd = clip.timelineStart + clip.timelineDuration;
-        const newStart = Math.max(0, Math.min(origEnd - 0.5, t));
-        clip.timelineStart = newStart;
-        clip.timelineDuration = origEnd - newStart;
-        clampScroll(); drawTimeline();
-      } else if (veDragging === 'trimL' && clip && clip.type !== 'text') {
+      if (veDragging === 'trimL' && clip) {
         clip.inPoint = Math.max(0, Math.min(clip.outPoint - 0.1, (t - clip.timelineStart) * clip.speed));
         computeLayout(); clampScroll();
         $('ve-in-input').value = veSecsToHMS(clip.inPoint);
-      } else if (veDragging === 'trimR' && clip && clip.type !== 'text') {
+      } else if (veDragging === 'trimR' && clip) {
         const relEnd = t - clip.timelineStart;
         clip.outPoint = Math.max(clip.inPoint + 0.1, Math.min(clip.fileDuration, clip.inPoint + relEnd * clip.speed));
         computeLayout(); clampScroll();
@@ -4228,7 +4154,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const hovTrack = getVideoTrackAtY(y);
         const rawTarget = (hovTrack !== null) ? hovTrack : (veDragClip.track || 0);
         // Text clips can only live on V2+ tracks — prevent dragging to V1
-        veDragTargetTrack = (veDragClip.type === 'text' && rawTarget === 0) ? 1 : rawTarget;
+        veDragTargetTrack = rawTarget;
         if (veDragTargetTrack === (veDragClip.track || 0)) {
           if (veDragTargetTrack === 0) {
             veDragClip.timelineStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
@@ -4253,12 +4179,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateAllLayerVideos();
       }
-      if (veDragging === 'trimL' || veDragging === 'trimR' || veDragging === 'audioTrimL' || veDragging === 'audioTrimR' || veDragging === 'textDurL' || veDragging === 'textDurR') pushHistory();
+      if (veDragging === 'trimL' || veDragging === 'trimR' || veDragging === 'audioTrimL' || veDragging === 'audioTrimR') pushHistory();
       if (veDragging === 'audioMove') { pushHistory(); veDragClip = null; }
       if (veDragging === 'clipMove' && veDragClip) {
         const srcTrack = veDragClip.track || 0;
         if (veDragTargetTrack !== null && veDragTargetTrack !== srcTrack) {
-          if (veDragTargetTrack === 0 && veDragClip.type !== 'text') {
+          if (veDragTargetTrack === 0) {
             // Moving V2+ clip back to V1 — preserve its current size/position
             veDragClip.track = 0;
             showToast(`${veDragClip.fileName} moved to V1`);
@@ -4451,13 +4377,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Trim inputs ───────────────────────────────────────────────────────────
     $('ve-in-input').addEventListener('change', function() {
-      const clip = selectedClip(); if (!clip || clip.type === 'text') return;
+      const clip = selectedClip(); if (!clip) return;
       clip.inPoint = Math.max(0, Math.min(clip.outPoint - 0.1, veStrToSecs(this.value)));
       this.value = veSecsToHMS(clip.inPoint);
       computeLayout(); pushHistory(); drawTimeline();
     });
     $('ve-out-input').addEventListener('change', function() {
-      const clip = selectedClip(); if (!clip || clip.type === 'text') return;
+      const clip = selectedClip(); if (!clip) return;
       clip.outPoint = Math.max(clip.inPoint + 0.1, Math.min(clip.fileDuration, veStrToSecs(this.value)));
       this.value = veSecsToHMS(clip.outPoint);
       computeLayout(); pushHistory(); drawTimeline();
@@ -4466,28 +4392,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Speed buttons ─────────────────────────────────────────────────────────
     document.querySelectorAll('.ve-speed-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const clip = selectedClip(); if (!clip || clip.type === 'text') return;
+        const clip = selectedClip(); if (!clip) return;
         clip.speed = parseFloat(btn.dataset.speed);
         video.playbackRate = clip.speed;
         computeLayout(); pushHistory(); refreshClipPanel(); drawTimeline();
       });
-    });
-
-    // ── Text overlays ─────────────────────────────────────────────────────────
-    $('ve-text-add-btn').addEventListener('click', () => {
-      const text  = $('ve-text-input').value.trim();
-      if (!text) { showToast('Enter text first'); return; }
-      const start = veStrToSecs($('ve-text-start').value) || vePlayPos;
-      const end   = veStrToSecs($('ve-text-end').value)   || Math.min(vePlayPos + 5, veTotalDur);
-      veTextOverlays.push({
-        id: genId(), text,
-        pos:      $('ve-text-pos').value,
-        color:    $('ve-text-color').value,
-        startSec: start,
-        endSec:   end,
-      });
-      $('ve-text-input').value = '';
-      pushHistory(); renderTextList(); drawTimeline();
     });
 
     // ── Format buttons ────────────────────────────────────────────────────────
@@ -4503,7 +4412,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!veClips.length) return;
       $('ve-btn-hype').disabled = true; $('ve-btn-hype').textContent = '⚡ Analyzing…';
       // Ensure waveforms loaded
-      for (const c of veClips) { if (c.type === 'text') continue; if (!c.waveform) await loadWaveform(c); }
+      for (const c of veClips) { if (!c.waveform) await loadWaveform(c); }
       veHypeMarkers = [];
       for (const clip of veClips) {
         if (!clip.waveform) continue;
@@ -4602,11 +4511,8 @@ document.addEventListener('DOMContentLoaded', () => {
         filePath: c.filePath, inPoint: c.inPoint, outPoint: c.outPoint, speed: c.speed,
         muted: c.muted || false,
         transitionIn: c.transitionIn || null,
-        textOverlays: veTextOverlays.filter(o => o.startSec < c.timelineStart + c.timelineDuration && o.endSec > c.timelineStart)
-          .map(o => ({ ...o, startSec: o.startSec - c.timelineStart, endSec: o.endSec - c.timelineStart })),
       }));
-      // V2+ clips as overlay clips (text clips are not yet supported in export)
-      const overlayClips = veClips.filter(c => c.track > 0 && c.type !== 'text').map(c => ({
+      const overlayClips = veClips.filter(c => c.track > 0).map(c => ({
         filePath: c.filePath, startSec: c.timelineStart, endSec: c.timelineStart + c.timelineDuration,
         x: c.x ?? 50, y: c.y ?? 5, w: c.w ?? 35, h: c.h ?? 35,
         inPoint: c.inPoint, outPoint: c.outPoint,
@@ -4633,7 +4539,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return {
         clips: veClips.map(c => ({ ...c, waveform: null, thumbnails: [] })),
         audioClips: veAudioClips.map(a => ({ ...a, waveform: null })),
-        textOverlays: veTextOverlays,
         hypeMarkers: veHypeMarkers,
         zoom: veZoom, scrollOff: veScrollOff,
         fadeInEn: veFadeInEn, fadeInDur: veFadeInDur,
@@ -4663,9 +4568,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadProjectState(state, pathMap) {
       // pathMap: { originalPath -> extractedTempPath }
-      if (!state) { computeLayout(); updateUndoRedo(); refreshClipPanel(); renderTextList(); drawTimeline(); return; }
-      veClips = (state.clips || []).map(c => {
-        if (c.type === 'text') return { ...c, waveform: null, thumbnails: [] };
+      if (!state) { computeLayout(); updateUndoRedo(); refreshClipPanel(); drawTimeline(); return; }
+      veClips = (state.clips || []).filter(c => c.type !== 'text').map(c => {
         return { ...c, fileUrl: assetUrl(pathMap[c.filePath] || c.filePath), filePath: pathMap[c.filePath] || c.filePath, waveform: null, thumbnails: [] };
       });
       veAudioClips = (state.audioClips || []).map(a => ({
@@ -4673,7 +4577,6 @@ document.addEventListener('DOMContentLoaded', () => {
         filePath: pathMap[a.filePath] || a.filePath,
         waveform: null,
       }));
-      veTextOverlays = state.textOverlays || [];
       veHypeMarkers  = state.hypeMarkers  || [];
       veZoom = state.zoom || 1; veScrollOff = state.scrollOff || 0;
       veFadeInEn = state.fadeInEn || false; veFadeInDur = state.fadeInDur || 0.5;
@@ -4684,9 +4587,9 @@ document.addEventListener('DOMContentLoaded', () => {
       updateCanvasAspectRatio();
       veSelId = null; veHistory = []; veHistIdx = -1; vePlayPos = 0;
       computeLayout(); clampScroll();
-      updateUndoRedo(); refreshClipPanel(); renderTextList(); drawTimeline();
+      updateUndoRedo(); refreshClipPanel(); drawTimeline();
       // Reload waveforms + thumbnails async
-      for (const c of veClips) { if (c.type === 'text') continue; loadWaveform(c); loadThumbnails(c); }
+      for (const c of veClips) { loadWaveform(c); loadThumbnails(c); }
       for (const a of veAudioClips) { loadWaveform(a); }
       seekToPos(0);
     }
@@ -4778,12 +4681,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const result = await window.creatorhub.project.create(name).catch(() => null);
       if (!result || !result.ok) { showToast('Could not create project'); return; }
       // Reset editor state for new project
-      veClips = []; veAudioClips = []; veTextOverlays = []; veHypeMarkers = [];
+      veClips = []; veAudioClips = []; veHypeMarkers = [];
       veSelId = null; veHistory = []; veHistIdx = -1; vePlayPos = 0;
       veTotalDur = 0; veZoom = 1; veScrollOff = 0;
       video.src = ''; video.load();
       veLayers.forEach(l => { l.wrap.style.display = 'none'; if (!l.video.paused) l.video.pause(); l.video.src = ''; });
-      computeLayout(); updateUndoRedo(); refreshClipPanel(); renderTextList();
+      computeLayout(); updateUndoRedo(); refreshClipPanel();
       openEditor(result.path, name);
       drawTimeline();
     });
@@ -4891,7 +4794,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Separate audio ─────────────────────────────────────────────────────────
     $('ve-sep-audio-btn').addEventListener('click', () => {
-      const clip = selectedClip(); if (!clip || clip.type === 'text' || clip.audioDetached) return;
+      const clip = selectedClip(); if (!clip || clip.audioDetached) return;
       clip.audioDetached = true;
       // Find first empty audio track
       const usedTracks = new Set(veAudioClips.map(a => a.audioTrack || 0));
@@ -4916,7 +4819,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const clip = selectedClip(); if (clip && clip.track > 0) seekToPos(clip.timelineStart);
     });
     $('ve-layer-toV1').addEventListener('click', () => {
-      const clip = selectedClip(); if (!clip || !clip.track || clip.type === 'text') return;
+      const clip = selectedClip(); if (!clip || !clip.track) return;
       clip.track = 0; clip.keyframes = []; delete clip.x; delete clip.y; delete clip.w; delete clip.h;
       computeLayout(); updateAllLayerVideos(); refreshClipPanel(); drawTimeline(); pushHistory();
       showToast(`${clip.fileName} moved to V1`);
@@ -5004,17 +4907,6 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => showKfOnboarding(0), 400); // slight delay so UI settles
     }
 
-    // ── Text overlays ──────────────────────────────────────────────────────────
-    $('ve-text-add-btn').addEventListener('click', () => {
-      const text = $('ve-text-input').value.trim();
-      if (!text) { showToast('Enter text first'); return; }
-      const start = veStrToSecs($('ve-text-start').value) || vePlayPos;
-      const end   = veStrToSecs($('ve-text-end').value)   || Math.min(vePlayPos + 5, veTotalDur);
-      veTextOverlays.push({ id: genId(), text, pos: $('ve-text-pos').value, color: $('ve-text-color').value, startSec: start, endSec: end });
-      $('ve-text-input').value = '';
-      pushHistory(); renderTextList(); drawTimeline();
-    });
-
     // ── Format buttons ─────────────────────────────────────────────────────────
     document.querySelectorAll('.ve-format-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5027,10 +4919,10 @@ document.addEventListener('DOMContentLoaded', () => {
     $('ve-btn-hype').addEventListener('click', async () => {
       if (!veClips.length) return;
       $('ve-btn-hype').disabled = true; $('ve-btn-hype').textContent = '⚡ Analyzing…';
-      for (const c of veClips) { if (c.type === 'text') continue; if (!c.waveform) await loadWaveform(c); }
+      for (const c of veClips) { if (!c.waveform) await loadWaveform(c); }
       veHypeMarkers = [];
       for (const clip of veClips) {
-        if (clip.type === 'text' || !clip.waveform) continue;
+        if (!clip.waveform) continue;
         const peaks = clip.waveform, maxPeak = Math.max(...peaks, 0.001), thresh = maxPeak * 0.75;
         let inHype = false, lastT = -999;
         for (let i = 0; i < peaks.length; i++) {
@@ -5168,46 +5060,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (!$('ve-editor') || $('ve-editor').style.display === 'none') return;
       deleteSelectedClip();
-    });
-
-    // ── Add Text button ───────────────────────────────────────────────────────
-    $('ve-btn-addtext').addEventListener('click', () => {
-      const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
-      overlay.innerHTML = `
-        <div style="background:#0f1520;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:20px;width:360px;display:flex;flex-direction:column;gap:12px;">
-          <div style="font-size:13px;font-weight:700;">Add Text Overlay</div>
-          <input id="_txt-input" placeholder="Enter text…" style="background:#060810;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 12px;color:#e8edf5;font-family:Outfit,sans-serif;font-size:13px;outline:none;width:100%;">
-          <div style="display:flex;gap:8px;justify-content:flex-end;">
-            <button id="_txt-cancel" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(232,237,245,0.5);font-family:Outfit,sans-serif;font-size:12px;padding:7px 16px;cursor:pointer;">Cancel</button>
-            <button id="_txt-confirm" style="background:#00e5ff;border:none;border-radius:8px;color:#0a0e14;font-family:Outfit,sans-serif;font-size:12px;font-weight:700;padding:7px 16px;cursor:pointer;">Add</button>
-          </div>
-        </div>`;
-      const input = overlay.querySelector('#_txt-input');
-      const doAdd = () => {
-        const text = input.value.trim();
-        if (!text) { input.focus(); return; }
-        document.body.removeChild(overlay);
-        const v1End = veClips.filter(c => !c.track).reduce((m, c) => Math.max(m, c.timelineStart + c.timelineDuration), 0);
-        const start = v1End || vePlayPos;
-        // Find next available V2+ track slot (track 1 = V2, track 2 = V3, ...)
-        let track = 1;
-        for (let t = 1; t <= MAX_LAYERS; t++) {
-          const overlap = veClips.find(c => c.track === t && c.timelineStart < start + 5 && c.timelineStart + c.timelineDuration > start);
-          if (!overlap) { track = t; break; }
-        }
-        const txtClip = { id: genId(), type: 'text', text, textColor: '#ffffff', track, timelineStart: start, timelineDuration: 5, fileName: 'T: ' + text, keyframes: [] };
-        veClips.push(txtClip);
-        veSelId = txtClip.id;
-        computeLayout(); pushHistory(); refreshClipPanel(); drawTimeline(); syncAllLayers();
-        showToast('Text added to V' + (track + 1));
-      };
-      overlay.querySelector('#_txt-cancel').addEventListener('click', () => document.body.removeChild(overlay));
-      overlay.querySelector('#_txt-confirm').addEventListener('click', doAdd);
-      input.addEventListener('keydown', e => { if (e.key === 'Enter') doAdd(); if (e.key === 'Escape') document.body.removeChild(overlay); });
-      overlay.addEventListener('click', e => { if (e.target === overlay) document.body.removeChild(overlay); });
-      document.body.appendChild(overlay);
-      setTimeout(() => input.focus(), 50);
     });
 
     // ── Init ───────────────────────────────────────────────────────────────────
