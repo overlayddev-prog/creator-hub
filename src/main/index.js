@@ -915,8 +915,8 @@ function spawnStreamProc(dest, opts) {
         };
         try { mainWin?.webContents?.send('studio:stream-health', health); } catch (_) {}
       }
-      // Send errors to renderer
-      if (line.includes('Error') || line.includes('error') || line.includes('failed')) {
+      // Send errors to renderer (ignore errors during deliberate stop)
+      if (!streamStopping && (line.includes('Error') || line.includes('error') || line.includes('failed'))) {
         try { mainWin?.webContents?.send('studio:stream-error', { destId: dest.id, message: line.trim() }); } catch (_) {}
       }
     }
