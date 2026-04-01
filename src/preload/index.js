@@ -85,7 +85,7 @@ contextBridge.exposeInMainWorld('creatorhub', {
     recordChunk:            (chunk)        => ipcRenderer.invoke('studio:record-chunk', chunk),
     recordStop:             (fmt, dir)     => ipcRenderer.invoke('studio:record-stop', fmt, dir),
     streamStart:            (destinations, opts) => ipcRenderer.invoke('studio:stream-start', destinations, opts),
-    streamChunk:            (chunk)        => ipcRenderer.invoke('studio:stream-chunk', chunk),
+    streamChunk:            (chunk)        => ipcRenderer.send('studio:stream-chunk', chunk),
     streamStop:             ()             => ipcRenderer.invoke('studio:stream-stop'),
     onStreamHealth:         (cb)           => ipcRenderer.on('studio:stream-health', (_e, data) => cb(data)),
     onStreamReconnecting:   (cb)           => ipcRenderer.on('studio:stream-reconnecting', (_e, data) => cb(data)),

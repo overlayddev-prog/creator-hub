@@ -844,7 +844,7 @@ function buildFfmpegArgs(dest, opts) {
   const rtmp = `${dest.server}/${dest.key}`;
   const bitrateKbps = parseInt(opts.videoBitrate) || 6000;
   const gop = String((opts.fps || 30) * 2);
-  const args = ['-f', 'webm', '-i', 'pipe:0'];
+  const args = ['-i', 'pipe:0'];
 
   if (opts.encoder === 'h264_nvenc') {
     args.push(
@@ -955,6 +955,7 @@ ipcMain.handle('studio:stream-start', async (_e, destinations, opts) => {
   // destinations = [{ id, server, key }, ...], opts = { videoBitrate, audioBitrate, encoder, fps }
   if (streamProcs.size > 0) return { ok: false, error: 'Already streaming' };
   streamStopping = false;
+  streamChunkCount = 0;
   if (opts) streamOpts = { ...streamOpts, ...opts };
   for (const dest of destinations) {
     const proc = spawnStreamProc(dest, streamOpts);
@@ -963,14 +964,18 @@ ipcMain.handle('studio:stream-start', async (_e, destinations, opts) => {
   return { ok: true };
 });
 
-ipcMain.handle('studio:stream-chunk', async (_e, chunk) => {
+let streamChunkCount = 0;
+ipcMain.on('studio:stream-chunk', (_e, chunk) => {
   const buf = Buffer.from(chunk);
+  streamChunkCount++;
+  if (streamChunkCount <= 3) {
+    console.log(`[FFmpeg pipe] chunk #${streamChunkCount}, size=${buf.length}, first4=${buf.slice(0, 4).toString('hex')}`);
+  }
   for (const entry of streamProcs.values()) {
     if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {
       entry.proc.stdin.write(buf);
     }
   }
-  return { ok: true };
 });
 
 ipcMain.handle('studio:stream-stop', async () => {
