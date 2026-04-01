@@ -2010,8 +2010,7 @@ document.addEventListener('DOMContentLoaded', () => {
     engine.start();
 
     // ── Scene persistence ─────────────────────────────────────────────────────
-    // Only image/media/browser sources can be restored — live captures (screen/window/camera) can't
-    const RESTORABLE = ['image', 'media', 'browser'];
+    // Only image/media/browser sources can be saved to disk (live captures re-acquired on restore)
 
     function serializeScenes() {
       const tabs = [...studioSceneTabs.querySelectorAll('.studio-scene-tab')];
@@ -2021,11 +2020,10 @@ document.addEventListener('DOMContentLoaded', () => {
         scenes: tabs.map(t => ({
           name: t.dataset.scene,
           sources: t === activeTab
-            ? engine.sources
-                .filter(s => RESTORABLE.includes(s.type))
-                .map(s => ({
+            ? engine.sources.map(s => ({
                   type: s.type, name: s.name,
                   path: s.element?.src || s.element?.currentSrc || s._browserUrl || null,
+                  sourceId: s._sourceId || null,
                   x: s.x, y: s.y, width: s.width, height: s.height,
                   rotation: s.rotation, visible: s.visible,
                 }))
@@ -2057,9 +2055,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (activeScene) {
         for (const s of activeScene.sources || []) {
           try {
-            if (s.type === 'image') await engine.addImageSource(s.path, s.name);
-            else if (s.type === 'media') await engine.addMediaSource(s.path, s.name);
-            else if (s.type === 'browser') await engine.addBrowserSource(s.path, s.name);
+            if (s.type === 'screen' || s.type === 'window') {
+              if (!s.sourceId) continue;
+              await engine.addDesktopSource(s.sourceId, s.name, s.type);
+            } else if (s.type === 'camera') {
+              await engine.addCameraSource(s.sourceId || undefined, s.name);
+            } else if (s.type === 'image') {
+              await engine.addImageSource(s.path, s.name);
+            } else if (s.type === 'media') {
+              await engine.addMediaSource(s.path, s.name);
+            } else if (s.type === 'browser') {
+              await engine.addBrowserSource(s.path, s.name);
+            }
             const src = engine.sources[engine.sources.length - 1];
             engine.setTransform(src.id, { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation });
             if (!s.visible) src.visible = false;
@@ -2470,18 +2477,13 @@ document.addEventListener('DOMContentLoaded', () => {
   function saveCurrentSceneToTab() {
     const activeTab = studioSceneTabs?.querySelector('.studio-scene-tab.active');
     if (!activeTab) return;
-    activeTab._savedSources = engine.sources
-      .filter(s => RESTORABLE.includes(s.type))
-      .map(s => ({
-        type: s.type, name: s.name,
-        path: s.element?.src || s.element?.currentSrc || s._browserUrl || null,
-        x: s.x, y: s.y, width: s.width, height: s.height,
-        rotation: s.rotation, visible: s.visible,
-      }));
-    // Also save non-restorable source info so we know what was live
-    activeTab._liveSources = engine.sources
-      .filter(s => !RESTORABLE.includes(s.type))
-      .map(s => ({ type: s.type, name: s.name, x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation, visible: s.visible }));
+    activeTab._savedSources = engine.sources.map(s => ({
+      type: s.type, name: s.name,
+      path: s.element?.src || s.element?.currentSrc || s._browserUrl || null,
+      sourceId: s._sourceId || null,
+      x: s.x, y: s.y, width: s.width, height: s.height,
+      rotation: s.rotation, visible: s.visible,
+    }));
   }
 
   // Clear all engine sources
@@ -2497,9 +2499,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const sources = tab._savedSources || [];
     for (const s of sources) {
       try {
-        if (s.type === 'image') await engine.addImageSource(s.path, s.name);
-        else if (s.type === 'media') await engine.addMediaSource(s.path, s.name);
-        else if (s.type === 'browser') await engine.addBrowserSource(s.path, s.name);
+        if (s.type === 'screen' || s.type === 'window') {
+          if (!s.sourceId) continue;
+          await engine.addDesktopSource(s.sourceId, s.name, s.type);
+        } else if (s.type === 'camera') {
+          await engine.addCameraSource(s.sourceId || undefined, s.name);
+        } else if (s.type === 'image') {
+          await engine.addImageSource(s.path, s.name);
+        } else if (s.type === 'media') {
+          await engine.addMediaSource(s.path, s.name);
+        } else if (s.type === 'browser') {
+          await engine.addBrowserSource(s.path, s.name);
+        }
         const src = engine.sources[engine.sources.length - 1];
         engine.setTransform(src.id, { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation });
         if (!s.visible) src.visible = false;
@@ -2661,10 +2672,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const studioMonitorToggle = $('studio-monitor-toggle');
   if (studioMonitorToggle) {
     studioMonitorToggle.addEventListener('click', () => {
+      // Resume AudioContext if suspended (requires user gesture)
+      if (engine.audioCtx && engine.audioCtx.state === 'suspended') engine.audioCtx.resume();
       const on = !engine.isMonitoring();
       engine.setMonitor(on);
       studioMonitorToggle.textContent = on ? '🔊' : '🔇';
       studioMonitorToggle.title = on ? 'Monitoring ON (click to mute)' : 'Monitor audio (hear output)';
+      showToast(on ? 'Audio monitoring ON — you can hear the mix' : 'Audio monitoring OFF');
     });
   }
 

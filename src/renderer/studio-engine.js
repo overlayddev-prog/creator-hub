@@ -13,6 +13,7 @@ class StudioSource {
     this.width    = 1920;
     this.height   = 1080;
     this.rotation = 0;
+    this._sourceId = null;    // chromeMediaSourceId for screen/window, deviceId for camera
   }
 }
 
@@ -161,6 +162,7 @@ class StudioEngine {
     const video = this._makeVideo(stream);
     await video.play().catch(() => {});
     const src = new StudioSource(this._id++, name, type, video, stream);
+    src._sourceId = chromeSourceId;
     src.width = this.outW;  src.height = this.outH;
     this._pushTop(src);
     // Route any audio tracks into the audio graph
@@ -176,6 +178,7 @@ class StudioEngine {
     const video = this._makeVideo(stream);
     await video.play().catch(() => {});
     const src = new StudioSource(this._id++, name, 'camera', video, stream);
+    src._sourceId = deviceId;
     // Default: bottom-left quarter
     src.width  = Math.round(this.outW * 0.25);
     src.height = Math.round(this.outH * 0.25);
