@@ -345,8 +345,12 @@ class StudioEngine {
 
   // ── Microphone (standalone, not tied to a scene source) ───────────────────
   async addMicrophoneTrack(deviceId) {
+    const sampleRate = this.audioCtx ? this.audioCtx.sampleRate : 48000;
+    const audioConstraints = deviceId
+      ? { deviceId: { exact: deviceId }, sampleRate, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      : { sampleRate, echoCancellation: false, noiseSuppression: false, autoGainControl: false };
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+      audio: audioConstraints,
       video: false,
     });
     const key = deviceId ? 'mic_' + deviceId : 'mic';
