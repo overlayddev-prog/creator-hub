@@ -42,7 +42,7 @@ class StudioEngine {
     this.outW   = w;  this.outH = h;
     canvas.width  = w;
     canvas.height = h;
-    this.ctx = canvas.getContext('2d');
+    this.ctx = canvas.getContext('2d', { desynchronized: true, alpha: false });
     // Audio graph
     this.audioCtx  = new AudioContext();
     this.audioDest = this.audioCtx.createMediaStreamDestination();
@@ -74,6 +74,13 @@ class StudioEngine {
 
   _loop() {
     if (!this.running) return;
+    const now = performance.now();
+    // Throttle to ~30fps when not streaming/recording (preview doesn't need 60fps)
+    if (!this.outputActive && this._lastFrame && (now - this._lastFrame) < 30) {
+      this._rafId = requestAnimationFrame(() => this._loop());
+      return;
+    }
+    this._lastFrame = now;
     this._render();
     this._rafId = requestAnimationFrame(() => this._loop());
   }
