@@ -45,7 +45,19 @@ class StudioEngine {
     // Audio graph
     this.audioCtx  = new AudioContext();
     this.audioDest = this.audioCtx.createMediaStreamDestination();
+    // Monitor node — connects to speakers so user can hear the mix locally
+    this._monitorGain = this.audioCtx.createGain();
+    this._monitorGain.gain.value = 0; // off by default
+    this._monitorGain.connect(this.audioCtx.destination);
+    this._monitoring = false;
   }
+
+  setMonitor(enabled) {
+    this._monitoring = enabled;
+    this._monitorGain.gain.value = enabled ? 1 : 0;
+  }
+
+  isMonitoring() { return this._monitoring; }
 
   start() {
     if (this.running) return;
@@ -282,6 +294,25 @@ class StudioEngine {
     return src;
   }
 
+  // ── Audio-only media file (not a visual source, just audio in the mix) ───
+  async addMediaAudioTrack(filePath, name) {
+    const url = filePath.includes('://') ? filePath
+      : 'asset:///' + filePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '$1');
+    const audio = document.createElement('audio');
+    audio.src        = url;
+    audio.autoplay   = true;
+    audio.loop       = true;
+    audio.playsInline = true;
+    await audio.play().catch(() => {});
+    const key = 'media_' + Date.now();
+    const mediaStream = audio.captureStream ? audio.captureStream() : null;
+    if (mediaStream) {
+      this._connectAudio(key, mediaStream);
+      this._audioNodes.get(key)._audioEl = audio;
+    }
+    return { key, audio };
+  }
+
   // ── Microphone (standalone, not tied to a scene source) ───────────────────
   async addMicrophoneTrack(deviceId) {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -323,6 +354,8 @@ class StudioEngine {
     gainNode._lastVol = 1;
     srcNode.connect(gainNode);
     gainNode.connect(this.audioDest);
+    // Also route to monitor so user can hear when monitoring is on
+    if (this._monitorGain) gainNode.connect(this._monitorGain);
     this._audioNodes.set(id, { source: srcNode, gain: gainNode, stream: ownedStream || null });
   }
 

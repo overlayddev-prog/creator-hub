@@ -314,6 +314,7 @@
             <div class="studio-audio">
               <div class="studio-audio-hdr">
                 <span>Audio</span>
+                <button class="studio-icon-btn" id="studio-monitor-toggle" title="Monitor audio (hear output)">🔇</button>
                 <button class="studio-icon-btn" id="studio-add-audio" title="Add audio source">+</button>
               </div>
               <!-- Device picker (shown when + clicked) -->
@@ -341,25 +342,26 @@
                 </label>
                 <label>Frame Rate
                   <select class="studio-select" id="studio-fps">
-                    <option>60 FPS</option>
-                    <option selected>30 FPS</option>
-                    <option>24 FPS</option>
+                    <option value="60">60 FPS</option>
+                    <option value="30" selected>30 FPS</option>
+                    <option value="24">24 FPS</option>
                   </select>
                 </label>
                 <label>Encoder
                   <select class="studio-select" id="studio-encoder">
-                    <option>H.264 (Software)</option>
-                    <option>H.265 (Software)</option>
-                    <option>NVENC H.264</option>
-                    <option>AMD AMF H.264</option>
+                    <option value="H.264 (Software)">H.264 (Software)</option>
+                    <option value="H.265 (Software)">H.265 (Software)</option>
+                    <option value="NVENC H.264">NVENC H.264</option>
+                    <option value="AMD AMF H.264">AMD AMF H.264</option>
                   </select>
                 </label>
                 <label>Bitrate
                   <select class="studio-select" id="studio-bitrate">
-                    <option>3000 kbps</option>
-                    <option selected>6000 kbps</option>
-                    <option>8000 kbps</option>
-                    <option>12000 kbps</option>
+                    <option value="3000">3000 kbps</option>
+                    <option value="4500">4500 kbps</option>
+                    <option value="6000" selected>6000 kbps</option>
+                    <option value="8000">8000 kbps</option>
+                    <option value="12000">12000 kbps</option>
                   </select>
                 </label>
               </div>
@@ -414,6 +416,14 @@
               <div class="studio-ctrl-row" style="margin-top:6px;">
                 <button class="studio-btn studio-btn-live" id="studio-go-live">🔴 Go Live</button>
                 <button class="studio-btn studio-btn-stop" id="studio-end-stream" disabled>⏹ End</button>
+              </div>
+              <!-- Stream health monitor -->
+              <div id="studio-stream-health" style="display:none;margin-top:6px;font-size:11px;color:rgba(232,237,245,0.6);border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;">
+                <div style="display:flex;justify-content:space-between;">
+                  <span>FPS: <span id="stream-health-fps">--</span></span>
+                  <span>Bitrate: <span id="stream-health-bitrate">--</span></span>
+                  <span id="stream-health-status" style="color:var(--green);">● Healthy</span>
+                </div>
               </div>
             </div>
 

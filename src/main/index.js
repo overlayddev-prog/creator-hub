@@ -827,41 +827,121 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir) => {
 });
 
 // ── Studio — streaming (multi-destination) ───────────────────────────────────
-const streamProcs = new Map(); // destId → ffmpeg process
+const streamProcs = new Map(); // destId → { proc, dest, opts, reconnecting }
+let streamOpts = { videoBitrate: '4000k', audioBitrate: '128k', encoder: 'libx264',  fps: 30 };
+let streamStopping = false;
 
-ipcMain.handle('studio:stream-start', async (_e, destinations) => {
-  // destinations = [{ id, server, key }, ...]
-  if (streamProcs.size > 0) return { ok: false, error: 'Already streaming' };
+function buildFfmpegArgs(dest, opts) {
+  const rtmp = `${dest.server}/${dest.key}`;
+  const gop = String(opts.fps * 2); // 2 second keyframe interval
+  const args = ['-i', 'pipe:0'];
+  // Encoder selection
+  if (opts.encoder === 'h264_nvenc') {
+    args.push('-c:v', 'h264_nvenc', '-preset', 'p4', '-tune', 'll', '-rc', 'cbr');
+  } else if (opts.encoder === 'h264_amf') {
+    args.push('-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cbr');
+  } else if (opts.encoder === 'libx265') {
+    args.push('-c:v', 'libx265', '-preset', 'veryfast', '-tune', 'zerolatency');
+  } else {
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency');
+  }
+  args.push(
+    '-b:v', opts.videoBitrate, '-maxrate', opts.videoBitrate,
+    '-bufsize', String(parseInt(opts.videoBitrate) * 2) + 'k',
+    '-pix_fmt', 'yuv420p', '-g', gop,
+    '-c:a', 'aac', '-b:a', opts.audioBitrate, '-ar', '44100',
+    '-f', 'flv', rtmp,
+  );
+  return args;
+}
+
+function spawnStreamProc(dest, opts) {
   const ffmpegPath = require('ffmpeg-static');
+  const args = buildFfmpegArgs(dest, opts);
+  const proc = spawn(ffmpegPath, args);
+  let stderrBuf = '';
+
+  proc.stdin.on('error', () => {});
+
+  // Parse FFmpeg stderr for stream health stats
+  proc.stderr.on('data', (data) => {
+    stderrBuf += data.toString();
+    // FFmpeg progress lines look like: frame= 1234 fps= 30 ... bitrate=4000.0kbits/s ...
+    const lines = stderrBuf.split('\r');
+    stderrBuf = lines.pop() || '';
+    for (const line of lines) {
+      const fps    = line.match(/fps=\s*([\d.]+)/);
+      const br     = line.match(/bitrate=\s*([\d.]+)kbits\/s/);
+      const frames = line.match(/frame=\s*(\d+)/);
+      const speed  = line.match(/speed=\s*([\d.]+)x/);
+      if (fps || br) {
+        const health = {
+          destId: dest.id,
+          fps:    fps ? parseFloat(fps[1]) : null,
+          bitrate: br ? parseFloat(br[1]) : null,
+          frames: frames ? parseInt(frames[1]) : null,
+          speed:  speed ? parseFloat(speed[1]) : null,
+        };
+        try { mainWin?.webContents?.send('studio:stream-health', health); } catch (_) {}
+      }
+    }
+  });
+
+  proc.on('close', (code) => {
+    const entry = streamProcs.get(dest.id);
+    if (!entry) return;
+    // If not a deliberate stop and code indicates error, try reconnect
+    if (!streamStopping && code !== 0 && entry.reconnectAttempts < 5) {
+      entry.reconnecting = true;
+      entry.reconnectAttempts++;
+      try { mainWin?.webContents?.send('studio:stream-reconnecting', { destId: dest.id, attempt: entry.reconnectAttempts }); } catch (_) {}
+      // Wait before reconnecting (exponential backoff: 2s, 4s, 8s, 16s, 32s)
+      const delay = Math.min(2000 * Math.pow(2, entry.reconnectAttempts - 1), 32000);
+      setTimeout(() => {
+        if (streamStopping) return;
+        const newProc = spawnStreamProc(dest, opts);
+        entry.proc = newProc;
+        entry.reconnecting = false;
+        streamProcs.set(dest.id, entry);
+        try { mainWin?.webContents?.send('studio:stream-reconnected', { destId: dest.id }); } catch (_) {}
+      }, delay);
+    } else if (!streamStopping) {
+      streamProcs.delete(dest.id);
+      try { mainWin?.webContents?.send('studio:stream-dropped', { destId: dest.id }); } catch (_) {}
+    } else {
+      streamProcs.delete(dest.id);
+    }
+  });
+
+  return proc;
+}
+
+ipcMain.handle('studio:stream-start', async (_e, destinations, opts) => {
+  // destinations = [{ id, server, key }, ...], opts = { videoBitrate, audioBitrate, encoder, fps }
+  if (streamProcs.size > 0) return { ok: false, error: 'Already streaming' };
+  streamStopping = false;
+  if (opts) streamOpts = { ...streamOpts, ...opts };
   for (const dest of destinations) {
-    const rtmp = `${dest.server}/${dest.key}`;
-    const proc = spawn(ffmpegPath, [
-      '-i', 'pipe:0',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
-      '-b:v', '4000k', '-maxrate', '4000k', '-bufsize', '8000k',
-      '-pix_fmt', 'yuv420p', '-g', '60',
-      '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
-      '-f', 'flv', rtmp,
-    ]);
-    proc.stdin.on('error', () => {});
-    proc.stderr.on('data', () => {});
-    proc.on('close', () => { streamProcs.delete(dest.id); });
-    streamProcs.set(dest.id, proc);
+    const proc = spawnStreamProc(dest, streamOpts);
+    streamProcs.set(dest.id, { proc, dest, reconnecting: false, reconnectAttempts: 0 });
   }
   return { ok: true };
 });
 
 ipcMain.handle('studio:stream-chunk', async (_e, chunk) => {
   const buf = Buffer.from(chunk);
-  for (const proc of streamProcs.values()) {
-    if (!proc.stdin.destroyed) proc.stdin.write(buf);
+  for (const entry of streamProcs.values()) {
+    if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {
+      entry.proc.stdin.write(buf);
+    }
   }
   return { ok: true };
 });
 
 ipcMain.handle('studio:stream-stop', async () => {
-  for (const proc of streamProcs.values()) {
-    try { proc.stdin.end(); } catch (_) {}
+  streamStopping = true;
+  for (const entry of streamProcs.values()) {
+    try { entry.proc.stdin.end(); } catch (_) {}
   }
   streamProcs.clear();
   return { ok: true };

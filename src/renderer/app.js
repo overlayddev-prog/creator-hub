@@ -14,6 +14,21 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.11.0': {
+    sections: [
+      {
+        title: 'New',
+        items: [
+          '<b>Scene switching</b> — scene tabs now fully work; clicking a tab saves the current scene and loads the new one with all its sources',
+          '<b>Media audio sources</b> — click + in the Audio panel to add an audio or video file (MP3, WAV, MP4, etc.) as an audio-only source with volume and mute controls',
+          '<b>Audio monitor toggle</b> — click the speaker icon in the Audio header to hear the live audio mix through your speakers (off by default)',
+          '<b>Stream health monitor</b> — real-time FPS, bitrate, and connection status displayed below the stream controls while live',
+          '<b>Auto-reconnect</b> — if an RTMP stream drops, the app automatically reconnects up to 5 times with exponential backoff and shows toast notifications',
+          '<b>Output settings wired</b> — Encoder, Bitrate, and FPS dropdowns in the Output panel now control the actual stream; supports H.264, H.265, NVENC, and AMD AMF',
+        ],
+      },
+    ],
+  },
   '0.10.19': {
     sections: [
       {
@@ -2448,8 +2463,68 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── Scene tab switching (visual only for now) ─────────────────────────────
+  // ── Scene tab switching ────────────────────────────────────────────────────
   const studioSceneTabs = $('studio-scene-tabs');
+
+  // Save current engine sources to the currently active tab (for later restore)
+  function saveCurrentSceneToTab() {
+    const activeTab = studioSceneTabs?.querySelector('.studio-scene-tab.active');
+    if (!activeTab) return;
+    activeTab._savedSources = engine.sources
+      .filter(s => RESTORABLE.includes(s.type))
+      .map(s => ({
+        type: s.type, name: s.name,
+        path: s.element?.src || s.element?.currentSrc || s._browserUrl || null,
+        x: s.x, y: s.y, width: s.width, height: s.height,
+        rotation: s.rotation, visible: s.visible,
+      }));
+    // Also save non-restorable source info so we know what was live
+    activeTab._liveSources = engine.sources
+      .filter(s => !RESTORABLE.includes(s.type))
+      .map(s => ({ type: s.type, name: s.name, x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation, visible: s.visible }));
+  }
+
+  // Clear all engine sources
+  function clearAllSources() {
+    while (engine.sources.length) {
+      engine.removeSource(engine.sources[0].id);
+    }
+    studioSelectedId = null;
+  }
+
+  // Restore sources from a tab's saved data
+  async function restoreSourcesFromTab(tab) {
+    const sources = tab._savedSources || [];
+    for (const s of sources) {
+      try {
+        if (s.type === 'image') await engine.addImageSource(s.path, s.name);
+        else if (s.type === 'media') await engine.addMediaSource(s.path, s.name);
+        else if (s.type === 'browser') await engine.addBrowserSource(s.path, s.name);
+        const src = engine.sources[engine.sources.length - 1];
+        engine.setTransform(src.id, { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation });
+        if (!s.visible) src.visible = false;
+      } catch (_) {}
+    }
+    renderLayerList();
+    if (engine.sources.length) selectSource(engine.sources[engine.sources.length - 1].id);
+  }
+
+  // Switch to a scene tab
+  async function switchToScene(tab) {
+    const currentActive = studioSceneTabs.querySelector('.studio-scene-tab.active');
+    if (currentActive === tab) return;
+    // Save current scene
+    saveCurrentSceneToTab();
+    // Clear canvas
+    clearAllSources();
+    // Activate new tab
+    studioSceneTabs.querySelectorAll('.studio-scene-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    // Restore new scene
+    await restoreSourcesFromTab(tab);
+    saveScenes();
+  }
+
   if (studioSceneTabs) {
     studioSceneTabs.addEventListener('click', (e) => {
       const tab = e.target.closest('.studio-scene-tab');
@@ -2457,7 +2532,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.target.classList.contains('studio-tab-del')) {
         // Double-click to delete (arm pattern)
         if (tab.dataset.armed) {
+          const wasActive = tab.classList.contains('active');
           tab.remove();
+          // If we deleted the active tab, switch to the first remaining tab
+          if (wasActive) {
+            const first = studioSceneTabs.querySelector('.studio-scene-tab');
+            if (first) {
+              clearAllSources();
+              first.classList.add('active');
+              restoreSourcesFromTab(first);
+            }
+          }
           saveScenes();
         } else {
           tab.dataset.armed = '1';
@@ -2466,8 +2551,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return;
       }
-      studioSceneTabs.querySelectorAll('.studio-scene-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
+      switchToScene(tab);
     });
 
     // Refresh overlays button
@@ -2489,14 +2573,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const addSceneBtn = $('studio-add-scene');
     if (addSceneBtn) {
       addSceneBtn.addEventListener('click', () => {
+        // Save current scene before switching
+        saveCurrentSceneToTab();
         const name = 'Scene ' + (studioSceneTabs.querySelectorAll('.studio-scene-tab').length + 1);
         const tab = document.createElement('div');
         tab.className = 'studio-scene-tab';
         tab.dataset.scene = name;
+        tab._savedSources = [];
         tab.innerHTML = `<span class="studio-tab-dot"></span><span class="studio-tab-name">${name}</span><button class="studio-tab-del" tabindex="-1">×</button>`;
         addSceneBtn.before(tab);
+        // Clear current sources and switch to empty scene
+        clearAllSources();
         studioSceneTabs.querySelectorAll('.studio-scene-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
+        renderLayerList();
         saveScenes();
       });
     }
@@ -2567,6 +2657,17 @@ document.addEventListener('DOMContentLoaded', () => {
     tracksEl.appendChild(row);
   }
 
+  // ── Audio monitor toggle ───────────────────────────────────────────────────
+  const studioMonitorToggle = $('studio-monitor-toggle');
+  if (studioMonitorToggle) {
+    studioMonitorToggle.addEventListener('click', () => {
+      const on = !engine.isMonitoring();
+      engine.setMonitor(on);
+      studioMonitorToggle.textContent = on ? '🔊' : '🔇';
+      studioMonitorToggle.title = on ? 'Monitoring ON (click to mute)' : 'Monitor audio (hear output)';
+    });
+  }
+
   const studioAddAudio   = $('studio-add-audio');
   const studioAudioPicker = $('studio-audio-picker');
 
@@ -2587,10 +2688,38 @@ document.addEventListener('DOMContentLoaded', () => {
       const all = await navigator.mediaDevices.enumerateDevices();
       const inputs = all.filter(d => d.kind === 'audioinput');
       studioAudioPicker.innerHTML = '';
+
+      // Media file option
+      const mediaItem = document.createElement('div');
+      mediaItem.className = 'studio-device-item';
+      mediaItem.innerHTML = `<span class="studio-device-name">🎵 Media File (audio/video)</span>`;
+      mediaItem.addEventListener('click', async () => {
+        studioAudioPicker.style.display = 'none';
+        const file = await window.creatorhub.app.openFileDialog({
+          filters: [{ name: 'Audio / Video', extensions: ['mp3','wav','aac','ogg','flac','m4a','mp4','mkv','mov','avi','webm'] }],
+        });
+        if (!file) return;
+        try {
+          const name = file.replace(/.*[\\/]/, '');
+          const { key, audio } = await engine.addMediaAudioTrack(file, name);
+          // Create analyser for the media audio
+          const mediaStream = audio.captureStream ? audio.captureStream() : null;
+          let analyser = null;
+          if (mediaStream && mediaStream.getAudioTracks().length) {
+            analyser = engine.audioCtx.createAnalyser();
+            analyser.fftSize = 32;
+            engine.audioCtx.createMediaStreamSource(mediaStream).connect(analyser);
+          }
+          addAudioTrackUI(key, '🎵 ' + name, analyser);
+        } catch (err) { showToast('Could not open file: ' + err.message); }
+      });
+      studioAudioPicker.appendChild(mediaItem);
+
+      // Mic devices
       inputs.forEach(dev => {
         const item = document.createElement('div');
         item.className = 'studio-device-item';
-        item.innerHTML = `<span class="studio-device-name">${dev.label || dev.deviceId.slice(0,12)}</span>`;
+        item.innerHTML = `<span class="studio-device-name">🎤 ${dev.label || dev.deviceId.slice(0,12)}</span>`;
         item.addEventListener('click', async () => {
           studioAudioPicker.style.display = 'none';
           const key = 'mic_' + dev.deviceId;
@@ -2607,7 +2736,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         studioAudioPicker.appendChild(item);
       });
-      if (!inputs.length) studioAudioPicker.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:4px 0;">No audio inputs found</div>';
+      if (!inputs.length && studioAudioPicker.children.length <= 1) {
+        const noDevs = document.createElement('div');
+        noDevs.style.cssText = 'color:var(--muted);font-size:11px;padding:4px 0;';
+        noDevs.textContent = 'No audio input devices found';
+        studioAudioPicker.appendChild(noDevs);
+      }
     });
   }
 
@@ -2829,6 +2963,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ── Stream health listeners ────────────────────────────────────────────────
+  if (window.creatorhub.studio.onStreamHealth) {
+    window.creatorhub.studio.onStreamHealth((data) => {
+      const fpsEl = $('stream-health-fps');
+      const brEl  = $('stream-health-bitrate');
+      const stEl  = $('stream-health-status');
+      if (fpsEl && data.fps != null) fpsEl.textContent = data.fps.toFixed(1);
+      if (brEl && data.bitrate != null) brEl.textContent = Math.round(data.bitrate) + ' kbps';
+      if (stEl) {
+        const healthy = data.fps > 20 && data.speed >= 0.9;
+        const warning = data.fps > 10 && data.speed >= 0.5;
+        if (healthy) { stEl.textContent = '● Healthy'; stEl.style.color = 'var(--green)'; }
+        else if (warning) { stEl.textContent = '● Degraded'; stEl.style.color = 'var(--amber)'; }
+        else { stEl.textContent = '● Dropping'; stEl.style.color = 'var(--red)'; }
+      }
+    });
+    window.creatorhub.studio.onStreamReconnecting((data) => {
+      showToast(`Stream destination reconnecting (attempt ${data.attempt})…`);
+      $('studio-stream-dot').style.background = 'var(--amber)';
+      const stEl = $('stream-health-status');
+      if (stEl) { stEl.textContent = '● Reconnecting…'; stEl.style.color = 'var(--amber)'; }
+    });
+    window.creatorhub.studio.onStreamReconnected(() => {
+      showToast('Stream reconnected!');
+      $('studio-stream-dot').style.background = 'var(--green)';
+      const stEl = $('stream-health-status');
+      if (stEl) { stEl.textContent = '● Healthy'; stEl.style.color = 'var(--green)'; }
+    });
+    window.creatorhub.studio.onStreamDropped(() => {
+      showToast('Stream destination dropped — could not reconnect');
+      // If all destinations dropped, auto-end
+      // (we'll get multiple events if multiple dests fail)
+    });
+  }
+
+  // Read output settings from the UI
+  function getStreamOpts() {
+    const fpsEl      = $('studio-fps');
+    const encoderEl  = $('studio-encoder');
+    const bitrateEl  = $('studio-bitrate');
+    const encoderMap = {
+      'H.264 (Software)': 'libx264',
+      'H.265 (Software)': 'libx265',
+      'NVENC H.264':      'h264_nvenc',
+      'AMD AMF H.264':    'h264_amf',
+    };
+    const bitrateVal = bitrateEl ? parseInt(bitrateEl.value) || 6000 : 6000;
+    const fpsVal     = fpsEl ? parseInt(fpsEl.value) || 30 : 30;
+    const encoder    = encoderEl ? (encoderMap[encoderEl.value] || 'libx264') : 'libx264';
+    return {
+      videoBitrate: bitrateVal + 'k',
+      audioBitrate: '128k',
+      encoder,
+      fps: fpsVal,
+    };
+  }
+
   if (studioGoLive) {
     studioGoLive.addEventListener('click', async () => {
       if (!studioReady) { showToast('No sources added yet'); return; }
@@ -2841,11 +3032,13 @@ document.addEventListener('DOMContentLoaded', () => {
       })).filter(d => d.server);
       if (!dests.length) { showToast('Custom destination needs an RTMP server URL'); return; }
 
-      const res = await window.creatorhub.studio.streamStart(dests);
+      const opts = getStreamOpts();
+      const res = await window.creatorhub.studio.streamStart(dests, opts);
       if (!res.ok) { showToast('Stream error: ' + res.error); return; }
 
-      const stream = engine.captureStream(30);
-      streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 4_000_000 });
+      const stream = engine.captureStream(opts.fps);
+      const videoBps = parseInt(opts.videoBitrate) * 1000;
+      streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps });
       streamMediaRecorder.ondataavailable = async e => {
         if (e.data.size > 0) await window.creatorhub.studio.streamChunk(await e.data.arrayBuffer());
       };
@@ -2858,6 +3051,7 @@ document.addEventListener('DOMContentLoaded', () => {
       $('studio-stream-dot').style.background = 'var(--green)';
       $('studio-stream-label').textContent = `Live → ${dests.length} destination${dests.length > 1 ? 's' : ''}`;
       if ($('studio-live-badge')) $('studio-live-badge').style.display = '';
+      if ($('studio-stream-health')) $('studio-stream-health').style.display = '';
       stopStreamClock = makeClock(t => {
         $('studio-stream-timer').textContent = t;
         if ($('studio-live-clock')) $('studio-live-clock').textContent = t;
@@ -2881,6 +3075,9 @@ document.addEventListener('DOMContentLoaded', () => {
       $('studio-stream-label').textContent = 'Not streaming';
       $('studio-stream-timer').textContent  = '';
       if ($('studio-live-badge')) $('studio-live-badge').style.display = 'none';
+      if ($('studio-stream-health')) $('studio-stream-health').style.display = 'none';
+      if ($('stream-health-fps')) $('stream-health-fps').textContent = '--';
+      if ($('stream-health-bitrate')) $('stream-health-bitrate').textContent = '--';
     });
   }
 
