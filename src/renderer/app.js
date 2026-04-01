@@ -2779,8 +2779,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       await window.creatorhub.studio.recordStart();
       const stream = engine.captureStream(30);
+      const recH264 = 'video/webm;codecs=h264,opus';
+      const recMime = MediaRecorder.isTypeSupported(recH264) ? recH264 : 'video/webm;codecs=vp8,opus';
       mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp8,opus',
+        mimeType: recMime,
         videoBitsPerSecond: bps,
         audioBitsPerSecond: 192000,
       });
@@ -3043,12 +3045,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!dests.length) { showToast('Custom destination needs an RTMP server URL'); return; }
 
       const opts = getStreamOpts();
+      // Try H.264 in MediaRecorder so FFmpeg can copy instead of re-encode
+      const h264Mime = 'video/webm;codecs=h264,opus';
+      const canH264 = MediaRecorder.isTypeSupported(h264Mime);
+      opts._passthrough = canH264; // tell FFmpeg to copy video if H.264
       const res = await window.creatorhub.studio.streamStart(dests, opts);
       if (!res.ok) { showToast('Stream error: ' + res.error); return; }
 
       const stream = engine.captureStream(opts.fps);
       const videoBps = parseInt(opts.videoBitrate) * 1000;
-      streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
+      const mime = canH264 ? h264Mime : 'video/webm;codecs=vp8,opus';
+      streamMediaRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
       streamMediaRecorder.ondataavailable = async e => {
         if (e.data.size > 0) await window.creatorhub.studio.streamChunk(await e.data.arrayBuffer());
       };
