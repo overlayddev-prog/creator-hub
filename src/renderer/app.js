@@ -3066,9 +3066,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const stream = engine.captureStream(opts.fps);
       const videoBps = parseInt(opts.videoBitrate) * 1000;
       streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
-      streamMediaRecorder.ondataavailable = e => {
+      streamMediaRecorder.ondataavailable = async (e) => {
         if (e.data.size > 0) {
-          e.data.arrayBuffer().then(buf => window.creatorhub.studio.streamChunk(buf));
+          const buf = await e.data.arrayBuffer();
+          await window.creatorhub.studio.streamChunk(buf);
         }
       };
       streamMediaRecorder.start(100);
