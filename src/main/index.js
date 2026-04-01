@@ -843,7 +843,7 @@ let streamStopping = false;
 function buildFfmpegArgs(dest, opts) {
   const rtmp = `${dest.server}/${dest.key}`;
   const gop = String(opts.fps * 2); // 2 second keyframe interval
-  const args = ['-i', 'pipe:0'];
+  const args = ['-f', 'webm', '-i', 'pipe:0'];
 
   // Encoder selection
   if (opts.encoder === 'h264_nvenc') {
