@@ -3064,8 +3064,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) { showToast('Stream error: ' + res.error); return; }
 
       const stream = engine.captureStream(opts.fps);
-      // Give MediaRecorder 3x the target bitrate — FFmpeg re-encodes from this so it needs headroom
-      const videoBps = parseInt(opts.videoBitrate) * 1000 * 3;
+      const videoBps = parseInt(opts.videoBitrate) * 1000;
       streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
       streamMediaRecorder.ondataavailable = e => {
         if (e.data.size > 0) {
