@@ -14,6 +14,23 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.11.1': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>FFmpeg packaged build</b> — fixed ENOENT crash when recording/streaming in the installed app (ffmpeg-static unpacked from ASAR)',
+          '<b>H.264 passthrough</b> — MediaRecorder now outputs H.264 directly so FFmpeg copies instead of re-encoding, eliminating stutter',
+          '<b>Audio routing</b> — media audio sources no longer play through speakers when muted; volume sliders and mute buttons now work correctly',
+          '<b>Audio crunch fix</b> — sample rate matched to 48 kHz (no more resampling artifacts), audio bitrate bumped to 192 kbps',
+          '<b>Preview performance</b> — canvas uses desynchronized GPU rendering, throttled to 30 fps in preview mode, GPU compositing layer enabled',
+          '<b>Overlay persistence</b> — browser source URLs (Overlayd overlays) now save and restore correctly across scenes',
+          '<b>NVENC encoder</b> — removed invalid FFmpeg flags that could cause stream failures with NVIDIA hardware encoding',
+          '<b>Stream error reporting</b> — FFmpeg errors now surface as toast notifications instead of failing silently',
+        ],
+      },
+    ],
+  },
   '0.11.0': {
     sections: [
       {
