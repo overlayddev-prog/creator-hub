@@ -842,16 +842,39 @@ let streamStopping = false;
 
 function buildFfmpegArgs(dest, opts) {
   const rtmp = `${dest.server}/${dest.key}`;
-  const gop = String(opts.fps * 2); // 2 second keyframe interval
   const bitrateKbps = parseInt(opts.videoBitrate) || 6000;
+  const gop = String((opts.fps || 30) * 2);
   const args = ['-f', 'webm', '-i', 'pipe:0'];
 
-  // Always use libx264 — ffmpeg-static doesn't include hardware encoders (NVENC/AMF)
-  args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency');
+  if (opts.encoder === 'h264_nvenc') {
+    args.push(
+      '-c:v', 'h264_nvenc',
+      '-preset', 'p4',
+      '-rc', 'cbr',
+      '-b:v', bitrateKbps + 'k',
+      '-maxrate', bitrateKbps + 'k',
+      '-bufsize', (bitrateKbps * 2) + 'k',
+    );
+  } else if (opts.encoder === 'h264_amf') {
+    args.push(
+      '-c:v', 'h264_amf',
+      '-quality', 'speed',
+      '-rc', 'cbr',
+      '-b:v', bitrateKbps + 'k',
+      '-maxrate', bitrateKbps + 'k',
+      '-bufsize', (bitrateKbps * 2) + 'k',
+    );
+  } else {
+    args.push(
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-tune', 'zerolatency',
+      '-b:v', bitrateKbps + 'k',
+      '-maxrate', bitrateKbps + 'k',
+      '-bufsize', (bitrateKbps * 2) + 'k',
+    );
+  }
   args.push(
-    '-b:v', bitrateKbps + 'k',
-    '-maxrate', bitrateKbps + 'k',
-    '-bufsize', (bitrateKbps * 2) + 'k',
     '-pix_fmt', 'yuv420p',
     '-g', gop,
     '-c:a', 'aac', '-b:a', opts.audioBitrate || '192k', '-ar', '48000',
