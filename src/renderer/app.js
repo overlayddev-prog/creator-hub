@@ -3056,8 +3056,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const videoBps = parseInt(opts.videoBitrate) * 1000;
       const mime = canH264 ? h264Mime : 'video/webm;codecs=vp8,opus';
       streamMediaRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
-      streamMediaRecorder.ondataavailable = async e => {
-        if (e.data.size > 0) await window.creatorhub.studio.streamChunk(await e.data.arrayBuffer());
+      streamMediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) {
+          e.data.arrayBuffer().then(buf => window.creatorhub.studio.streamChunk(buf));
+        }
       };
       streamMediaRecorder.start(100);
       engine.outputActive = true;
