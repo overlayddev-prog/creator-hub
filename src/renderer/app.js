@@ -2999,9 +2999,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     window.creatorhub.studio.onStreamDropped(() => {
       showToast('Stream destination dropped — could not reconnect');
-      // If all destinations dropped, auto-end
-      // (we'll get multiple events if multiple dests fail)
     });
+    if (window.creatorhub.studio.onStreamError) {
+      window.creatorhub.studio.onStreamError((data) => {
+        console.error('[Stream FFmpeg]', data.message);
+        showToast('Stream error: ' + data.message);
+      });
+    }
   }
 
   // Read output settings from the UI
@@ -3048,7 +3052,7 @@ document.addEventListener('DOMContentLoaded', () => {
       streamMediaRecorder.ondataavailable = async e => {
         if (e.data.size > 0) await window.creatorhub.studio.streamChunk(await e.data.arrayBuffer());
       };
-      streamMediaRecorder.start(250);
+      streamMediaRecorder.start(100);
       engine.outputActive = true;
 
       studioGoLive.disabled    = true;

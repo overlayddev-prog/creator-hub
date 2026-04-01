@@ -843,10 +843,10 @@ let streamStopping = false;
 function buildFfmpegArgs(dest, opts) {
   const rtmp = `${dest.server}/${dest.key}`;
   const gop = String(opts.fps * 2); // 2 second keyframe interval
-  const args = ['-i', 'pipe:0'];
+  const args = ['-thread_queue_size', '512', '-i', 'pipe:0'];
   // Encoder selection
   if (opts.encoder === 'h264_nvenc') {
-    args.push('-c:v', 'h264_nvenc', '-preset', 'p4', '-tune', 'll', '-rc', 'cbr');
+    args.push('-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'cbr');
   } else if (opts.encoder === 'h264_amf') {
     args.push('-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cbr');
   } else if (opts.encoder === 'libx265') {
@@ -872,9 +872,11 @@ function spawnStreamProc(dest, opts) {
 
   proc.stdin.on('error', () => {});
 
-  // Parse FFmpeg stderr for stream health stats
+  // Parse FFmpeg stderr for stream health stats and error detection
   proc.stderr.on('data', (data) => {
-    stderrBuf += data.toString();
+    const text = data.toString();
+    stderrBuf += text;
+    console.log('[FFmpeg stream]', text.trim());
     // FFmpeg progress lines look like: frame= 1234 fps= 30 ... bitrate=4000.0kbits/s ...
     const lines = stderrBuf.split('\r');
     stderrBuf = lines.pop() || '';
@@ -892,6 +894,10 @@ function spawnStreamProc(dest, opts) {
           speed:  speed ? parseFloat(speed[1]) : null,
         };
         try { mainWin?.webContents?.send('studio:stream-health', health); } catch (_) {}
+      }
+      // Send errors to renderer
+      if (line.includes('Error') || line.includes('error') || line.includes('failed')) {
+        try { mainWin?.webContents?.send('studio:stream-error', { destId: dest.id, message: line.trim() }); } catch (_) {}
       }
     }
   });
