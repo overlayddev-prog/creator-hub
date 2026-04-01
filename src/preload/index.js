@@ -94,6 +94,6 @@ contextBridge.exposeInMainWorld('creatorhub', {
     onStreamError:          (cb)           => ipcRenderer.on('studio:stream-error', (_e, data) => cb(data)),
     browserSourceCreate:  (id, url, w, h) => ipcRenderer.invoke('studio:browser-source-create', id, url, w, h),
     browserSourceDestroy: (id)            => ipcRenderer.invoke('studio:browser-source-destroy', id),
-    onBrowserSourceFrame: (cb)            => ipcRenderer.on('studio:browser-frame', (_e, id, buf) => cb(id, buf)),
+    onBrowserSourceFrame: (cb)            => ipcRenderer.on('studio:browser-frame', (_e, id, buf, w, h) => cb(id, buf, w, h)),
   },
 });

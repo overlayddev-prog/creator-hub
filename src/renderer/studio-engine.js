@@ -287,15 +287,24 @@ class StudioEngine {
     // One shared IPC listener for all browser sources
     if (!this._browserFrameListenerSet) {
       this._browserFrameListenerSet = true;
-      window.creatorhub.studio.onBrowserSourceFrame(async (srcId, buf) => {
+      window.creatorhub.studio.onBrowserSourceFrame((srcId, buf, w, h) => {
         const s = this.sources.find(s => s._browserId === srcId);
         if (!s) return;
         try {
-          const bitmap = await createImageBitmap(new Blob([buf], { type: 'image/png' }));
+          const uint8 = new Uint8ClampedArray(buf);
+          // Electron toBitmap() is BGRA — swap B and R channels to RGBA
+          for (let i = 0; i < uint8.length; i += 4) {
+            const b = uint8[i];
+            uint8[i]     = uint8[i + 2]; // R = B
+            uint8[i + 2] = b;            // B = R
+          }
+          const imgData = new ImageData(uint8, w, h);
           const ctx = s.element.getContext('2d');
-          ctx.clearRect(0, 0, s.element.width, s.element.height);
-          ctx.drawImage(bitmap, 0, 0);
-          bitmap.close();
+          // Resize offscreen canvas if needed
+          if (s.element.width !== w || s.element.height !== h) {
+            s.element.width = w; s.element.height = h;
+          }
+          ctx.putImageData(imgData, 0, 0);
           s._hasFrame = true;
         } catch (_) {}
       });

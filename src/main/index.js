@@ -981,10 +981,11 @@ ipcMain.handle('studio:browser-source-create', (_e, id, url, w, h) => {
     backgroundColor: '#00000000',
     webPreferences: { offscreen: true, contextIsolation: true, nodeIntegration: false },
   });
-  win.webContents.setFrameRate(15);
+  win.webContents.setFrameRate(30);
   win.webContents.on('paint', (_evt, _dirty, image) => {
     if (!mainWin || mainWin.isDestroyed()) return;
-    mainWin.webContents.send('studio:browser-frame', id, image.toPNG());
+    const size = image.getSize();
+    mainWin.webContents.send('studio:browser-frame', id, image.toBitmap(), size.width, size.height);
   });
   win.loadURL(url);
   browserSourceWins.set(id, win);
