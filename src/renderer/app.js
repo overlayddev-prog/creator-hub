@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.11.2': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Streaming pipeline</b> — fixed "Invalid data found when processing input" error that prevented going live',
+          '<b>Chunk delivery</b> — switched to fire-and-forget IPC for stream data, eliminating backpressure and chunk ordering issues',
+        ],
+      },
+    ],
+  },
   '0.11.1': {
     sections: [
       {
