@@ -2782,6 +2782,7 @@ document.addEventListener('DOMContentLoaded', () => {
       mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp8,opus',
         videoBitsPerSecond: bps,
+        audioBitsPerSecond: 192000,
       });
       recTotalBytes = 0;
       mediaRecorder.ondataavailable = async e => {
@@ -3019,7 +3020,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const encoder    = encoderEl ? (encoderMap[encoderEl.value] || 'libx264') : 'libx264';
     return {
       videoBitrate: bitrateVal + 'k',
-      audioBitrate: '128k',
+      audioBitrate: '192k',
       encoder,
       fps: fpsVal,
     };
@@ -3043,11 +3044,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const stream = engine.captureStream(opts.fps);
       const videoBps = parseInt(opts.videoBitrate) * 1000;
-      streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps });
+      streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
       streamMediaRecorder.ondataavailable = async e => {
         if (e.data.size > 0) await window.creatorhub.studio.streamChunk(await e.data.arrayBuffer());
       };
-      streamMediaRecorder.start(100);
+      streamMediaRecorder.start(250);
       engine.outputActive = true;
 
       studioGoLive.disabled    = true;

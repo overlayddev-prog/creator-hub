@@ -858,7 +858,7 @@ function buildFfmpegArgs(dest, opts) {
     '-b:v', opts.videoBitrate, '-maxrate', opts.videoBitrate,
     '-bufsize', String(parseInt(opts.videoBitrate) * 2) + 'k',
     '-pix_fmt', 'yuv420p', '-g', gop,
-    '-c:a', 'aac', '-b:a', opts.audioBitrate, '-ar', '44100',
+    '-c:a', 'aac', '-b:a', opts.audioBitrate, '-ar', '48000',
     '-f', 'flv', rtmp,
   );
   return args;
