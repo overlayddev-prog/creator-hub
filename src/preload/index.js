@@ -1,4 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+// Direct file writing for recording chunks (bypasses IPC for bulk binary data)
+let _recStream = null;
+let _recPath = null;
 
 contextBridge.exposeInMainWorld('creatorhub', {
   // ── IPC event listener ─────────────────────────────────────────────────────
@@ -81,11 +88,29 @@ contextBridge.exposeInMainWorld('creatorhub', {
   // ── Studio (FFmpeg-based recording / streaming) ────────────────────────────
   studio: {
     getDesktopSources:      (types)        => ipcRenderer.invoke('studio:desktop-sources', types),
-    recordStart:            ()             => ipcRenderer.invoke('studio:record-start'),
-    recordChunk:            (chunk)        => ipcRenderer.invoke('studio:record-chunk', chunk),
-    recordStop:             (fmt, dir)     => ipcRenderer.invoke('studio:record-stop', fmt, dir),
+    recordStart: () => {
+      _recPath = path.join(os.tmpdir(), `ch-rec-${Date.now()}.webm`);
+      _recStream = fs.createWriteStream(_recPath);
+      console.log('[preload] recording to', _recPath);
+      return { ok: true };
+    },
+    recordChunk: (b64) => {
+      if (_recStream) {
+        const buf = Buffer.from(b64, 'base64');
+        _recStream.write(buf);
+      }
+    },
+    recordStop: async (fmt, dir) => {
+      if (_recStream) {
+        await new Promise(r => _recStream.end(r));
+        _recStream = null;
+      }
+      const tmpPath = _recPath;
+      _recPath = null;
+      return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath);
+    },
     streamStart:            (destinations, opts) => ipcRenderer.invoke('studio:stream-start', destinations, opts),
-    streamChunk:            (chunk)        => ipcRenderer.send('studio:stream-chunk', chunk),
+    streamChunk: (b64) => ipcRenderer.send('studio:stream-chunk', b64),
     streamStop:             ()             => ipcRenderer.invoke('studio:stream-stop'),
     onStreamHealth:         (cb)           => ipcRenderer.on('studio:stream-health', (_e, data) => cb(data)),
     onStreamReconnecting:   (cb)           => ipcRenderer.on('studio:stream-reconnecting', (_e, data) => cb(data)),

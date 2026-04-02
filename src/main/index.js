@@ -789,47 +789,27 @@ ipcMain.handle('studio:desktop-sources', async (_e, types) => {
 });
 
 // ── Studio — recording ────────────────────────────────────────────────────────
-const rec = { writeStream: null, tmpPath: null };
-
-ipcMain.handle('studio:record-start', async () => {
-  if (rec.writeStream) return { ok: false, error: 'Already recording' };
-  const tmpPath = path.join(app.getPath('temp'), `ch-rec-${Date.now()}.webm`);
-  rec.writeStream = fs.createWriteStream(tmpPath);
-  rec.tmpPath = tmpPath;
-  return { ok: true };
-});
-
-ipcMain.handle('studio:record-chunk', async (_e, chunk) => {
-  if (!rec.writeStream) return { ok: true };
-  const buf = Buffer.from(chunk, 'base64');
-  rec.writeStream.write(buf);
-  return { ok: true };
-});
-
-ipcMain.handle('studio:record-stop', async (_e, format, outputDir) => {
-  if (!rec.writeStream) return { ok: false, error: 'Not recording' };
-  await new Promise(r => rec.writeStream.end(r));
-  rec.writeStream = null;
+// Recording: preload writes chunks directly to disk, main only does FFmpeg conversion
+ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath) => {
+  if (!tmpPath) return { ok: false, error: 'No recording file' };
 
   const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const ext = (format || 'mp4').toLowerCase();
   const dir = outputDir || app.getPath('videos');
   const outPath = path.join(dir, `CreatorHub-${ts}.${ext}`);
 
-  // WebM or MKV: just copy the container (VP8/Opus → WebM/MKV, no re-encode)
   const copyFormats = ['webm', 'mkv'];
   const args = copyFormats.includes(ext)
-    ? ['-i', rec.tmpPath, '-c', 'copy', outPath, '-y']
-    : ['-i', rec.tmpPath,
+    ? ['-i', tmpPath, '-c', 'copy', outPath, '-y']
+    : ['-i', tmpPath,
        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
        '-c:a', 'aac', '-b:a', '192k',
        outPath, '-y'];
 
   const ffmpegPath = getFFmpegPath();
-  // Log temp file info for diagnostics
   try {
-    const stat = fs.statSync(rec.tmpPath);
-    console.log('[FFmpeg rec] temp file:', rec.tmpPath, 'size:', stat.size, 'bytes');
+    const stat = fs.statSync(tmpPath);
+    console.log('[FFmpeg rec] temp file:', tmpPath, 'size:', stat.size, 'bytes');
     console.log('[FFmpeg rec] cmd:', ffmpegPath, args.join(' '));
   } catch (e) { console.log('[FFmpeg rec] stat error:', e.message); }
 
@@ -840,8 +820,7 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir) => {
     proc.on('close', code => {
       if (code !== 0) console.log('[FFmpeg rec] FAILED code:', code, '\nstderr:', stderrOut);
       else console.log('[FFmpeg rec] OK →', outPath);
-      try { fs.unlinkSync(rec.tmpPath); } catch(e) {}
-      rec.tmpPath = null;
+      try { fs.unlinkSync(tmpPath); } catch(e) {}
       if (code === 0) resolve({ ok: true, outputPath: outPath });
       else resolve({ ok: false, error: `FFmpeg exited ${code}` });
     });

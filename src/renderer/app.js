@@ -2815,28 +2815,26 @@ document.addEventListener('DOMContentLoaded', () => {
       const qual = $('studio-rec-quality').value;
       const bps  = QUALITY_BITS[qual] || 8_000_000;
 
-      await window.creatorhub.studio.recordStart();
+      window.creatorhub.studio.recordStart();
       const stream = engine.captureStream(30);
-      console.log('[REC] stream tracks: video=' + stream.getVideoTracks().length + ' audio=' + stream.getAudioTracks().length);
-      stream.getVideoTracks().forEach(t => console.log('[REC] video track:', t.label, 'enabled=' + t.enabled, 'readyState=' + t.readyState));
       mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp8,opus',
         videoBitsPerSecond: bps,
         audioBitsPerSecond: 192000,
       });
-      mediaRecorder.onerror = (ev) => console.error('[REC] MediaRecorder error:', ev.error);
       recTotalBytes = 0;
-      mediaRecorder.ondataavailable = async e => {
-        console.log('[REC] ondataavailable size=' + e.data.size);
+      let recChunkQueue = Promise.resolve();
+      mediaRecorder._chunkQueue = () => recChunkQueue;
+      mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           recTotalBytes += e.data.size;
           const mb = (recTotalBytes / 1048576).toFixed(1);
           const sizeEl = $('studio-rec-size');
           if (sizeEl) { sizeEl.textContent = mb + ' MB'; sizeEl.style.display = ''; }
-          const buf = await e.data.arrayBuffer();
-          const b64 = bufToBase64(buf);
-          console.log('[REC] sending chunk b64.length=' + b64.length);
-          await window.creatorhub.studio.recordChunk(b64);
+          recChunkQueue = recChunkQueue.then(async () => {
+            const buf = await e.data.arrayBuffer();
+            window.creatorhub.studio.recordChunk(bufToBase64(buf));
+          });
         }
       };
       mediaRecorder.start(500);
@@ -2860,8 +2858,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (studioStopRec) {
     studioStopRec.addEventListener('click', async () => {
       if (!mediaRecorder) return;
-      // Wait for the final ondataavailable chunk before telling main to close
+      const chunkQueue = mediaRecorder._chunkQueue();
       await new Promise(res => { mediaRecorder.addEventListener('stop', res, { once: true }); mediaRecorder.stop(); });
+      await chunkQueue; // ensure all pending chunks are written to disk
       mediaRecorder = null;
       engine.outputActive = false;
       if (stopRecClock) { stopRecClock(); stopRecClock = null; }
