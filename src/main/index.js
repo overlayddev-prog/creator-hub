@@ -800,7 +800,13 @@ ipcMain.handle('studio:record-start', async () => {
 });
 
 ipcMain.handle('studio:record-chunk', async (_e, chunk) => {
-  if (rec.writeStream) rec.writeStream.write(Buffer.from(chunk));
+  if (!rec.writeStream) return { ok: true };
+  let buf;
+  if (Buffer.isBuffer(chunk)) buf = chunk;
+  else if (chunk instanceof ArrayBuffer) buf = Buffer.from(new Uint8Array(chunk));
+  else if (ArrayBuffer.isView(chunk)) buf = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  else buf = Buffer.from(chunk);
+  rec.writeStream.write(buf);
   return { ok: true };
 });
 
@@ -844,7 +850,7 @@ function buildFfmpegArgs(dest, opts) {
   const rtmp = `${dest.server}/${dest.key}`;
   const bitrateKbps = parseInt(opts.videoBitrate) || 6000;
   const gop = String((opts.fps || 30) * 2);
-  const args = ['-i', 'pipe:0'];
+  const args = ['-fflags', '+genpts+discardcorrupt', '-i', 'pipe:0'];
 
   if (opts.encoder === 'h264_nvenc') {
     args.push(
@@ -965,12 +971,28 @@ ipcMain.handle('studio:stream-start', async (_e, destinations, opts) => {
 });
 
 let streamChunkCount = 0;
+let streamDiagFile = null;
 ipcMain.on('studio:stream-chunk', (_e, chunk) => {
-  const buf = Buffer.from(chunk);
+  let buf;
+  if (Buffer.isBuffer(chunk)) buf = chunk;
+  else if (chunk instanceof ArrayBuffer) buf = Buffer.from(new Uint8Array(chunk));
+  else if (ArrayBuffer.isView(chunk)) buf = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  else { console.log('[FFmpeg pipe] unexpected chunk type:', typeof chunk, chunk); return; }
+
   streamChunkCount++;
-  if (streamChunkCount <= 3) {
-    console.log(`[FFmpeg pipe] chunk #${streamChunkCount}, size=${buf.length}, first4=${buf.slice(0, 4).toString('hex')}`);
+  if (streamChunkCount <= 5) {
+    console.log(`[FFmpeg pipe] chunk #${streamChunkCount}, size=${buf.length}, first8=${buf.subarray(0, 8).toString('hex')}`);
   }
+  // Write first 3 seconds of data to a diagnostic file
+  if (streamChunkCount === 1) {
+    const diagPath = path.join(app.getPath('temp'), 'creatorhub-stream-diag.webm');
+    try { streamDiagFile = fs.createWriteStream(diagPath); console.log('[FFmpeg diag] writing to', diagPath); } catch (_) {}
+  }
+  if (streamDiagFile && streamChunkCount <= 30) {
+    streamDiagFile.write(buf);
+    if (streamChunkCount === 30) { streamDiagFile.end(); streamDiagFile = null; console.log('[FFmpeg diag] done'); }
+  }
+
   for (const entry of streamProcs.values()) {
     if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {
       entry.proc.stdin.write(buf);
