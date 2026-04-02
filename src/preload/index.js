@@ -82,10 +82,10 @@ contextBridge.exposeInMainWorld('creatorhub', {
   studio: {
     getDesktopSources:      (types)        => ipcRenderer.invoke('studio:desktop-sources', types),
     recordStart:            ()             => ipcRenderer.invoke('studio:record-start'),
-    recordChunk:            (chunk)        => ipcRenderer.invoke('studio:record-chunk', chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : chunk),
+    recordChunk:            (chunk)        => ipcRenderer.invoke('studio:record-chunk', chunk),
     recordStop:             (fmt, dir)     => ipcRenderer.invoke('studio:record-stop', fmt, dir),
     streamStart:            (destinations, opts) => ipcRenderer.invoke('studio:stream-start', destinations, opts),
-    streamChunk:            (chunk)        => ipcRenderer.send('studio:stream-chunk', chunk instanceof ArrayBuffer ? new Uint8Array(chunk) : chunk),
+    streamChunk:            (chunk)        => ipcRenderer.send('studio:stream-chunk', chunk),
     streamStop:             ()             => ipcRenderer.invoke('studio:stream-stop'),
     onStreamHealth:         (cb)           => ipcRenderer.on('studio:stream-health', (_e, data) => cb(data)),
     onStreamReconnecting:   (cb)           => ipcRenderer.on('studio:stream-reconnecting', (_e, data) => cb(data)),

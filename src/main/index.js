@@ -801,11 +801,7 @@ ipcMain.handle('studio:record-start', async () => {
 
 ipcMain.handle('studio:record-chunk', async (_e, chunk) => {
   if (!rec.writeStream) return { ok: true };
-  let buf;
-  if (Buffer.isBuffer(chunk)) buf = chunk;
-  else if (chunk instanceof ArrayBuffer) buf = Buffer.from(new Uint8Array(chunk));
-  else if (ArrayBuffer.isView(chunk)) buf = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
-  else buf = Buffer.from(chunk);
+  const buf = Buffer.from(chunk);
   rec.writeStream.write(buf);
   return { ok: true };
 });
@@ -984,12 +980,7 @@ ipcMain.handle('studio:stream-start', async (_e, destinations, opts) => {
 let streamChunkCount = 0;
 let streamDiagFile = null;
 ipcMain.on('studio:stream-chunk', (_e, chunk) => {
-  let buf;
-  if (Buffer.isBuffer(chunk)) buf = chunk;
-  else if (chunk instanceof ArrayBuffer) buf = Buffer.from(new Uint8Array(chunk));
-  else if (ArrayBuffer.isView(chunk)) buf = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
-  else { console.log('[FFmpeg pipe] unexpected chunk type:', typeof chunk, chunk); return; }
-
+  const buf = Buffer.from(chunk);
   streamChunkCount++;
   if (streamChunkCount <= 5) {
     console.log(`[FFmpeg pipe] chunk #${streamChunkCount}, size=${buf.length}, first8=${buf.subarray(0, 8).toString('hex')}`);

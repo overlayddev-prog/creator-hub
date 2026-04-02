@@ -2820,7 +2820,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const sizeEl = $('studio-rec-size');
           if (sizeEl) { sizeEl.textContent = mb + ' MB'; sizeEl.style.display = ''; }
           const buf = await e.data.arrayBuffer();
-          await window.creatorhub.studio.recordChunk(buf);
+          await window.creatorhub.studio.recordChunk(Array.from(new Uint8Array(buf)));
         }
       };
       mediaRecorder.start(500);
@@ -3079,7 +3079,7 @@ document.addEventListener('DOMContentLoaded', () => {
       streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
       streamMediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
-          e.data.arrayBuffer().then(buf => window.creatorhub.studio.streamChunk(buf));
+          e.data.arrayBuffer().then(buf => window.creatorhub.studio.streamChunk(Array.from(new Uint8Array(buf))));
         }
       };
       streamMediaRecorder.start(100);
