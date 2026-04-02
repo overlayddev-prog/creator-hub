@@ -830,9 +830,20 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir) => {
        outPath, '-y'];
 
   const ffmpegPath = getFFmpegPath();
+  // Log temp file info for diagnostics
+  try {
+    const stat = fs.statSync(rec.tmpPath);
+    console.log('[FFmpeg rec] temp file:', rec.tmpPath, 'size:', stat.size, 'bytes');
+    console.log('[FFmpeg rec] cmd:', ffmpegPath, args.join(' '));
+  } catch (e) { console.log('[FFmpeg rec] stat error:', e.message); }
+
   return new Promise(resolve => {
     const proc = spawn(ffmpegPath, args);
+    let stderrOut = '';
+    proc.stderr.on('data', d => { stderrOut += d.toString(); });
     proc.on('close', code => {
+      if (code !== 0) console.log('[FFmpeg rec] FAILED code:', code, '\nstderr:', stderrOut);
+      else console.log('[FFmpeg rec] OK →', outPath);
       try { fs.unlinkSync(rec.tmpPath); } catch(e) {}
       rec.tmpPath = null;
       if (code === 0) resolve({ ok: true, outputPath: outPath });
