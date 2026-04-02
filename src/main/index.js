@@ -799,9 +799,13 @@ ipcMain.handle('studio:record-start', async () => {
   return { ok: true };
 });
 
+let recChunkCount = 0;
 ipcMain.handle('studio:record-chunk', async (_e, chunk) => {
+  recChunkCount++;
+  console.log(`[rec-chunk] #${recChunkCount} type=${typeof chunk} isArray=${Array.isArray(chunk)} len=${chunk?.length ?? chunk?.byteLength ?? '?'} writeStream=${!!rec.writeStream}`);
   if (!rec.writeStream) return { ok: true };
   const buf = Buffer.from(chunk);
+  console.log(`[rec-chunk] buf.length=${buf.length} first4=${buf.subarray(0, 4).toString('hex')}`);
   rec.writeStream.write(buf);
   return { ok: true };
 });

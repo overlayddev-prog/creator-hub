@@ -2820,7 +2820,9 @@ document.addEventListener('DOMContentLoaded', () => {
           const sizeEl = $('studio-rec-size');
           if (sizeEl) { sizeEl.textContent = mb + ' MB'; sizeEl.style.display = ''; }
           const buf = await e.data.arrayBuffer();
-          await window.creatorhub.studio.recordChunk(Array.from(new Uint8Array(buf)));
+          const arr = Array.from(new Uint8Array(buf));
+          console.log(`[rec ondataavailable] blob=${e.data.size} arr.len=${arr.length} first4=${arr.slice(0,4)}`);
+          await window.creatorhub.studio.recordChunk(arr);
         }
       };
       mediaRecorder.start(500);
