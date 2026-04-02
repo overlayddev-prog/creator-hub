@@ -799,13 +799,9 @@ ipcMain.handle('studio:record-start', async () => {
   return { ok: true };
 });
 
-let recChunkCount = 0;
 ipcMain.handle('studio:record-chunk', async (_e, chunk) => {
-  recChunkCount++;
-  console.log(`[rec-chunk] #${recChunkCount} type=${typeof chunk} isArray=${Array.isArray(chunk)} len=${chunk?.length ?? chunk?.byteLength ?? '?'} writeStream=${!!rec.writeStream}`);
   if (!rec.writeStream) return { ok: true };
-  const buf = Buffer.from(chunk);
-  console.log(`[rec-chunk] buf.length=${buf.length} first4=${buf.subarray(0, 4).toString('hex')}`);
+  const buf = Buffer.from(chunk, 'base64');
   rec.writeStream.write(buf);
   return { ok: true };
 });
@@ -982,23 +978,12 @@ ipcMain.handle('studio:stream-start', async (_e, destinations, opts) => {
 });
 
 let streamChunkCount = 0;
-let streamDiagFile = null;
 ipcMain.on('studio:stream-chunk', (_e, chunk) => {
-  const buf = Buffer.from(chunk);
+  const buf = Buffer.from(chunk, 'base64');
   streamChunkCount++;
-  if (streamChunkCount <= 5) {
+  if (streamChunkCount <= 3) {
     console.log(`[FFmpeg pipe] chunk #${streamChunkCount}, size=${buf.length}, first8=${buf.subarray(0, 8).toString('hex')}`);
   }
-  // Write first 3 seconds of data to a diagnostic file
-  if (streamChunkCount === 1) {
-    const diagPath = path.join(app.getPath('temp'), 'creatorhub-stream-diag.webm');
-    try { streamDiagFile = fs.createWriteStream(diagPath); console.log('[FFmpeg diag] writing to', diagPath); } catch (_) {}
-  }
-  if (streamDiagFile && streamChunkCount <= 30) {
-    streamDiagFile.write(buf);
-    if (streamChunkCount === 30) { streamDiagFile.end(); streamDiagFile = null; console.log('[FFmpeg diag] done'); }
-  }
-
   for (const entry of streamProcs.values()) {
     if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {
       entry.proc.stdin.write(buf);
