@@ -2817,20 +2817,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
       await window.creatorhub.studio.recordStart();
       const stream = engine.captureStream(30);
+      console.log('[REC] stream tracks: video=' + stream.getVideoTracks().length + ' audio=' + stream.getAudioTracks().length);
+      stream.getVideoTracks().forEach(t => console.log('[REC] video track:', t.label, 'enabled=' + t.enabled, 'readyState=' + t.readyState));
       mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp8,opus',
         videoBitsPerSecond: bps,
         audioBitsPerSecond: 192000,
       });
+      mediaRecorder.onerror = (ev) => console.error('[REC] MediaRecorder error:', ev.error);
       recTotalBytes = 0;
       mediaRecorder.ondataavailable = async e => {
+        console.log('[REC] ondataavailable size=' + e.data.size);
         if (e.data.size > 0) {
           recTotalBytes += e.data.size;
           const mb = (recTotalBytes / 1048576).toFixed(1);
           const sizeEl = $('studio-rec-size');
           if (sizeEl) { sizeEl.textContent = mb + ' MB'; sizeEl.style.display = ''; }
           const buf = await e.data.arrayBuffer();
-          await window.creatorhub.studio.recordChunk(bufToBase64(buf));
+          const b64 = bufToBase64(buf);
+          console.log('[REC] sending chunk b64.length=' + b64.length);
+          await window.creatorhub.studio.recordChunk(b64);
         }
       };
       mediaRecorder.start(500);
