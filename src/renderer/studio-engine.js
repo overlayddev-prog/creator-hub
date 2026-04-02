@@ -106,6 +106,12 @@ class StudioEngine {
       catch (e) { /* frame not ready */ }
       ctx.restore();
     }
+    // Force captureStream to emit a frame even when canvas content is "unchanged"
+    // (single-pixel transparency change is invisible but triggers a new capture frame)
+    if (this.outputActive) {
+      ctx.fillStyle = 'rgba(0,0,0,0.004)';
+      ctx.fillRect(0, 0, 1, 1);
+    }
     // Draw selection box + handles on top — skipped during recording/streaming
     if (this._selectedId != null && !this.outputActive) {
       const sel = this.sources.find(s => s.id === this._selectedId);
