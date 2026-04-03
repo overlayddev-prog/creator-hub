@@ -959,10 +959,10 @@ ipcMain.handle('studio:stream-start', async (_e, destinations, opts) => {
 
 let streamChunkCount = 0;
 ipcMain.on('studio:stream-chunk', (_e, chunk) => {
-  const buf = Buffer.from(chunk, 'base64');
+  const buf = Buffer.from(chunk);
   streamChunkCount++;
-  if (streamChunkCount <= 3) {
-    console.log(`[FFmpeg pipe] chunk #${streamChunkCount}, size=${buf.length}, first8=${buf.subarray(0, 8).toString('hex')}`);
+  if (streamChunkCount <= 5) {
+    console.log(`[FFmpeg pipe] chunk #${streamChunkCount}, type=${typeof chunk}, size=${buf.length}, first8=${buf.subarray(0, 8).toString('hex')}`);
   }
   for (const entry of streamProcs.values()) {
     if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {

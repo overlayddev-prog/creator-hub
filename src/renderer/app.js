@@ -2023,16 +2023,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const QUALITY_BITS = { high: 10_000_000, medium: 5_000_000, low: 2_500_000 };
 
-  // Fast ArrayBuffer → base64 for IPC (strings survive contextBridge reliably)
-  function bufToBase64(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let bin = '';
-    for (let i = 0; i < bytes.length; i += 8192) {
-      bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 8192, bytes.length)));
-    }
-    return btoa(bin);
-  }
-  const PLATFORM_META = {
+const PLATFORM_META = {
     twitch:   { label: 'Twitch',       icon: '🟣', server: 'rtmp://live.twitch.tv/app' },
     youtube:  { label: 'YouTube',      icon: '🔴', server: 'rtmp://a.rtmp.youtube.com/live2' },
     kick:     { label: 'Kick',         icon: '🟢', server: 'rtmp://fa723fc1b171.global-contribute.live-video.net/app' },
@@ -2833,7 +2824,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (sizeEl) { sizeEl.textContent = mb + ' MB'; sizeEl.style.display = ''; }
           recChunkQueue = recChunkQueue.then(async () => {
             const buf = await e.data.arrayBuffer();
-            window.creatorhub.studio.recordChunk(bufToBase64(buf));
+            window.creatorhub.studio.recordChunk(new Uint8Array(buf));
           });
         }
       };
@@ -3093,7 +3084,7 @@ document.addEventListener('DOMContentLoaded', () => {
       streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
       streamMediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
-          e.data.arrayBuffer().then(buf => window.creatorhub.studio.streamChunk(bufToBase64(buf)));
+          e.data.arrayBuffer().then(buf => window.creatorhub.studio.streamChunk(new Uint8Array(buf)));
         }
       };
       streamMediaRecorder.start(100);

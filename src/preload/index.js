@@ -98,15 +98,12 @@ contextBridge.exposeInMainWorld('creatorhub', {
       console.log('[preload] recording to', _recPath);
       return { ok: true };
     },
-    recordChunk: (b64) => {
+    recordChunk: (data) => {
       if (_recStream && !_recStream.destroyed) {
-        const buf = Buffer.from(b64, 'base64');
+        const buf = Buffer.from(data);
         _recChunks++;
         _recBytes += buf.length;
-        console.log(`[preload] chunk #${_recChunks} b64len=${b64.length} bytes=${buf.length} totalBytes=${_recBytes}`);
         _recStream.write(buf);
-      } else {
-        console.log('[preload] recordChunk DROPPED — stream closed');
       }
     },
     recordStop: async (fmt, dir) => {
@@ -123,7 +120,7 @@ contextBridge.exposeInMainWorld('creatorhub', {
       return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath);
     },
     streamStart:            (destinations, opts) => ipcRenderer.invoke('studio:stream-start', destinations, opts),
-    streamChunk: (b64) => ipcRenderer.send('studio:stream-chunk', b64),
+    streamChunk: (data) => ipcRenderer.send('studio:stream-chunk', data),
     streamStop:             ()             => ipcRenderer.invoke('studio:stream-stop'),
     onStreamHealth:         (cb)           => ipcRenderer.on('studio:stream-health', (_e, data) => cb(data)),
     onStreamReconnecting:   (cb)           => ipcRenderer.on('studio:stream-reconnecting', (_e, data) => cb(data)),
