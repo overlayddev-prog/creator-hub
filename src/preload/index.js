@@ -6,6 +6,8 @@ const os = require('os');
 // Direct file writing for recording chunks (bypasses IPC for bulk binary data)
 let _recStream = null;
 let _recPath = null;
+let _recChunks = 0;
+let _recBytes = 0;
 
 contextBridge.exposeInMainWorld('creatorhub', {
   // ── IPC event listener ─────────────────────────────────────────────────────
@@ -91,20 +93,31 @@ contextBridge.exposeInMainWorld('creatorhub', {
     recordStart: () => {
       _recPath = path.join(os.tmpdir(), `ch-rec-${Date.now()}.webm`);
       _recStream = fs.createWriteStream(_recPath);
+      _recChunks = 0;
+      _recBytes = 0;
       console.log('[preload] recording to', _recPath);
       return { ok: true };
     },
     recordChunk: (b64) => {
       if (_recStream && !_recStream.destroyed) {
-        _recStream.write(Buffer.from(b64, 'base64'));
+        const buf = Buffer.from(b64, 'base64');
+        _recChunks++;
+        _recBytes += buf.length;
+        console.log(`[preload] chunk #${_recChunks} b64len=${b64.length} bytes=${buf.length} totalBytes=${_recBytes}`);
+        _recStream.write(buf);
+      } else {
+        console.log('[preload] recordChunk DROPPED — stream closed');
       }
     },
     recordStop: async (fmt, dir) => {
+      console.log(`[preload] recordStop — wrote ${_recChunks} chunks, ${_recBytes} bytes total`);
       const stream = _recStream;
-      _recStream = null; // prevent further writes immediately
+      _recStream = null;
       if (stream && !stream.destroyed) {
         await new Promise(r => stream.end(r));
       }
+      // Verify file size
+      try { console.log('[preload] file size:', fs.statSync(_recPath).size); } catch(_) {}
       const tmpPath = _recPath;
       _recPath = null;
       return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath);
