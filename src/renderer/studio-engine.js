@@ -106,10 +106,11 @@ class StudioEngine {
       catch (e) { /* frame not ready */ }
       ctx.restore();
     }
-    // Force captureStream to emit a frame even when canvas content is "unchanged"
-    // (single-pixel transparency change is invisible but triggers a new capture frame)
+    // Force captureStream to emit a new frame every render by toggling a pixel
+    // between two near-black values (invisible to the eye, but different to captureStream)
     if (this.outputActive) {
-      ctx.fillStyle = 'rgba(0,0,0,0.004)';
+      this._frameToggle = !this._frameToggle;
+      ctx.fillStyle = this._frameToggle ? '#010101' : '#000000';
       ctx.fillRect(0, 0, 1, 1);
     }
     // Draw selection box + handles on top — skipped during recording/streaming

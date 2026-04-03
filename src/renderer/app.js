@@ -3077,17 +3077,13 @@ const PLATFORM_META = {
 
       const opts = getStreamOpts();
 
-      // Start MediaRecorder FIRST and pre-buffer initial chunks so FFmpeg
-      // gets data immediately when it starts (otherwise pipe:0 is empty and FFmpeg errors)
+      // Start MediaRecorder FIRST to pre-buffer the WebM header before FFmpeg starts
       const stream = engine.captureStream(opts.fps);
       const videoBps = parseInt(opts.videoBitrate) * 1000;
       streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
-      engine.outputActive = true;
 
       const preBuffer = [];
       let preBufferDone = false;
-      let preBufferResolve;
-      const preBufferReady = new Promise(r => { preBufferResolve = r; });
 
       streamMediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -3095,8 +3091,6 @@ const PLATFORM_META = {
             const chunk = new Uint8Array(buf);
             if (!preBufferDone) {
               preBuffer.push(chunk);
-              // Wait until we have the header + at least one real data chunk
-              if (preBuffer.length >= 2) preBufferResolve();
             } else {
               window.creatorhub.studio.streamChunk(chunk);
             }
@@ -3104,15 +3098,16 @@ const PLATFORM_META = {
         }
       };
       streamMediaRecorder.start(100);
+      engine.outputActive = true;
 
-      // Wait for at least 2 chunks (WebM header + first data)
-      await preBufferReady;
+      // Wait 500ms for initial chunks to accumulate (header + first data)
+      await new Promise(r => setTimeout(r, 500));
 
-      // NOW spawn FFmpeg — pipe:0 will get data immediately
+      // Spawn FFmpeg
       const res = await window.creatorhub.studio.streamStart(dests, opts);
       if (!res.ok) { streamMediaRecorder.stop(); engine.outputActive = false; showToast('Stream error: ' + res.error); return; }
 
-      // Flush pre-buffered chunks to FFmpeg
+      // Flush pre-buffered chunks to FFmpeg, then switch to live forwarding
       preBufferDone = true;
       for (const chunk of preBuffer) {
         window.creatorhub.studio.streamChunk(chunk);
