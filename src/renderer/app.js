@@ -2858,9 +2858,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (studioStopRec) {
     studioStopRec.addEventListener('click', async () => {
       if (!mediaRecorder) return;
-      const chunkQueue = mediaRecorder._chunkQueue();
       await new Promise(res => { mediaRecorder.addEventListener('stop', res, { once: true }); mediaRecorder.stop(); });
-      await chunkQueue; // ensure all pending chunks are written to disk
+      await mediaRecorder._chunkQueue(); // flush all pending chunks (including final stop chunk)
       mediaRecorder = null;
       engine.outputActive = false;
       if (stopRecClock) { stopRecClock(); stopRecClock = null; }

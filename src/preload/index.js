@@ -95,15 +95,15 @@ contextBridge.exposeInMainWorld('creatorhub', {
       return { ok: true };
     },
     recordChunk: (b64) => {
-      if (_recStream) {
-        const buf = Buffer.from(b64, 'base64');
-        _recStream.write(buf);
+      if (_recStream && !_recStream.destroyed) {
+        _recStream.write(Buffer.from(b64, 'base64'));
       }
     },
     recordStop: async (fmt, dir) => {
-      if (_recStream) {
-        await new Promise(r => _recStream.end(r));
-        _recStream = null;
+      const stream = _recStream;
+      _recStream = null; // prevent further writes immediately
+      if (stream && !stream.destroyed) {
+        await new Promise(r => stream.end(r));
       }
       const tmpPath = _recPath;
       _recPath = null;
