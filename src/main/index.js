@@ -837,7 +837,7 @@ function buildFfmpegArgs(dest, opts) {
   const rtmp = `${dest.server}/${dest.key}`;
   const bitrateKbps = parseInt(opts.videoBitrate) || 6000;
   const gop = String((opts.fps || 30) * 2);
-  const args = ['-fflags', '+genpts+discardcorrupt', '-i', 'pipe:0'];
+  const args = ['-fflags', '+genpts', '-i', 'pipe:0'];
 
   if (opts.encoder === 'h264_nvenc') {
     args.push(
