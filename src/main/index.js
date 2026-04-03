@@ -801,9 +801,10 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath) => {
 
   const copyFormats = ['webm', 'mkv'];
   const args = copyFormats.includes(ext)
-    ? ['-i', tmpPath, '-c', 'copy', outPath, '-y']
-    : ['-i', tmpPath,
+    ? ['-fflags', '+genpts', '-i', tmpPath, '-c', 'copy', outPath, '-y']
+    : ['-fflags', '+genpts', '-i', tmpPath,
        '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+       '-vsync', 'cfr',
        '-c:a', 'aac', '-b:a', '192k',
        outPath, '-y'];
 
@@ -828,157 +829,10 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath) => {
   });
 });
 
-// ── Studio — streaming (multi-destination) ───────────────────────────────────
-const streamProcs = new Map(); // destId → { proc, dest, opts, reconnecting }
-let streamOpts = { videoBitrate: '4000k', audioBitrate: '128k', encoder: 'libx264',  fps: 30 };
-let streamStopping = false;
-
-function buildFfmpegArgs(dest, opts) {
-  const rtmp = `${dest.server}/${dest.key}`;
-  const bitrateKbps = parseInt(opts.videoBitrate) || 6000;
-  const gop = String((opts.fps || 30) * 2);
-  const args = ['-fflags', '+genpts', '-i', 'pipe:0'];
-
-  if (opts.encoder === 'h264_nvenc') {
-    args.push(
-      '-c:v', 'h264_nvenc',
-      '-preset', 'p4',
-      '-rc', 'cbr',
-      '-b:v', bitrateKbps + 'k',
-      '-maxrate', bitrateKbps + 'k',
-      '-bufsize', (bitrateKbps * 2) + 'k',
-    );
-  } else if (opts.encoder === 'h264_amf') {
-    args.push(
-      '-c:v', 'h264_amf',
-      '-quality', 'speed',
-      '-rc', 'cbr',
-      '-b:v', bitrateKbps + 'k',
-      '-maxrate', bitrateKbps + 'k',
-      '-bufsize', (bitrateKbps * 2) + 'k',
-    );
-  } else {
-    args.push(
-      '-c:v', 'libx264',
-      '-preset', 'veryfast',
-      '-tune', 'zerolatency',
-      '-b:v', bitrateKbps + 'k',
-      '-maxrate', bitrateKbps + 'k',
-      '-bufsize', (bitrateKbps * 2) + 'k',
-    );
-  }
-  args.push(
-    '-pix_fmt', 'yuv420p',
-    '-g', gop,
-    '-c:a', 'aac', '-b:a', opts.audioBitrate || '192k', '-ar', '48000',
-    '-f', 'flv', rtmp,
-  );
-  return args;
-}
-
-function spawnStreamProc(dest, opts) {
-  const ffmpegPath = getFFmpegPath();
-  const args = buildFfmpegArgs(dest, opts);
-  console.log('[FFmpeg stream cmd]', ffmpegPath, args.join(' '));
-  const proc = spawn(ffmpegPath, args);
-  let stderrBuf = '';
-
-  proc.stdin.on('error', () => {});
-
-  // Parse FFmpeg stderr for stream health stats and error detection
-  proc.stderr.on('data', (data) => {
-    const text = data.toString();
-    stderrBuf += text;
-    console.log('[FFmpeg stream]', text.trim());
-    // FFmpeg progress lines look like: frame= 1234 fps= 30 ... bitrate=4000.0kbits/s ...
-    const lines = stderrBuf.split('\r');
-    stderrBuf = lines.pop() || '';
-    for (const line of lines) {
-      const fps    = line.match(/fps=\s*([\d.]+)/);
-      const br     = line.match(/bitrate=\s*([\d.]+)kbits\/s/);
-      const frames = line.match(/frame=\s*(\d+)/);
-      const speed  = line.match(/speed=\s*([\d.]+)x/);
-      if (fps || br) {
-        const health = {
-          destId: dest.id,
-          fps:    fps ? parseFloat(fps[1]) : null,
-          bitrate: br ? parseFloat(br[1]) : null,
-          frames: frames ? parseInt(frames[1]) : null,
-          speed:  speed ? parseFloat(speed[1]) : null,
-        };
-        try { mainWin?.webContents?.send('studio:stream-health', health); } catch (_) {}
-      }
-      // Send errors to renderer (ignore errors during deliberate stop)
-      if (!streamStopping && (line.includes('Error') || line.includes('error') || line.includes('failed'))) {
-        try { mainWin?.webContents?.send('studio:stream-error', { destId: dest.id, message: line.trim() }); } catch (_) {}
-      }
-    }
-  });
-
-  proc.on('close', (code) => {
-    const entry = streamProcs.get(dest.id);
-    if (!entry) return;
-    // If not a deliberate stop and code indicates error, try reconnect
-    if (!streamStopping && code !== 0 && entry.reconnectAttempts < 5) {
-      entry.reconnecting = true;
-      entry.reconnectAttempts++;
-      try { mainWin?.webContents?.send('studio:stream-reconnecting', { destId: dest.id, attempt: entry.reconnectAttempts }); } catch (_) {}
-      // Wait before reconnecting (exponential backoff: 2s, 4s, 8s, 16s, 32s)
-      const delay = Math.min(2000 * Math.pow(2, entry.reconnectAttempts - 1), 32000);
-      setTimeout(() => {
-        if (streamStopping) return;
-        const newProc = spawnStreamProc(dest, opts);
-        entry.proc = newProc;
-        entry.reconnecting = false;
-        streamProcs.set(dest.id, entry);
-        try { mainWin?.webContents?.send('studio:stream-reconnected', { destId: dest.id }); } catch (_) {}
-      }, delay);
-    } else if (!streamStopping) {
-      streamProcs.delete(dest.id);
-      try { mainWin?.webContents?.send('studio:stream-dropped', { destId: dest.id }); } catch (_) {}
-    } else {
-      streamProcs.delete(dest.id);
-    }
-  });
-
-  return proc;
-}
-
-ipcMain.handle('studio:stream-start', async (_e, destinations, opts) => {
-  // destinations = [{ id, server, key }, ...], opts = { videoBitrate, audioBitrate, encoder, fps }
-  if (streamProcs.size > 0) return { ok: false, error: 'Already streaming' };
-  streamStopping = false;
-  streamChunkCount = 0;
-  if (opts) streamOpts = { ...streamOpts, ...opts };
-  for (const dest of destinations) {
-    const proc = spawnStreamProc(dest, streamOpts);
-    streamProcs.set(dest.id, { proc, dest, reconnecting: false, reconnectAttempts: 0 });
-  }
-  return { ok: true };
-});
-
-let streamChunkCount = 0;
-ipcMain.on('studio:stream-chunk', (_e, chunk) => {
-  const buf = Buffer.from(chunk);
-  streamChunkCount++;
-  if (streamChunkCount <= 5) {
-    console.log(`[FFmpeg pipe] chunk #${streamChunkCount}, type=${typeof chunk}, size=${buf.length}, first8=${buf.subarray(0, 8).toString('hex')}`);
-  }
-  for (const entry of streamProcs.values()) {
-    if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {
-      entry.proc.stdin.write(buf);
-    }
-  }
-});
-
-ipcMain.handle('studio:stream-stop', async () => {
-  streamStopping = true;
-  for (const entry of streamProcs.values()) {
-    try { entry.proc.stdin.end(); } catch (_) {}
-  }
-  streamProcs.clear();
-  return { ok: true };
-});
+// ── Studio — streaming ───────────────────────────────────────────────────────
+// Streaming is now handled entirely in the preload process (src/preload/index.js)
+// to bypass Electron IPC serialization issues with binary data.
+// FFmpeg is spawned directly in the preload, which has sandbox: false access.
 
 // ── Browser sources (offscreen render → paint → IPC → OffscreenCanvas) ───────
 const browserSourceWins = new Map();

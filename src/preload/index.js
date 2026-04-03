@@ -2,12 +2,140 @@ const { contextBridge, ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { spawn } = require('child_process');
 
-// Direct file writing for recording chunks (bypasses IPC for bulk binary data)
+// ── FFmpeg path resolution (same logic as main process) ─────────────────────
+function getFFmpegPath() {
+  let p = require('ffmpeg-static');
+  if (p && p.includes('app.asar')) {
+    p = p.replace('app.asar', 'app.asar.unpacked');
+  }
+  return p;
+}
+
+// ── Recording — direct file write (bypasses IPC for bulk binary data) ───────
 let _recStream = null;
 let _recPath = null;
 let _recChunks = 0;
 let _recBytes = 0;
+
+// ── Streaming — FFmpeg spawned directly in preload (bypasses IPC entirely) ──
+let _streamProcs = [];       // [{ proc, dest, opts, reconnecting, reconnectAttempts }]
+let _streamStopping = false;
+let _streamChunkCount = 0;
+
+// Callbacks registered by the renderer via onStreamHealth/onStreamError/etc.
+let _healthCb = null;
+let _errorCb = null;
+let _reconnectCb = null;
+let _reconnectedCb = null;
+let _droppedCb = null;
+
+function buildStreamArgs(dest, opts) {
+  const rtmp = `${dest.server}/${dest.key}`;
+  const bitrateKbps = parseInt(opts.videoBitrate) || 6000;
+  const gop = String((opts.fps || 30) * 2);
+  const args = ['-fflags', '+genpts', '-i', 'pipe:0'];
+
+  if (opts.encoder === 'h264_nvenc') {
+    args.push(
+      '-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'cbr',
+      '-b:v', bitrateKbps + 'k', '-maxrate', bitrateKbps + 'k',
+      '-bufsize', (bitrateKbps * 2) + 'k',
+    );
+  } else if (opts.encoder === 'h264_amf') {
+    args.push(
+      '-c:v', 'h264_amf', '-quality', 'speed', '-rc', 'cbr',
+      '-b:v', bitrateKbps + 'k', '-maxrate', bitrateKbps + 'k',
+      '-bufsize', (bitrateKbps * 2) + 'k',
+    );
+  } else {
+    args.push(
+      '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
+      '-b:v', bitrateKbps + 'k', '-maxrate', bitrateKbps + 'k',
+      '-bufsize', (bitrateKbps * 2) + 'k',
+    );
+  }
+  args.push(
+    '-pix_fmt', 'yuv420p', '-g', gop,
+    '-c:a', 'aac', '-b:a', opts.audioBitrate || '192k', '-ar', '48000',
+    '-f', 'flv', rtmp,
+  );
+  return args;
+}
+
+// Spawn a single FFmpeg process for one RTMP destination.
+// Attaches stderr parsing (health/errors) and reconnection logic.
+function spawnStreamFFmpeg(dest, opts, entry) {
+  const ffmpegPath = getFFmpegPath();
+  const args = buildStreamArgs(dest, opts);
+  console.log('[preload FFmpeg] cmd:', ffmpegPath, args.join(' '));
+  const proc = spawn(ffmpegPath, args);
+  let stderrBuf = '';
+
+  proc.stdin.on('error', () => {});
+
+  proc.stderr.on('data', (data) => {
+    const text = data.toString();
+    stderrBuf += text;
+    console.log('[preload FFmpeg]', text.trim());
+
+    const lines = stderrBuf.split('\r');
+    stderrBuf = lines.pop() || '';
+    for (const line of lines) {
+      const fps    = line.match(/fps=\s*([\d.]+)/);
+      const br     = line.match(/bitrate=\s*([\d.]+)kbits\/s/);
+      const frames = line.match(/frame=\s*(\d+)/);
+      const speed  = line.match(/speed=\s*([\d.]+)x/);
+      if (fps || br) {
+        const health = {
+          destId: dest.id,
+          fps:    fps ? parseFloat(fps[1]) : null,
+          bitrate: br ? parseFloat(br[1]) : null,
+          frames: frames ? parseInt(frames[1]) : null,
+          speed:  speed ? parseFloat(speed[1]) : null,
+        };
+        if (_healthCb) try { _healthCb(health); } catch (_) {}
+      }
+      if (!_streamStopping && (line.includes('Error') || line.includes('error') || line.includes('failed'))) {
+        if (_errorCb) try { _errorCb({ destId: dest.id, message: line.trim() }); } catch (_) {}
+      }
+    }
+  });
+
+  proc.on('close', (code) => {
+    const idx = _streamProcs.indexOf(entry);
+    if (idx === -1) return;
+
+    if (!_streamStopping && code !== 0 && entry.reconnectAttempts < 5) {
+      entry.reconnecting = true;
+      entry.reconnectAttempts++;
+      if (_reconnectCb) try { _reconnectCb({ destId: dest.id, attempt: entry.reconnectAttempts }); } catch (_) {}
+      const delay = Math.min(2000 * Math.pow(2, entry.reconnectAttempts - 1), 32000);
+      setTimeout(() => {
+        if (_streamStopping) return;
+        // Respawn FFmpeg into the SAME entry (don't create a new one)
+        entry.proc = spawnStreamFFmpeg(dest, opts, entry);
+        entry.reconnecting = false;
+        if (_reconnectedCb) try { _reconnectedCb({ destId: dest.id }); } catch (_) {}
+      }, delay);
+    } else if (!_streamStopping) {
+      _streamProcs.splice(idx, 1);
+      if (_droppedCb) try { _droppedCb({ destId: dest.id }); } catch (_) {}
+    } else {
+      _streamProcs.splice(idx, 1);
+    }
+  });
+
+  return proc;
+}
+
+// Create a new stream entry + spawn FFmpeg for it
+function addStreamDest(dest, opts) {
+  const entry = { proc: null, dest, opts, reconnecting: false, reconnectAttempts: 0 };
+  entry.proc = spawnStreamFFmpeg(dest, opts, entry);
+  _streamProcs.push(entry);
+}
 
 contextBridge.exposeInMainWorld('creatorhub', {
   // ── IPC event listener ─────────────────────────────────────────────────────
@@ -87,9 +215,11 @@ contextBridge.exposeInMainWorld('creatorhub', {
     delete:  (filePath)       => ipcRenderer.invoke('transitions:delete', filePath),
   },
 
-  // ── Studio (FFmpeg-based recording / streaming) ────────────────────────────
+  // ── Studio (recording / streaming) ────────────────────────────────────────
   studio: {
-    getDesktopSources:      (types)        => ipcRenderer.invoke('studio:desktop-sources', types),
+    getDesktopSources: (types) => ipcRenderer.invoke('studio:desktop-sources', types),
+
+    // ── Recording (direct file write in preload — no IPC for bulk data) ─────
     recordStart: () => {
       _recPath = path.join(os.tmpdir(), `ch-rec-${Date.now()}.webm`);
       _recStream = fs.createWriteStream(_recPath);
@@ -113,20 +243,51 @@ contextBridge.exposeInMainWorld('creatorhub', {
       if (stream && !stream.destroyed) {
         await new Promise(r => stream.end(r));
       }
-      // Verify file size
       try { console.log('[preload] file size:', fs.statSync(_recPath).size); } catch(_) {}
       const tmpPath = _recPath;
       _recPath = null;
       return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath);
     },
-    streamStart:            (destinations, opts) => ipcRenderer.invoke('studio:stream-start', destinations, opts),
-    streamChunk: (data) => ipcRenderer.send('studio:stream-chunk', Buffer.from(data)),
-    streamStop:             ()             => ipcRenderer.invoke('studio:stream-stop'),
-    onStreamHealth:         (cb)           => ipcRenderer.on('studio:stream-health', (_e, data) => cb(data)),
-    onStreamReconnecting:   (cb)           => ipcRenderer.on('studio:stream-reconnecting', (_e, data) => cb(data)),
-    onStreamReconnected:    (cb)           => ipcRenderer.on('studio:stream-reconnected', (_e, data) => cb(data)),
-    onStreamDropped:        (cb)           => ipcRenderer.on('studio:stream-dropped', (_e, data) => cb(data)),
-    onStreamError:          (cb)           => ipcRenderer.on('studio:stream-error', (_e, data) => cb(data)),
+
+    // ── Streaming (FFmpeg spawned directly in preload — no IPC for data) ────
+    streamStart: (destinations, opts) => {
+      if (_streamProcs.length > 0) return { ok: false, error: 'Already streaming' };
+      _streamStopping = false;
+      _streamChunkCount = 0;
+      for (const dest of destinations) {
+        addStreamDest(dest, opts);
+      }
+      return { ok: true };
+    },
+    streamChunk: (data) => {
+      const buf = Buffer.from(data);
+      _streamChunkCount++;
+      if (_streamChunkCount <= 5) {
+        console.log(`[preload FFmpeg pipe] chunk #${_streamChunkCount}, size=${buf.length}, first8=${buf.subarray(0, 8).toString('hex')}`);
+      }
+      for (const entry of _streamProcs) {
+        if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {
+          entry.proc.stdin.write(buf);
+        }
+      }
+    },
+    streamStop: () => {
+      _streamStopping = true;
+      for (const entry of _streamProcs) {
+        try { entry.proc.stdin.end(); } catch (_) {}
+      }
+      _streamProcs = [];
+      return { ok: true };
+    },
+
+    // ── Stream health / event callbacks ─────────────────────────────────────
+    onStreamHealth:       (cb) => { _healthCb = cb; },
+    onStreamReconnecting: (cb) => { _reconnectCb = cb; },
+    onStreamReconnected:  (cb) => { _reconnectedCb = cb; },
+    onStreamDropped:      (cb) => { _droppedCb = cb; },
+    onStreamError:        (cb) => { _errorCb = cb; },
+
+    // ── Browser sources (still via main process IPC) ────────────────────────
     browserSourceCreate:  (id, url, w, h) => ipcRenderer.invoke('studio:browser-source-create', id, url, w, h),
     browserSourceDestroy: (id)            => ipcRenderer.invoke('studio:browser-source-destroy', id),
     onBrowserSourceFrame: (cb)            => ipcRenderer.on('studio:browser-frame', (_e, id, buf, w, h) => cb(id, buf, w, h)),

@@ -2807,7 +2807,7 @@ const PLATFORM_META = {
       const bps  = QUALITY_BITS[qual] || 8_000_000;
 
       window.creatorhub.studio.recordStart();
-      const stream = engine.captureStream(30);
+      const stream = engine.captureStream();
       mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=vp8,opus',
         videoBitsPerSecond: bps,
@@ -2825,7 +2825,7 @@ const PLATFORM_META = {
           recChunkQueue = recChunkQueue.then(async () => {
             const buf = await e.data.arrayBuffer();
             window.creatorhub.studio.recordChunk(new Uint8Array(buf));
-          });
+          }).catch(err => console.error('[rec chunk]', err));
         }
       };
       mediaRecorder.start(500);
@@ -3078,7 +3078,7 @@ const PLATFORM_META = {
       const opts = getStreamOpts();
 
       // Start MediaRecorder FIRST to pre-buffer the WebM header before FFmpeg starts
-      const stream = engine.captureStream(opts.fps);
+      const stream = engine.captureStream();
       const videoBps = parseInt(opts.videoBitrate) * 1000;
       streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
 
@@ -3100,17 +3100,23 @@ const PLATFORM_META = {
       streamMediaRecorder.start(100);
       engine.outputActive = true;
 
-      // Wait 500ms for initial chunks to accumulate (header + first data)
-      await new Promise(r => setTimeout(r, 500));
+      // Wait 1s for initial chunks to accumulate (header + first keyframe)
+      await new Promise(r => setTimeout(r, 1000));
 
       // Spawn FFmpeg
       const res = await window.creatorhub.studio.streamStart(dests, opts);
       if (!res.ok) { streamMediaRecorder.stop(); engine.outputActive = false; showToast('Stream error: ' + res.error); return; }
 
-      // Flush pre-buffered chunks to FFmpeg, then switch to live forwarding
+      // Merge pre-buffered chunks into a single contiguous block before flushing.
+      // Without this, tiny first chunks (e.g. 1-byte WebM header fragment) can
+      // cause FFmpeg's format probe to fail on pipe:0.
       preBufferDone = true;
-      for (const chunk of preBuffer) {
-        window.creatorhub.studio.streamChunk(chunk);
+      if (preBuffer.length > 0) {
+        const totalLen = preBuffer.reduce((n, c) => n + c.length, 0);
+        const merged = new Uint8Array(totalLen);
+        let off = 0;
+        for (const c of preBuffer) { merged.set(c, off); off += c.length; }
+        window.creatorhub.studio.streamChunk(merged);
       }
 
       studioGoLive.disabled    = true;

@@ -75,8 +75,9 @@ class StudioEngine {
   _loop() {
     if (!this.running) return;
     const now = performance.now();
-    // Throttle to ~30fps when not streaming/recording (preview doesn't need 60fps)
-    if (!this.outputActive && this._lastFrame && (now - this._lastFrame) < 30) {
+    // Always throttle to ~30fps — captureStream(30) only needs 30fps of changes,
+    // and running faster just wastes CPU on VP8 encoding overhead.
+    if (this._lastFrame && (now - this._lastFrame) < 33) {
       this._rafId = requestAnimationFrame(() => this._loop());
       return;
     }
@@ -106,12 +107,19 @@ class StudioEngine {
       catch (e) { /* frame not ready */ }
       ctx.restore();
     }
-    // Force captureStream to emit a new frame every render by toggling a pixel
-    // between two near-black values (invisible to the eye, but different to captureStream)
+    // Force captureStream(30) to detect a change every frame by writing a
+    // unique pixel pattern.  A single pixel wasn't reliable in Chromium — use
+    // a wider 8×2 strip that encodes the low bits of a frame counter so each
+    // frame is guaranteed to be pixel-different from the last.
     if (this.outputActive) {
-      this._frameToggle = !this._frameToggle;
-      ctx.fillStyle = this._frameToggle ? '#010101' : '#000000';
-      ctx.fillRect(0, 0, 1, 1);
+      this._frameCtr = ((this._frameCtr || 0) + 1) & 0xFF;
+      const v = this._frameCtr;
+      // Encode counter into RGB channels across 8 pixels — always unique
+      for (let i = 0; i < 8; i++) {
+        const bit = (v >> i) & 1;
+        ctx.fillStyle = bit ? '#030301' : '#010103';
+        ctx.fillRect(i, 0, 1, 2);
+      }
     }
     // Draw selection box + handles on top — skipped during recording/streaming
     if (this._selectedId != null && !this.outputActive) {
@@ -150,8 +158,11 @@ class StudioEngine {
 
   // ── Output stream (for recording / streaming) ────────────────────────────
   captureStream(fps = 30) {
+    // captureStream(30) auto-detects canvas changes up to 30fps.
+    // The pixel-counter pattern in _render() guarantees every frame is unique
+    // so Chrome always has a change to detect.
     const videoStream = this.canvas.captureStream(fps);
-    const combined   = new MediaStream([
+    const combined = new MediaStream([
       ...videoStream.getVideoTracks(),
       ...this.audioDest.stream.getAudioTracks(),
     ]);
