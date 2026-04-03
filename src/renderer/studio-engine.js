@@ -42,7 +42,7 @@ class StudioEngine {
     this.outW   = w;  this.outH = h;
     canvas.width  = w;
     canvas.height = h;
-    this.ctx = canvas.getContext('2d', { desynchronized: true, alpha: false });
+    this.ctx = canvas.getContext('2d', { alpha: false });
     // Audio graph
     this.audioCtx  = new AudioContext();
     this.audioDest = this.audioCtx.createMediaStreamDestination();
