@@ -211,10 +211,15 @@ class StudioEngine {
   }
 
   async addCameraSource(deviceId, name) {
-    const stream = await navigator.mediaDevices.getUserMedia({
+    const constraints = {
       audio: false,
-      video: deviceId ? { deviceId: { exact: deviceId } } : true,
-    });
+      video: {
+        width:  { ideal: this.outW },
+        height: { ideal: this.outH },
+      },
+    };
+    if (deviceId) constraints.video.deviceId = { exact: deviceId };
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
     const video = this._makeVideo(stream);
     await video.play().catch(() => {});
     // Wait for the video to decode at least one frame so we get real dimensions
@@ -224,8 +229,8 @@ class StudioEngine {
     const src = new StudioSource(this._id++, name, 'camera', video, stream);
     src._sourceId = deviceId;
     // Use the actual decoded video dimensions for the native aspect ratio
-    const natW = video.videoWidth  || 1920;
-    const natH = video.videoHeight || 1080;
+    const natW = video.videoWidth  || this.outW;
+    const natH = video.videoHeight || this.outH;
     src._aspectRatio = natW / natH;
     // Default: bottom-left, sized to native ratio at 25% of canvas width
     src.width  = Math.round(this.outW * 0.25);
@@ -325,29 +330,41 @@ class StudioEngine {
     src._browserId  = id;
     src._browserUrl = url;
     src._hasFrame   = false;
-    // One shared IPC listener for all browser sources
+    // One shared IPC listener + Web Worker for all browser sources.
+    // Main process sends only the dirty region (cropped), so goal updates are
+    // ~120KB instead of 8MB.  The worker does the BGRA→RGBA swap off-thread,
+    // then main thread does a fast putImageData at the dirty rect offset.
     if (!this._browserFrameListenerSet) {
       this._browserFrameListenerSet = true;
-      window.creatorhub.studio.onBrowserSourceFrame((srcId, buf, w, h) => {
+
+      const workerCode = `
+        self.onmessage = function(e) {
+          var d = e.data, u8 = new Uint8ClampedArray(d.buf);
+          var u32 = new Uint32Array(u8.buffer);
+          for (var i = 0, len = u32.length; i < len; i++) {
+            var px = u32[i];
+            u32[i] = (px & 0xFF00FF00) | ((px & 0xFF) << 16) | ((px >> 16) & 0xFF);
+          }
+          self.postMessage({ srcId: d.srcId, buf: u8.buffer, dx: d.dx, dy: d.dy, dw: d.dw, dh: d.dh }, [u8.buffer]);
+        };
+      `;
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      const worker = new Worker(URL.createObjectURL(blob));
+
+      worker.onmessage = (e) => {
+        const { srcId, buf, dx, dy, dw, dh } = e.data;
         const s = this.sources.find(s => s._browserId === srcId);
         if (!s) return;
-        try {
-          const uint8 = new Uint8ClampedArray(buf);
-          // Electron toBitmap() is BGRA — swap B and R channels to RGBA
-          for (let i = 0; i < uint8.length; i += 4) {
-            const b = uint8[i];
-            uint8[i]     = uint8[i + 2]; // R = B
-            uint8[i + 2] = b;            // B = R
-          }
-          const imgData = new ImageData(uint8, w, h);
-          const ctx = s.element.getContext('2d');
-          // Resize offscreen canvas if needed
-          if (s.element.width !== w || s.element.height !== h) {
-            s.element.width = w; s.element.height = h;
-          }
-          ctx.putImageData(imgData, 0, 0);
-          s._hasFrame = true;
-        } catch (_) {}
+        const ctx = s.element.getContext('2d');
+        ctx.putImageData(new ImageData(new Uint8ClampedArray(buf), dw, dh), dx, dy);
+        s._hasFrame = true;
+      };
+
+      window.creatorhub.studio.onBrowserSourceFrame((srcId, buf, dx, dy, dw, dh) => {
+        const s = this.sources.find(s => s._browserId === srcId);
+        if (!s) return;
+        const copy = new Uint8ClampedArray(buf).buffer;
+        worker.postMessage({ buf: copy, srcId, dx, dy, dw, dh }, [copy]);
       });
     }
     await window.creatorhub.studio.browserSourceCreate(id, url, this.outW, this.outH);

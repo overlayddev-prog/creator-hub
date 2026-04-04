@@ -300,6 +300,6 @@ contextBridge.exposeInMainWorld('creatorhub', {
     // ── Browser sources (still via main process IPC) ────────────────────────
     browserSourceCreate:  (id, url, w, h) => ipcRenderer.invoke('studio:browser-source-create', id, url, w, h),
     browserSourceDestroy: (id)            => ipcRenderer.invoke('studio:browser-source-destroy', id),
-    onBrowserSourceFrame: (cb)            => ipcRenderer.on('studio:browser-frame', (_e, id, buf, w, h) => cb(id, buf, w, h)),
+    onBrowserSourceFrame: (cb)            => ipcRenderer.on('studio:browser-frame', (_e, id, buf, dx, dy, dw, dh) => cb(id, buf, dx, dy, dw, dh)),
   },
 });

@@ -14,6 +14,24 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.12.0': {
+    sections: [
+      {
+        title: 'New',
+        items: [
+          '<b>Overlay dirty-rect rendering</b> — browser source updates now send only the changed pixels over IPC (e.g. ~120 KB for a goal tick vs 8 MB full frame), eliminating stutter when overlays change',
+          '<b>Off-thread pixel conversion</b> — BGRA→RGBA swap moved to a Web Worker so it never blocks the render loop',
+        ],
+      },
+      {
+        title: 'Fix',
+        items: [
+          '<b>Webcam resolution</b> — camera sources now request the highest resolution your webcam supports (ideal 1920×1080) instead of the browser default',
+          '<b>Webcam aspect ratio</b> — camera sources lock to their native aspect ratio during resize, Apply Transform, and Reset; ratio persists across scene save/load',
+        ],
+      },
+    ],
+  },
   '0.11.2': {
     sections: [
       {
@@ -2055,6 +2073,7 @@ const PLATFORM_META = {
                   sourceId: s._sourceId || null,
                   x: s.x, y: s.y, width: s.width, height: s.height,
                   rotation: s.rotation, visible: s.visible,
+                  aspectRatio: s.type === 'camera' ? (s._aspectRatio || null) : null,
                 }))
             : (t._savedSources || []),
         })),
@@ -2097,6 +2116,7 @@ const PLATFORM_META = {
               await engine.addBrowserSource(s.path, s.name);
             }
             const src = engine.sources[engine.sources.length - 1];
+            if (s.aspectRatio) src._aspectRatio = s.aspectRatio;
             engine.setTransform(src.id, { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation });
             if (!s.visible) src.visible = false;
           } catch (_) {}
@@ -2346,11 +2366,18 @@ const PLATFORM_META = {
   if (studioApplyTransform) {
     studioApplyTransform.addEventListener('click', () => {
       if (!studioSelectedId) return;
+      let w = Number($('studio-tx-w').value);
+      let h = Number($('studio-tx-h').value);
+      const src = engine.sources.find(s => s.id === studioSelectedId);
+      if (src && src._aspectRatio) {
+        h = Math.round(w / src._aspectRatio);
+        $('studio-tx-h').value = h;
+      }
       engine.setTransform(studioSelectedId, {
         x:        Number($('studio-tx-x').value),
         y:        Number($('studio-tx-y').value),
-        width:    Number($('studio-tx-w').value),
-        height:   Number($('studio-tx-h').value),
+        width:    w,
+        height:   h,
         rotation: Number($('studio-tx-rot').value),
       });
       saveScenes();
@@ -2360,7 +2387,12 @@ const PLATFORM_META = {
   if (studioResetTransform) {
     studioResetTransform.addEventListener('click', () => {
       if (!studioSelectedId) return;
-      engine.setTransform(studioSelectedId, { x: 0, y: 0, width: 1920, height: 1080, rotation: 0 });
+      const src = engine.sources.find(s => s.id === studioSelectedId);
+      let resetW = 1920, resetH = 1080;
+      if (src && src._aspectRatio) {
+        resetH = Math.round(1920 / src._aspectRatio);
+      }
+      engine.setTransform(studioSelectedId, { x: 0, y: 0, width: resetW, height: resetH, rotation: 0 });
       selectSource(studioSelectedId);
     });
   }
@@ -2570,6 +2602,7 @@ const PLATFORM_META = {
           await engine.addBrowserSource(s.path, s.name);
         }
         const src = engine.sources[engine.sources.length - 1];
+        if (s.aspectRatio) src._aspectRatio = s.aspectRatio;
         engine.setTransform(src.id, { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation });
         if (!s.visible) src.visible = false;
       } catch (_) {}

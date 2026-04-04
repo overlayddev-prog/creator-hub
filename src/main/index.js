@@ -856,10 +856,13 @@ ipcMain.handle('studio:browser-source-create', (_e, id, url, w, h) => {
     webPreferences: { offscreen: true, contextIsolation: true, nodeIntegration: false },
   });
   win.webContents.setFrameRate(30);
-  win.webContents.on('paint', (_evt, _dirty, image) => {
+  win.webContents.on('paint', (_evt, dirty, image) => {
     if (!mainWin || mainWin.isDestroyed()) return;
-    const size = image.getSize();
-    mainWin.webContents.send('studio:browser-frame', id, image.toBitmap(), size.width, size.height);
+    // Send only the dirty region — when a goal counter ticks, that's ~120KB
+    // instead of 8MB for the full frame.  First paint is still full-frame.
+    const cropped = image.crop(dirty);
+    mainWin.webContents.send('studio:browser-frame', id, cropped.toBitmap(),
+      dirty.x, dirty.y, dirty.width, dirty.height);
   });
   win.loadURL(url);
   browserSourceWins.set(id, win);
