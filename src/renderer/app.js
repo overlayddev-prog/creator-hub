@@ -2812,10 +2812,21 @@ const PLATFORM_META = {
         await engine.audioCtx.resume();
       }
 
-      window.creatorhub.studio.recordStart();
+      // Try H.264 MediaRecorder — FFmpeg can then remux (-c:v copy) instead of
+      // re-encoding, making MP4 conversion nearly instant even for long recordings.
+      let recMime = 'video/webm;codecs=vp8,opus';
+      let recH264 = false;
+      if (typeof MediaRecorder.isTypeSupported === 'function' &&
+          MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
+        recMime = 'video/webm;codecs=h264,opus';
+        recH264 = true;
+        console.log('[Rec] using H.264 MediaRecorder (fast remux on save)');
+      }
+
+      window.creatorhub.studio.recordStart(recH264);
       const stream = engine.captureStream();
       mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp8,opus',
+        mimeType: recMime,
         videoBitsPerSecond: bps,
         audioBitsPerSecond: 192000,
       });

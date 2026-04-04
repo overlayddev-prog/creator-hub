@@ -18,6 +18,7 @@ let _recStream = null;
 let _recPath = null;
 let _recChunks = 0;
 let _recBytes = 0;
+let _recH264 = false;
 
 // ── Streaming — FFmpeg spawned directly in preload (bypasses IPC entirely) ──
 let _streamProcs = [];       // [{ proc, dest, opts, reconnecting, reconnectAttempts }]
@@ -228,12 +229,13 @@ contextBridge.exposeInMainWorld('creatorhub', {
     getDesktopSources: (types) => ipcRenderer.invoke('studio:desktop-sources', types),
 
     // ── Recording (direct file write in preload — no IPC for bulk data) ─────
-    recordStart: () => {
+    recordStart: (h264) => {
       _recPath = path.join(os.tmpdir(), `ch-rec-${Date.now()}.webm`);
+      _recH264 = !!h264;
       _recStream = fs.createWriteStream(_recPath);
       _recChunks = 0;
       _recBytes = 0;
-      console.log('[preload] recording to', _recPath);
+      console.log('[preload] recording to', _recPath, _recH264 ? '(h264)' : '(vp8)');
       return { ok: true };
     },
     recordChunk: (data) => {
@@ -254,7 +256,7 @@ contextBridge.exposeInMainWorld('creatorhub', {
       try { console.log('[preload] file size:', fs.statSync(_recPath).size); } catch(_) {}
       const tmpPath = _recPath;
       _recPath = null;
-      return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath);
+      return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath, _recH264);
     },
 
     // ── Streaming (FFmpeg spawned directly in preload — no IPC for data) ────

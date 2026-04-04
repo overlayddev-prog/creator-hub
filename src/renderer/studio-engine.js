@@ -84,14 +84,8 @@ class StudioEngine {
 
   _loop() {
     if (!this.running) return;
-    const now = performance.now();
-    // Always throttle to ~30fps — captureStream(30) only needs 30fps of changes,
-    // and running faster just wastes CPU on VP8 encoding overhead.
-    if (this._lastFrame && (now - this._lastFrame) < 33) {
-      this._rafId = requestAnimationFrame(() => this._loop());
-      return;
-    }
-    this._lastFrame = now;
+    // Run at native rAF speed (~60fps) for smooth preview.
+    // captureStream(30) does its own internal rate-limiting for recording/streaming.
     this._render();
     this._rafId = requestAnimationFrame(() => this._loop());
   }

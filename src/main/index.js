@@ -791,7 +791,7 @@ ipcMain.handle('studio:desktop-sources', async (_e, types) => {
 
 // ── Studio — recording ────────────────────────────────────────────────────────
 // Recording: preload writes chunks directly to disk, main only does FFmpeg conversion
-ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath) => {
+ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath, isH264) => {
   if (!tmpPath) return { ok: false, error: 'No recording file' };
 
   const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -799,14 +799,24 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath) => {
   const dir = outputDir || app.getPath('videos');
   const outPath = path.join(dir, `CreatorHub-${ts}.${ext}`);
 
-  const copyFormats = ['webm', 'mkv'];
-  const args = copyFormats.includes(ext)
-    ? ['-fflags', '+genpts', '-i', tmpPath, '-c', 'copy', outPath, '-y']
-    : ['-fflags', '+genpts', '-i', tmpPath,
-       '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
-       '-vsync', 'cfr',
-       '-c:a', 'aac', '-b:a', '192k',
-       outPath, '-y'];
+  let args;
+  if (['webm', 'mkv'].includes(ext)) {
+    // Container supports the source codecs directly — just copy everything
+    args = ['-fflags', '+genpts', '-i', tmpPath, '-c', 'copy', outPath, '-y'];
+  } else if (isH264) {
+    // MediaRecorder produced H.264 — copy video, only transcode audio to AAC
+    // This is nearly instant even for multi-hour recordings
+    args = ['-fflags', '+genpts', '-i', tmpPath,
+            '-c:v', 'copy',
+            '-c:a', 'aac', '-b:a', '192k',
+            outPath, '-y'];
+  } else {
+    // VP8 source — must re-encode video to H.264 for MP4/MOV
+    args = ['-fflags', '+genpts', '-i', tmpPath,
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
+            '-c:a', 'aac', '-b:a', '192k',
+            outPath, '-y'];
+  }
 
   const ffmpegPath = getFFmpegPath();
   try {
