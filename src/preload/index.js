@@ -37,7 +37,10 @@ function buildStreamArgs(dest, opts) {
   const gop = String((opts.fps || 30) * 2);
   const args = ['-fflags', '+genpts', '-i', 'pipe:0'];
 
-  if (opts.encoder === 'h264_nvenc') {
+  if (opts.h264Passthrough) {
+    // MediaRecorder is already outputting H.264 — just copy it to FLV
+    args.push('-c:v', 'copy');
+  } else if (opts.encoder === 'h264_nvenc') {
     args.push(
       '-c:v', 'h264_nvenc', '-preset', 'p4', '-rc', 'cbr',
       '-b:v', bitrateKbps + 'k', '-maxrate', bitrateKbps + 'k',
@@ -56,8 +59,10 @@ function buildStreamArgs(dest, opts) {
       '-bufsize', (bitrateKbps * 2) + 'k',
     );
   }
+  if (!opts.h264Passthrough) {
+    args.push('-pix_fmt', 'yuv420p', '-g', gop);
+  }
   args.push(
-    '-pix_fmt', 'yuv420p', '-g', gop,
     '-c:a', 'aac', '-b:a', opts.audioBitrate || '192k', '-ar', '48000',
     '-f', 'flv', rtmp,
   );

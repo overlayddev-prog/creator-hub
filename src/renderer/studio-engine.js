@@ -46,6 +46,16 @@ class StudioEngine {
     // Audio graph
     this.audioCtx  = new AudioContext();
     this.audioDest = this.audioCtx.createMediaStreamDestination();
+    // Silent tone keeps audioDest producing audio data at all times.
+    // Without this, MediaRecorder (vp8+opus) stalls when no real audio
+    // sources are connected — it waits for audio packets that never come,
+    // producing only 1-2 chunks regardless of recording duration.
+    this._silenceOsc  = this.audioCtx.createOscillator();
+    this._silenceGain = this.audioCtx.createGain();
+    this._silenceGain.gain.value = 0;          // inaudible
+    this._silenceOsc.connect(this._silenceGain);
+    this._silenceGain.connect(this.audioDest);
+    this._silenceOsc.start();
     // Monitor node — connects to speakers so user can hear the mix locally
     this._monitorGain = this.audioCtx.createGain();
     this._monitorGain.gain.value = 0; // off by default

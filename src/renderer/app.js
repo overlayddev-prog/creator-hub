@@ -2806,6 +2806,12 @@ const PLATFORM_META = {
       const qual = $('studio-rec-quality').value;
       const bps  = QUALITY_BITS[qual] || 8_000_000;
 
+      // Ensure AudioContext is running — if still suspended MediaRecorder
+      // won't get audio packets and will stall after 1-2 chunks.
+      if (engine.audioCtx && engine.audioCtx.state === 'suspended') {
+        await engine.audioCtx.resume();
+      }
+
       window.creatorhub.studio.recordStart();
       const stream = engine.captureStream();
       mediaRecorder = new MediaRecorder(stream, {
@@ -3077,10 +3083,31 @@ const PLATFORM_META = {
 
       const opts = getStreamOpts();
 
+      // Ensure AudioContext is running before starting MediaRecorder
+      if (engine.audioCtx && engine.audioCtx.state === 'suspended') {
+        await engine.audioCtx.resume();
+      }
+
       // Start MediaRecorder FIRST to pre-buffer the WebM header before FFmpeg starts
       const stream = engine.captureStream();
       const videoBps = parseInt(opts.videoBitrate) * 1000;
-      streamMediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
+
+      // Try H.264 MediaRecorder first — FFmpeg can copy H.264 directly to
+      // RTMP/FLV without re-encoding, which drastically reduces CPU and
+      // keeps the bitrate at target.  Fall back to VP8 if not supported.
+      let streamMime = 'video/webm;codecs=vp8,opus';
+      let h264Passthrough = false;
+      if (typeof MediaRecorder.isTypeSupported === 'function' &&
+          MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
+        streamMime = 'video/webm;codecs=h264,opus';
+        h264Passthrough = true;
+        console.log('[Stream] using H.264 passthrough (no re-encode)');
+      } else {
+        console.log('[Stream] H.264 not supported in MediaRecorder, using VP8 → re-encode');
+      }
+      opts.h264Passthrough = h264Passthrough;
+
+      streamMediaRecorder = new MediaRecorder(stream, { mimeType: streamMime, videoBitsPerSecond: videoBps, audioBitsPerSecond: 192000 });
 
       const preBuffer = [];
       let preBufferDone = false;
