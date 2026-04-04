@@ -2221,12 +2221,41 @@ const PLATFORM_META = {
         else if (h === 6) {                          nh+=dy; }
         else if (h === 7) {                 nw+=dx;  nh+=dy; }
         nw = Math.max(50, nw); nh = Math.max(50, nh);
+
+        // Lock aspect ratio for camera sources so the webcam can't be stretched
+        const dragSrc = engine.sources.find(s => s.id === canvasDrag.id);
+        if (dragSrc && dragSrc._aspectRatio) {
+          const ar = dragSrc._aspectRatio;
+          const isCorner = h === 0 || h === 2 || h === 5 || h === 7;
+          const isHoriz  = h === 3 || h === 4;
+          if (isCorner || isHoriz) {
+            // Width drives height
+            nh = Math.round(nw / ar);
+          } else {
+            // Height drives width (top/bottom edge handles)
+            nw = Math.round(nh * ar);
+          }
+          // Re-anchor: if the top-left was being dragged, adjust position
+          if (h === 0) { nx = canvasDrag.origX + canvasDrag.origW - nw; ny = canvasDrag.origY + canvasDrag.origH - nh; }
+          else if (h === 1) { ny = canvasDrag.origY + canvasDrag.origH - nh; }
+          else if (h === 2) { ny = canvasDrag.origY + canvasDrag.origH - nh; }
+          else if (h === 3) { nx = canvasDrag.origX + canvasDrag.origW - nw; }
+          else if (h === 5) { nx = canvasDrag.origX + canvasDrag.origW - nw; }
+          nw = Math.max(50, nw); nh = Math.max(50, Math.round(50 / ar));
+        }
+
         // Snap the edge(s) being dragged
         if (h === 0 || h === 3 || h === 5) { const s = snapVal(nx, xLines, SNAP);      nw += nx - s; nx = s; }
         if (h === 2 || h === 4 || h === 7) { const s = snapVal(nx+nw, xLines, SNAP);   nw = s - nx; }
         if (h === 0 || h === 1 || h === 2) { const s = snapVal(ny, yLines, SNAP);      nh += ny - s; ny = s; }
         if (h === 5 || h === 6 || h === 7) { const s = snapVal(ny+nh, yLines, SNAP);   nh = s - ny; }
         nw = Math.max(50, nw); nh = Math.max(50, nh);
+
+        // Re-enforce aspect ratio after snapping for camera sources
+        if (dragSrc && dragSrc._aspectRatio) {
+          nh = Math.round(nw / dragSrc._aspectRatio);
+        }
+
         engine.setTransform(canvasDrag.id, { x: nx, y: ny, width: nw, height: nh });
         $('studio-tx-x').value = Math.round(nx); $('studio-tx-y').value = Math.round(ny);
         $('studio-tx-w').value = Math.round(nw); $('studio-tx-h').value = Math.round(nh);

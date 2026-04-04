@@ -32,6 +32,8 @@ class StudioEngine {
     this.audioCtx   = null;
     this.audioDest  = null;   // MediaStreamAudioDestinationNode
     this._audioNodes = new Map(); // sourceId → { source, gain, stream }
+    // Bind once to avoid allocating a new closure every rAF tick (reduces GC stutter)
+    this._boundLoop = this._loop.bind(this);
   }
 
   select(id) { this._selectedId = id; }
@@ -84,10 +86,8 @@ class StudioEngine {
 
   _loop() {
     if (!this.running) return;
-    // Run at native rAF speed (~60fps) for smooth preview.
-    // captureStream(30) does its own internal rate-limiting for recording/streaming.
     this._render();
-    this._rafId = requestAnimationFrame(() => this._loop());
+    this._rafId = requestAnimationFrame(this._boundLoop);
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -111,19 +111,13 @@ class StudioEngine {
       catch (e) { /* frame not ready */ }
       ctx.restore();
     }
-    // Force captureStream(30) to detect a change every frame by writing a
-    // unique pixel pattern.  A single pixel wasn't reliable in Chromium — use
-    // a wider 8×2 strip that encodes the low bits of a frame counter so each
-    // frame is guaranteed to be pixel-different from the last.
+    // Force captureStream to detect a change every frame.  We write a small
+    // block whose color encodes a frame counter — one fillRect instead of eight.
     if (this.outputActive) {
       this._frameCtr = ((this._frameCtr || 0) + 1) & 0xFF;
       const v = this._frameCtr;
-      // Encode counter into RGB channels across 8 pixels — always unique
-      for (let i = 0; i < 8; i++) {
-        const bit = (v >> i) & 1;
-        ctx.fillStyle = bit ? '#030301' : '#010103';
-        ctx.fillRect(i, 0, 1, 2);
-      }
+      ctx.fillStyle = `rgb(${v},${(v * 7) & 0xFF},${(v * 13) & 0xFF})`;
+      ctx.fillRect(0, 0, 2, 2);
     }
     // Draw selection box + handles on top — skipped during recording/streaming
     if (this._selectedId != null && !this.outputActive) {
@@ -208,9 +202,15 @@ class StudioEngine {
     await video.play().catch(() => {});
     const src = new StudioSource(this._id++, name, 'camera', video, stream);
     src._sourceId = deviceId;
-    // Default: bottom-left quarter
+    // Store the camera's native aspect ratio so resize can lock to it
+    const vTrack = stream.getVideoTracks()[0];
+    const settings = vTrack ? vTrack.getSettings() : {};
+    src._aspectRatio = (settings.width && settings.height)
+      ? settings.width / settings.height
+      : 16 / 9; // fallback
+    // Default: bottom-left, sized to native ratio at 25% of canvas width
     src.width  = Math.round(this.outW * 0.25);
-    src.height = Math.round(this.outH * 0.25);
+    src.height = Math.round(src.width / src._aspectRatio);
     src.x = 0;  src.y = this.outH - src.height;
     this._pushTop(src);
     return src;
