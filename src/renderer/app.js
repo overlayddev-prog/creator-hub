@@ -2874,7 +2874,7 @@ const PLATFORM_META = {
           }).catch(err => console.error('[rec chunk]', err));
         }
       };
-      mediaRecorder.start(500);
+      mediaRecorder.start(1000);
       engine.outputActive = true;
 
       studioStartRec.disabled = true;

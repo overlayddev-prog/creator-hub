@@ -92,33 +92,50 @@ class StudioEngine {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   _render() {
-    const { ctx, outW, outH } = this;
+    const ctx  = this.ctx;
+    const outW = this.outW;
+    const outH = this.outH;
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, outW, outH);
-    for (const src of this.sources) {
-      if (!src.visible || !src.element) continue;
-      if (src.element.tagName === 'VIDEO' && src.element.readyState < 2) continue;
+
+    for (let i = 0, len = this.sources.length; i < len; i++) {
+      const src = this.sources[i];
+      if (!src.visible) continue;
+      const el = src.element;
+      if (!el) continue;
+      // Skip videos that haven't decoded a frame yet
+      if (el.tagName === 'VIDEO' && el.readyState < 2) continue;
       if (src.type === 'browser' && !src._hasFrame) continue;
-      ctx.save();
+
       if (src.rotation !== 0) {
+        // Only save/restore canvas state when we actually need rotation
+        ctx.save();
         const cx = src.x + src.width  / 2;
         const cy = src.y + src.height / 2;
         ctx.translate(cx, cy);
         ctx.rotate(src.rotation * Math.PI / 180);
         ctx.translate(-cx, -cy);
+        ctx.drawImage(el, src.x, src.y, src.width, src.height);
+        ctx.restore();
+      } else {
+        ctx.drawImage(el, src.x, src.y, src.width, src.height);
       }
-      try { ctx.drawImage(src.element, src.x, src.y, src.width, src.height); }
-      catch (e) { /* frame not ready */ }
-      ctx.restore();
     }
-    // Force captureStream to detect a change every frame.  We write a small
-    // block whose color encodes a frame counter — one fillRect instead of eight.
+
+    // Force captureStream to detect a change every frame via a tiny pixel block
+    // whose colour encodes a frame counter.  Uses pre-allocated ImageData to
+    // avoid string alloc + colour parsing every frame.
     if (this.outputActive) {
+      if (!this._counterImg) this._counterImg = ctx.createImageData(2, 2);
       this._frameCtr = ((this._frameCtr || 0) + 1) & 0xFF;
       const v = this._frameCtr;
-      ctx.fillStyle = `rgb(${v},${(v * 7) & 0xFF},${(v * 13) & 0xFF})`;
-      ctx.fillRect(0, 0, 2, 2);
+      const d = this._counterImg.data;
+      for (let p = 0; p < 16; p += 4) {
+        d[p] = v; d[p + 1] = (v * 7) & 0xFF; d[p + 2] = (v * 13) & 0xFF; d[p + 3] = 255;
+      }
+      ctx.putImageData(this._counterImg, 0, 0);
     }
+
     // Draw selection box + handles on top — skipped during recording/streaming
     if (this._selectedId != null && !this.outputActive) {
       const sel = this.sources.find(s => s.id === this._selectedId);
@@ -200,14 +217,16 @@ class StudioEngine {
     });
     const video = this._makeVideo(stream);
     await video.play().catch(() => {});
+    // Wait for the video to decode at least one frame so we get real dimensions
+    if (!video.videoWidth) {
+      await new Promise(r => { video.addEventListener('loadedmetadata', r, { once: true }); });
+    }
     const src = new StudioSource(this._id++, name, 'camera', video, stream);
     src._sourceId = deviceId;
-    // Store the camera's native aspect ratio so resize can lock to it
-    const vTrack = stream.getVideoTracks()[0];
-    const settings = vTrack ? vTrack.getSettings() : {};
-    src._aspectRatio = (settings.width && settings.height)
-      ? settings.width / settings.height
-      : 16 / 9; // fallback
+    // Use the actual decoded video dimensions for the native aspect ratio
+    const natW = video.videoWidth  || 1920;
+    const natH = video.videoHeight || 1080;
+    src._aspectRatio = natW / natH;
     // Default: bottom-left, sized to native ratio at 25% of canvas width
     src.width  = Math.round(this.outW * 0.25);
     src.height = Math.round(src.width / src._aspectRatio);
