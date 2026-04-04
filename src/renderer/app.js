@@ -3017,11 +3017,14 @@ const PLATFORM_META = {
       if (fpsEl && data.fps != null) fpsEl.textContent = data.fps.toFixed(1);
       if (brEl && data.bitrate != null) brEl.textContent = Math.round(data.bitrate) + ' kbps';
       if (stEl) {
-        const healthy = data.fps > 20 && data.speed >= 0.9;
-        const warning = data.fps > 10 && data.speed >= 0.5;
-        if (healthy) { stEl.textContent = '● Healthy'; stEl.style.color = 'var(--green)'; }
+        // Use speed if available, fall back to fps, fall back to bitrate-only
+        const spd = data.speed != null ? data.speed : 1;
+        const f   = data.fps != null ? data.fps : 30;
+        const healthy = f > 20 && spd >= 0.9;
+        const warning = f > 10 && spd >= 0.5;
+        if (healthy)      { stEl.textContent = '● Healthy';  stEl.style.color = 'var(--green)'; }
         else if (warning) { stEl.textContent = '● Degraded'; stEl.style.color = 'var(--amber)'; }
-        else { stEl.textContent = '● Dropping'; stEl.style.color = 'var(--red)'; }
+        else              { stEl.textContent = '● Dropping';  stEl.style.color = 'var(--red)'; }
       }
     });
     window.creatorhub.studio.onStreamReconnecting((data) => {

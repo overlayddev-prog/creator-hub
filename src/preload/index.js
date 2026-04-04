@@ -83,16 +83,19 @@ function spawnStreamFFmpeg(dest, opts, entry) {
   proc.stderr.on('data', (data) => {
     const text = data.toString();
     stderrBuf += text;
-    console.log('[preload FFmpeg]', text.trim());
-
-    const lines = stderrBuf.split('\r');
+    // FFmpeg uses \r to overwrite progress lines, but on Windows pipes we may
+    // see \r\n or just \n.  Split on any combination.
+    const lines = stderrBuf.split(/\r\n|\r|\n/);
     stderrBuf = lines.pop() || '';
     for (const line of lines) {
+      if (!line.trim()) continue;
+      // Only log non-progress lines (version info, errors) to avoid console spam
+      if (!line.includes('frame=')) console.log('[preload FFmpeg]', line.trim());
       const fps    = line.match(/fps=\s*([\d.]+)/);
       const br     = line.match(/bitrate=\s*([\d.]+)kbits\/s/);
       const frames = line.match(/frame=\s*(\d+)/);
       const speed  = line.match(/speed=\s*([\d.]+)x/);
-      if (fps || br) {
+      if (fps || br || frames) {
         const health = {
           destId: dest.id,
           fps:    fps ? parseFloat(fps[1]) : null,

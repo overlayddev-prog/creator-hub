@@ -354,14 +354,15 @@ class StudioEngine {
     audio.crossOrigin = 'anonymous';
     await audio.play().catch(() => {});
     const key = 'media_' + Date.now();
-    // Route through Web Audio graph instead of default output
-    // MediaElementSource disconnects the element from speakers — audio only goes through gain nodes
+    // Route through Web Audio graph — MediaElementSource disconnects the
+    // element from default output, so we reconnect to speakers via a gain node
+    // AND route to audioDest for recording/streaming.
     const srcNode  = this.audioCtx.createMediaElementSource(audio);
     const gainNode = this.audioCtx.createGain();
     gainNode._lastVol = 1;
     srcNode.connect(gainNode);
     gainNode.connect(this.audioDest);
-    if (this._monitorGain) gainNode.connect(this._monitorGain);
+    gainNode.connect(this.audioCtx.destination); // play through speakers
     // Analyser tapped off the gain node (NOT from captureStream — that causes glitching)
     const analyser = this.audioCtx.createAnalyser();
     analyser.fftSize = 32;
