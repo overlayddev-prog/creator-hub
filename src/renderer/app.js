@@ -14,6 +14,26 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.13.1': {
+    sections: [
+      {
+        title: 'New',
+        items: [
+          '<b>Clip overlap prevention</b> — clips on the same track can no longer phase into each other; dragging past another clip\'s midpoint swaps their positions',
+          '<b>Zoom to cursor</b> — Ctrl+scroll zooms centered on your mouse position instead of the timeline start; zoom buttons center on the playhead',
+          '<b>Middle-mouse pan</b> — middle-click and drag to scroll the timeline to any position',
+          '<b>Smart clip placement</b> — new clips are added after the selected clip, or at the end of V1 if nothing is selected',
+        ],
+      },
+      {
+        title: 'Fix',
+        items: [
+          '<b>Empty area deselect</b> — clicking empty space in the timeline now properly deselects all clips',
+          '<b>Snap improvement</b> — clips stick to adjacent edges and can\'t overlap after snapping',
+        ],
+      },
+    ],
+  },
   '0.12.0': {
     sections: [
       {
@@ -3281,6 +3301,8 @@ const PLATFORM_META = {
     let veDragClip     = null;
     let veDragOffsetSec = 0;
     let veDragTargetTrack = null;
+    let vePanStartX    = 0;
+    let vePanStartOff  = 0;
     let veDragCurrentX = 0;
     let veDragCurrentY = 0;
     let veRafId        = null;
@@ -4398,6 +4420,13 @@ const PLATFORM_META = {
 
     // ── Timeline mouse interactions ───────────────────────────────────────────
     canvas.addEventListener('mousedown', e => {
+      // Middle mouse button — pan timeline
+      if (e.button === 1) {
+        e.preventDefault();
+        veDragging = 'pan'; vePanStartX = e.clientX; vePanStartOff = veScrollOff;
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
       if (!veClips.length && !veAudioClips.length) return;
       const rect = canvas.getBoundingClientRect();
       const x    = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -4446,6 +4475,7 @@ const PLATFORM_META = {
           if (clickedClip) {
             veSelId = clickedClip.id; refreshClipPanel(); syncAllLayers();
             veDragging = 'clipMove'; veDragClip = clickedClip;
+            veDragClip._preDragStart = clickedClip.timelineStart;
             veDragOffsetSec = t - clickedClip.timelineStart;
             veDragTargetTrack = clickedClip.track || 0;
             // Auto-seek to V2+ clip when clicked so it shows in preview
@@ -4464,7 +4494,13 @@ const PLATFORM_META = {
         if (y <= RULER_H) {
           if (!video.paused) video.pause();
           veDragging = 'seek'; seekToPos(Math.max(0, Math.min(veTotalDur, t)));
+        } else if (getVideoTrackAtY(y) === null && getAudioTrackAtY(y) === null) {
+          // Clicked below all tracks or in empty area — deselect
+          veSelId = null; refreshClipPanel(); drawTimeline();
         }
+      } else {
+        // Clicked in label area — deselect
+        veSelId = null; refreshClipPanel(); drawTimeline();
       }
       e.preventDefault();
     });
@@ -4478,6 +4514,13 @@ const PLATFORM_META = {
       const clip  = selectedClip();
       const aclip = selectedAudioClip();
       veDragCurrentX = x; veDragCurrentY = y;
+
+      if (veDragging === 'pan') {
+        const dx = e.clientX - vePanStartX;
+        veScrollOff = vePanStartOff - (dx / rect.width) * visibleDur();
+        clampScroll(); drawTimeline();
+        return;
+      }
 
       if (veOvDrag) {
         // Preview layer drag/resize
@@ -4527,22 +4570,49 @@ const PLATFORM_META = {
       } else if (veDragging === 'clipMove' && veDragClip) {
         const hovTrack = getVideoTrackAtY(y);
         const rawTarget = (hovTrack !== null) ? hovTrack : (veDragClip.track || 0);
-        // Text clips can only live on V2+ tracks — prevent dragging to V1
         veDragTargetTrack = rawTarget;
         if (veDragTargetTrack === (veDragClip.track || 0)) {
-          if (veDragTargetTrack === 0) {
-            veDragClip.timelineStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
-            computeLayout();
-          } else {
-            veDragClip.timelineStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
-            computeLayout();
+          let newStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
+          const track = veDragClip.track || 0;
+          const dur = veDragClip.timelineDuration;
+          const others = veClips.filter(c => c.id !== veDragClip.id && (c.track || 0) === track)
+            .sort((a, b) => a.timelineStart - b.timelineStart);
+
+          // Check for overlap and handle swap / clamp
+          for (const other of others) {
+            const oStart = other.timelineStart;
+            const oDur = other.timelineDuration;
+            const oEnd = oStart + oDur;
+            const oMid = oStart + oDur / 2;
+            const newEnd = newStart + dur;
+
+            if (newEnd > oStart && newStart < oEnd) {
+              // Overlap detected — check if we've dragged past the midpoint
+              const dragCenter = newStart + dur / 2;
+              if (dragCenter > oMid) {
+                // Past midpoint → swap: place dragged clip after other clip
+                // Move other clip to where dragged clip was before this drag
+                const origStart = veDragClip._preDragStart ?? veDragClip.timelineStart;
+                other.timelineStart = origStart;
+                newStart = origStart + oDur;
+                veDragClip._preDragStart = newStart;
+              } else {
+                // Before midpoint → clamp to left edge of other clip
+                newStart = oStart - dur;
+                if (newStart < 0) newStart = 0;
+              }
+            }
           }
+
+          veDragClip.timelineStart = Math.max(0, newStart);
+          computeLayout();
         }
       }
       drawTimeline();
     });
 
     window.addEventListener('mouseup', () => {
+      if (veDragging === 'pan') { veDragging = null; canvas.style.cursor = ''; return; }
       if (veOvDrag) { pushHistory(); veOvDrag = null; refreshClipPanel(); return; }
       if (veDragging === 'seek') {
         // Final precise seek — ensures video.currentTime matches vePlayPos
@@ -4573,6 +4643,7 @@ const PLATFORM_META = {
           }
           computeLayout(); updateAllLayerVideos();
         }
+        delete veDragClip._preDragStart;
         veDragTargetTrack = null; pushHistory(); veDragClip = null;
         refreshClipPanel();
       }
@@ -4707,17 +4778,24 @@ const PLATFORM_META = {
       canvas.style.cursor = cur;
     });
 
-    // Zoom via scroll wheel on timeline
+    // Zoom via scroll wheel on timeline — centers on cursor position
     $('ve-timeline-wrap').addEventListener('wheel', e => {
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
-        // Zoom
+        // Zoom centered on mouse cursor
+        const rect = canvas.getBoundingClientRect();
+        const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const timeAtCursor = xToTime(mx);
+        const oldZoom = veZoom;
         const factor = e.deltaY > 0 ? 0.85 : 1.18;
         veZoom = Math.max(1, Math.min(40, veZoom * factor));
+        // Adjust scroll so the time under the cursor stays in the same screen position
+        const fractionInView = (mx - LW) / tw();
+        veScrollOff = timeAtCursor - fractionInView * visibleDur();
         $('ve-zoom-slider').value = String(veZoom);
         clampScroll();
       } else {
-        // Scroll
+        // Horizontal scroll
         veScrollOff += (e.deltaY / canvas.width) * visibleDur() * 3;
         clampScroll();
       }
@@ -4826,8 +4904,12 @@ const PLATFORM_META = {
         w: targetTrack === 0 ? 100 : 35, h: targetTrack === 0 ? 100 : 35,
         waveform: null, thumbnails: [],
         dims: meta.dims || '—',
-        timelineStart: targetTrack > 0 ? vePlayPos :
-          veClips.filter(c => !c.track).reduce((end, c) => Math.max(end, c.timelineStart + (c.outPoint - c.inPoint) / (c.speed || 1)), 0),
+        timelineStart: targetTrack > 0 ? vePlayPos : (() => {
+          // If a V1 clip is selected, place after it; otherwise at the end of V1
+          const selClip = veSelId ? veClips.find(c => c.id === veSelId && (c.track || 0) === 0) : null;
+          if (selClip) return selClip.timelineStart + selClip.timelineDuration;
+          return veClips.filter(c => !c.track).reduce((end, c) => Math.max(end, c.timelineStart + (c.outPoint - c.inPoint) / (c.speed || 1)), 0);
+        })(),
         timelineDuration: dur,
       };
       veClips.push(clip);
@@ -5122,8 +5204,18 @@ const PLATFORM_META = {
 
     // ── Zoom controls ──────────────────────────────────────────────────────────
     $('ve-zoom-slider').addEventListener('input', function() { veZoom = parseFloat(this.value); clampScroll(); drawTimeline(); });
-    $('ve-btn-zoom-in').addEventListener('click',  () => { veZoom = Math.min(40, veZoom*1.5); $('ve-zoom-slider').value = String(veZoom); clampScroll(); drawTimeline(); });
-    $('ve-btn-zoom-out').addEventListener('click', () => { veZoom = Math.max(1, veZoom/1.5);  $('ve-zoom-slider').value = String(veZoom); clampScroll(); drawTimeline(); });
+    $('ve-btn-zoom-in').addEventListener('click',  () => {
+      const centerTime = vePlayPos;
+      veZoom = Math.min(40, veZoom*1.5);
+      veScrollOff = centerTime - visibleDur() * 0.5;
+      $('ve-zoom-slider').value = String(veZoom); clampScroll(); drawTimeline();
+    });
+    $('ve-btn-zoom-out').addEventListener('click', () => {
+      const centerTime = vePlayPos;
+      veZoom = Math.max(1, veZoom/1.5);
+      veScrollOff = centerTime - visibleDur() * 0.5;
+      $('ve-zoom-slider').value = String(veZoom); clampScroll(); drawTimeline();
+    });
 
     // ── Undo/Redo ──────────────────────────────────────────────────────────────
     $('ve-btn-undo').addEventListener('click', () => { if (veHistIdx <= 0) return; veHistIdx--; applySnapshot(veHistory[veHistIdx]); updateUndoRedo(); });
