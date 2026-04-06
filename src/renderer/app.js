@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.13.2': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Clip drag drift fix</b> — dragging clips back and forth no longer causes them to drift apart; clips now clamp to the nearest edge instead of swapping during drag',
+        ],
+      },
+    ],
+  },
   '0.13.1': {
     sections: [
       {
@@ -4475,7 +4485,6 @@ const PLATFORM_META = {
           if (clickedClip) {
             veSelId = clickedClip.id; refreshClipPanel(); syncAllLayers();
             veDragging = 'clipMove'; veDragClip = clickedClip;
-            veDragClip._preDragStart = clickedClip.timelineStart;
             veDragOffsetSec = t - clickedClip.timelineStart;
             veDragTargetTrack = clickedClip.track || 0;
             // Auto-seek to V2+ clip when clicked so it shows in preview
@@ -4578,26 +4587,20 @@ const PLATFORM_META = {
           const others = veClips.filter(c => c.id !== veDragClip.id && (c.track || 0) === track)
             .sort((a, b) => a.timelineStart - b.timelineStart);
 
-          // Check for overlap and handle swap / clamp
+          // Clamp to prevent overlap — never mutate other clips during drag
           for (const other of others) {
             const oStart = other.timelineStart;
             const oDur = other.timelineDuration;
             const oEnd = oStart + oDur;
-            const oMid = oStart + oDur / 2;
             const newEnd = newStart + dur;
 
             if (newEnd > oStart && newStart < oEnd) {
-              // Overlap detected — check if we've dragged past the midpoint
-              const dragCenter = newStart + dur / 2;
-              if (dragCenter > oMid) {
-                // Past midpoint → swap: place dragged clip after other clip
-                // Move other clip to where dragged clip was before this drag
-                const origStart = veDragClip._preDragStart ?? veDragClip.timelineStart;
-                other.timelineStart = origStart;
-                newStart = origStart + oDur;
-                veDragClip._preDragStart = newStart;
+              // Overlap — clamp to whichever edge is closer to desired position
+              const distToLeft = Math.abs(newStart - (oStart - dur));
+              const distToRight = Math.abs(newStart - oEnd);
+              if (distToRight < distToLeft) {
+                newStart = oEnd;
               } else {
-                // Before midpoint → clamp to left edge of other clip
                 newStart = oStart - dur;
                 if (newStart < 0) newStart = 0;
               }
@@ -4643,7 +4646,6 @@ const PLATFORM_META = {
           }
           computeLayout(); updateAllLayerVideos();
         }
-        delete veDragClip._preDragStart;
         veDragTargetTrack = null; pushHistory(); veDragClip = null;
         refreshClipPanel();
       }
