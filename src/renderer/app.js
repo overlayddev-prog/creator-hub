@@ -14,12 +14,13 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
-  '0.13.2': {
+  '0.13.3': {
     sections: [
       {
         title: 'Fix',
         items: [
-          '<b>Clip drag drift fix</b> — dragging clips back and forth no longer causes them to drift apart; clips now clamp to the nearest edge instead of swapping during drag',
+          '<b>Clip swap rewrite</b> — dragging a clip past another clip\'s midpoint now properly swaps their order without drift; back-and-forth dragging is stable',
+          '<b>Transition picker</b> — transitions can now be applied to V1 clips (was broken due to track field check)',
         ],
       },
     ],
@@ -3823,7 +3824,7 @@ const PLATFORM_META = {
           bgCtx.restore();
 
           // Transition-in indicator (yellow bar at start of clip)
-          if (clip.track === 0 && clip.transitionIn) {
+          if ((clip.track || 0) === 0 && clip.transitionIn) {
             const tDurPx = (clip.transitionIn.duration / (clip.timelineDuration || 1)) * cw;
             bgCtx.fillStyle = 'rgba(251,191,36,0.25)';
             bgCtx.fillRect(Math.max(LW, cx1), ry + 2, Math.min(tDurPx, cw - 4), VID_H - 4);
@@ -4373,8 +4374,8 @@ const PLATFORM_META = {
       const transPanel = $('ve-transition-panel');
       if (transPanel) {
         let showTrans = false;
-        if (clip && clip.track === 0) {
-          const v1clips = veClips.filter(c => c.track === 0).sort((a, b) => a.timelineStart - b.timelineStart);
+        if (clip && (clip.track || 0) === 0) {
+          const v1clips = veClips.filter(c => (c.track || 0) === 0).sort((a, b) => a.timelineStart - b.timelineStart);
           showTrans = v1clips.indexOf(clip) > 0;
         }
         transPanel.style.display = showTrans ? '' : 'none';
@@ -4584,18 +4585,67 @@ const PLATFORM_META = {
           let newStart = getSnapPos(t - veDragOffsetSec, veDragClip.timelineDuration, veDragClip.id);
           const track = veDragClip.track || 0;
           const dur = veDragClip.timelineDuration;
-          const others = veClips.filter(c => c.id !== veDragClip.id && (c.track || 0) === track)
-            .sort((a, b) => a.timelineStart - b.timelineStart);
 
-          // Clamp to prevent overlap — never mutate other clips during drag
-          for (const other of others) {
+          // On first move, snapshot all original positions so swaps are stable
+          if (!veDragClip._dragOriginals) {
+            veDragClip._dragOriginals = {};
+            for (const c of veClips) {
+              if ((c.track || 0) === track) veDragClip._dragOriginals[c.id] = c.timelineStart;
+            }
+          }
+          const originals = veDragClip._dragOriginals;
+          const myOrigStart = originals[veDragClip.id];
+
+          // Reset all same-track clips to their original positions before computing swaps
+          for (const c of veClips) {
+            if (c.id !== veDragClip.id && (c.track || 0) === track && originals[c.id] !== undefined) {
+              c.timelineStart = originals[c.id];
+            }
+          }
+
+          // Build sorted original order (by original position)
+          const allTrack = veClips.filter(c => (c.track || 0) === track)
+            .sort((a, b) => (originals[a.id] ?? a.timelineStart) - (originals[b.id] ?? b.timelineStart));
+          const origOrder = allTrack.map(c => c.id);
+          const dragIdx = origOrder.indexOf(veDragClip.id);
+
+          // Figure out where the dragged clip wants to be inserted based on midpoint crossings
+          let insertIdx = dragIdx;
+          for (let i = 0; i < allTrack.length; i++) {
+            if (i === dragIdx) continue;
+            const c = allTrack[i];
+            const oOrig = originals[c.id] ?? c.timelineStart;
+            const oMid = oOrig + c.timelineDuration / 2;
+            const dragCenter = newStart + dur / 2;
+            if (i > dragIdx && dragCenter > oMid) insertIdx = i;
+            if (i < dragIdx && dragCenter < oMid) { insertIdx = Math.min(insertIdx, i); }
+          }
+
+          // Reorder: remove dragged clip, insert at new position
+          const reordered = allTrack.filter(c => c.id !== veDragClip.id);
+          reordered.splice(Math.min(insertIdx, reordered.length), 0, veDragClip);
+
+          // Lay out all clips sequentially using original gap structure
+          // Place non-dragged clips in order, skipping a slot for the dragged clip
+          let cursor = 0;
+          for (const c of reordered) {
+            if (c.id === veDragClip.id) {
+              cursor += dur; // reserve space, actual position set by clamp below
+              continue;
+            }
+            c.timelineStart = cursor;
+            cursor += c.timelineDuration;
+          }
+
+          // Now clamp dragged clip so it doesn't overlap any clip in its current position
+          const currentOthers = veClips.filter(c => c.id !== veDragClip.id && (c.track || 0) === track)
+            .sort((a, b) => a.timelineStart - b.timelineStart);
+          for (const other of currentOthers) {
             const oStart = other.timelineStart;
             const oDur = other.timelineDuration;
             const oEnd = oStart + oDur;
             const newEnd = newStart + dur;
-
             if (newEnd > oStart && newStart < oEnd) {
-              // Overlap — clamp to whichever edge is closer to desired position
               const distToLeft = Math.abs(newStart - (oStart - dur));
               const distToRight = Math.abs(newStart - oEnd);
               if (distToRight < distToLeft) {
@@ -4646,6 +4696,7 @@ const PLATFORM_META = {
           }
           computeLayout(); updateAllLayerVideos();
         }
+        delete veDragClip._dragOriginals;
         veDragTargetTrack = null; pushHistory(); veDragClip = null;
         refreshClipPanel();
       }
