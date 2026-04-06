@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.13.5': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Clip swap with small clips</b> — swap now triggers when the leading edge of the dragged clip passes the other clip\'s midpoint; big clips no longer instantly swap over small ones',
+        ],
+      },
+    ],
+  },
   '0.13.4': {
     sections: [
       {
@@ -4619,16 +4629,18 @@ const PLATFORM_META = {
           const origOrder = allTrack.map(c => c.id);
           const dragIdx = origOrder.indexOf(veDragClip.id);
 
-          // Figure out where the dragged clip wants to be inserted based on midpoint crossings
+          // Figure out where the dragged clip wants to be inserted
+          // Swap triggers when the leading edge of the dragged clip passes
+          // the other clip's midpoint (right edge when dragging right, left edge when dragging left)
+          const newEnd = newStart + dur;
           let insertIdx = dragIdx;
           for (let i = 0; i < allTrack.length; i++) {
             if (i === dragIdx) continue;
             const c = allTrack[i];
             const oOrig = originals[c.id] ?? c.timelineStart;
             const oMid = oOrig + c.timelineDuration / 2;
-            const dragGrabPt = newStart + veDragOffsetSec;
-            if (i > dragIdx && dragGrabPt > oMid) insertIdx = i;
-            if (i < dragIdx && dragGrabPt < oMid) { insertIdx = Math.min(insertIdx, i); }
+            if (i > dragIdx && newEnd > oMid) insertIdx = i;
+            if (i < dragIdx && newStart < oMid) { insertIdx = Math.min(insertIdx, i); }
           }
 
           // Reorder: remove dragged clip, insert at new position
