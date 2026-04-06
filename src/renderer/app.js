@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.13.4': {
+    sections: [
+      {
+        title: 'Improved',
+        items: [
+          '<b>Clip swap uses grab point</b> — swap now triggers based on where you clicked on the clip, not its center; feels more natural and predictable',
+        ],
+      },
+    ],
+  },
   '0.13.3': {
     sections: [
       {
@@ -4616,9 +4626,9 @@ const PLATFORM_META = {
             const c = allTrack[i];
             const oOrig = originals[c.id] ?? c.timelineStart;
             const oMid = oOrig + c.timelineDuration / 2;
-            const dragCenter = newStart + dur / 2;
-            if (i > dragIdx && dragCenter > oMid) insertIdx = i;
-            if (i < dragIdx && dragCenter < oMid) { insertIdx = Math.min(insertIdx, i); }
+            const dragGrabPt = newStart + veDragOffsetSec;
+            if (i > dragIdx && dragGrabPt > oMid) insertIdx = i;
+            if (i < dragIdx && dragGrabPt < oMid) { insertIdx = Math.min(insertIdx, i); }
           }
 
           // Reorder: remove dragged clip, insert at new position
