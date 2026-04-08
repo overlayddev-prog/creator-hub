@@ -1986,7 +1986,7 @@ body {
 }
 .ve-video-container {
   width: 100%; max-width: 640px; max-height: 100%; aspect-ratio: 16/9;
-  background: var(--surface2); position: relative; overflow: visible;
+  background: var(--surface2); position: relative; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
 /* Clip the videos themselves to stay inside the container */

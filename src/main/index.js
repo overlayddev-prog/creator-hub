@@ -681,9 +681,19 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
       if (!ti || !ti.data) return 'fade';
       const frames = (ti.data.frames) || [];
       if (frames.length >= 2) {
-        const dx = frames[frames.length-1].from.x - frames[0].from.x;
-        if (dx < -50) return 'slideleft';
-        if (dx > 50)  return 'slideright';
+        const first = frames[0].from, last = frames[frames.length-1].from;
+        const dx = last.x - first.x;
+        const dy = last.y - first.y;
+        const dw = last.w - first.w;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          if (dx < -50) return 'slideleft';
+          if (dx > 50)  return 'slideright';
+        } else {
+          if (dy < -50) return 'slideup';
+          if (dy > 50)  return 'slidedown';
+        }
+        if (dw < -30) return 'circleopen';
+        if (dw > 30)  return 'circleclose';
       }
       return 'fade';
     }

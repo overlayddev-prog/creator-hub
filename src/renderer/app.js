@@ -14,6 +14,23 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.13.6': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Custom transitions now preview</b> — position and size were being clamped to 0–100%, preventing slide/zoom transitions from animating off-screen; now unclamped during transitions',
+          '<b>Preview container overflow</b> — video container now clips content at its edges so transitions look clean',
+        ],
+      },
+      {
+        title: 'Improved',
+        items: [
+          '<b>Better export mapping</b> — custom transitions with vertical movement now map to slideup/slidedown FFmpeg xfade types instead of falling back to fade',
+        ],
+      },
+    ],
+  },
   '0.13.5': {
     sections: [
       {
@@ -4037,12 +4054,12 @@ const PLATFORM_META = {
           const toState   = _tState.to;
           const fromState = _tState.from;
 
-          // TO layer — main v1Wrap
+          // TO layer — main v1Wrap (no clamping on position/size so transitions can animate off-screen)
           v1Wrap.style.display   = 'block';
-          v1Wrap.style.left      = pct(toState.x)       + '%';
-          v1Wrap.style.top       = pct(toState.y)       + '%';
-          v1Wrap.style.width     = pct(toState.w,  1)   + '%';
-          v1Wrap.style.height    = pct(toState.h,  1)   + '%';
+          v1Wrap.style.left      = toState.x + '%';
+          v1Wrap.style.top       = toState.y + '%';
+          v1Wrap.style.width     = Math.max(1, toState.w) + '%';
+          v1Wrap.style.height    = Math.max(1, toState.h) + '%';
           v1Wrap.style.opacity   = (pct(toState.opacity, 0, 100) / 100).toFixed(3);
           v1Wrap.style.transform = `rotate(${toState.rotation}deg)`;
           v1Wrap.classList.toggle('ve-ov-selected', v1Active.id === veSelId);
@@ -4051,10 +4068,10 @@ const PLATFORM_META = {
           const prevClip = v1Sorted[v1Sorted.findIndex(c => c.id === v1Active.id) - 1];
           if (prevClip) {
             transWrap.style.display   = 'block';
-            transWrap.style.left      = pct(fromState.x)      + '%';
-            transWrap.style.top       = pct(fromState.y)      + '%';
-            transWrap.style.width     = pct(fromState.w, 1)   + '%';
-            transWrap.style.height    = pct(fromState.h, 1)   + '%';
+            transWrap.style.left      = fromState.x + '%';
+            transWrap.style.top       = fromState.y + '%';
+            transWrap.style.width     = Math.max(1, fromState.w) + '%';
+            transWrap.style.height    = Math.max(1, fromState.h) + '%';
             transWrap.style.opacity   = (pct(fromState.opacity, 0, 100) / 100).toFixed(3);
             transWrap.style.transform = `rotate(${fromState.rotation}deg)`;
 
