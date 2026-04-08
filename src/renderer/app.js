@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.13.7': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Transition preview z-order</b> — FROM clip now renders on top of TO clip during transitions, so slide/zoom-away effects are visible instead of hidden behind the incoming clip',
+          '<b>Export error details</b> — if FFmpeg fails during export, the error toast now shows the actual FFmpeg error message',
+        ],
+      },
+    ],
+  },
   '0.13.6': {
     sections: [
       {
@@ -4056,6 +4067,7 @@ const PLATFORM_META = {
 
           // TO layer — main v1Wrap (no clamping on position/size so transitions can animate off-screen)
           v1Wrap.style.display   = 'block';
+          v1Wrap.style.zIndex    = '2';
           v1Wrap.style.left      = toState.x + '%';
           v1Wrap.style.top       = toState.y + '%';
           v1Wrap.style.width     = Math.max(1, toState.w) + '%';
@@ -4064,10 +4076,11 @@ const PLATFORM_META = {
           v1Wrap.style.transform = `rotate(${toState.rotation}deg)`;
           v1Wrap.classList.toggle('ve-ov-selected', v1Active.id === veSelId);
 
-          // FROM layer — transWrap with previous clip
+          // FROM layer — transWrap with previous clip (z-index 3 = on top of TO during transition)
           const prevClip = v1Sorted[v1Sorted.findIndex(c => c.id === v1Active.id) - 1];
           if (prevClip) {
             transWrap.style.display   = 'block';
+            transWrap.style.zIndex    = '3';
             transWrap.style.left      = fromState.x + '%';
             transWrap.style.top       = fromState.y + '%';
             transWrap.style.width     = Math.max(1, fromState.w) + '%';
@@ -4106,6 +4119,7 @@ const PLATFORM_META = {
         } else {
           // Normal — no active transition
           transWrap.style.display = 'none';
+          transWrap.style.zIndex  = '';
           if (!transVideo.paused) transVideo.pause();
           v1Wrap.style.opacity   = '';
           v1Wrap.style.transform = '';

@@ -771,14 +771,25 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
 
   return new Promise(resolve => {
     const proc = spawn(ffmpegPath, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    let stderrBuf = '';
     proc.stderr.on('data', (data) => {
-      const m = data.toString().match(/time=(\d+):(\d+):(\d+\.?\d*)/);
+      const str = data.toString();
+      stderrBuf += str;
+      if (stderrBuf.length > 8000) stderrBuf = stderrBuf.slice(-4000);
+      const m = str.match(/time=(\d+):(\d+):(\d+\.?\d*)/);
       if (m && totalDur > 0) {
         const elapsed = parseInt(m[1])*3600 + parseInt(m[2])*60 + parseFloat(m[3]);
         sendProgress(Math.min(99, Math.round(elapsed / totalDur * 100)));
       }
     });
-    proc.on('close', code => { sendProgress(100); resolve(code === 0 ? { ok: true, outputPath: outPath } : { ok: false, error: `FFmpeg exited ${code}` }); });
+    proc.on('close', code => {
+      sendProgress(100);
+      if (code === 0) resolve({ ok: true, outputPath: outPath });
+      else {
+        const lastLines = stderrBuf.split('\n').slice(-10).join('\n');
+        resolve({ ok: false, error: `FFmpeg exited ${code}: ${lastLines}` });
+      }
+    });
     proc.on('error', e => resolve({ ok: false, error: e.message }));
   });
 });
