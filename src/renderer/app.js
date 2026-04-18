@@ -14,6 +14,22 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.14.0': {
+    sections: [
+      {
+        title: 'Multi-Canvas Streaming',
+        items: [
+          '<b>Multiple canvases</b> — create separate canvases for landscape, vertical, and custom resolutions; each canvas has its own source layout',
+          '<b>Canvas tabs</b> — pill-style tab bar to switch between canvases; add new canvases with the + button',
+          '<b>Per-canvas layouts</b> — each canvas saves its own source positions and sizes, so your vertical layout stays separate from your main layout',
+          '<b>Per-canvas destinations</b> — assign stream destinations to specific canvases so different platforms get different layouts',
+          '<b>Multi-view strip</b> — quick-switch thumbnail strip shows all canvases at a glance when you have 2 or more',
+          '<b>Portrait preview</b> — preview area dynamically adjusts aspect ratio when switching to vertical canvases',
+          '<b>Vertical resolution options</b> — 1080x1920 and 720x1280 now available in the output resolution dropdown',
+        ],
+      },
+    ],
+  },
   '0.13.7': {
     sections: [
       {
@@ -2118,6 +2134,18 @@ document.addEventListener('DOMContentLoaded', () => {
   let mediaRecorder = null;      // current MediaRecorder (record or stream)
   let streamMediaRecorder = null;
 
+  // ── Multi-canvas data model ───────────────────────────────────────────────
+  // Each canvas has its own resolution and per-source layout overrides.
+  // Sources are shared across all canvases; only positions/sizes differ.
+  // Destinations are assigned per-canvas so different canvases can stream
+  // to different platforms.
+  let studioCanvases = [
+    { id: 0, name: 'Main', resW: 1920, resH: 1080, layouts: {}, destIds: [] },
+  ];
+  let studioActiveCanvasId = 0;
+  let studioCanvasIdCounter = 0;
+  let _saveScenes = null; // set inside initStudio, used by canvas helpers
+
   const QUALITY_BITS = { high: 10_000_000, medium: 5_000_000, low: 2_500_000 };
 
 const PLATFORM_META = {
@@ -2141,6 +2169,8 @@ const PLATFORM_META = {
     function serializeScenes() {
       const tabs = [...studioSceneTabs.querySelectorAll('.studio-scene-tab')];
       const activeTab = studioSceneTabs.querySelector('.studio-scene-tab.active');
+      // Save current canvas layouts before serializing
+      saveCanvasLayouts();
       return {
         activeScene: activeTab?.dataset.scene || null,
         scenes: tabs.map(t => ({
@@ -2157,12 +2187,19 @@ const PLATFORM_META = {
             : (t._savedSources || []),
         })),
         resolution: { w: engine.outW, h: engine.outH },
+        canvases: studioCanvases.map(c => ({
+          id: c.id, name: c.name, resW: c.resW, resH: c.resH,
+          layouts: c.layouts, destIds: c.destIds,
+        })),
+        activeCanvasId: studioActiveCanvasId,
+        canvasIdCounter: studioCanvasIdCounter,
       };
     }
 
     async function saveScenes() {
       await window.creatorhub.scenes.save(serializeScenes());
     }
+    _saveScenes = saveScenes;
 
     async function restoreScenes(data) {
       if (!data) return;
@@ -2201,6 +2238,15 @@ const PLATFORM_META = {
           } catch (_) {}
         }
         renderLayerList();
+      }
+      // Restore multi-canvas data
+      if (data.canvases && data.canvases.length) {
+        studioCanvases = data.canvases;
+        studioActiveCanvasId = data.activeCanvasId || 0;
+        studioCanvasIdCounter = data.canvasIdCounter || data.canvases.length - 1;
+        renderCanvasTabs();
+        renderMultiview();
+        updateOutputUI(getActiveCanvas());
       }
     }
 
@@ -2369,6 +2415,240 @@ const PLATFORM_META = {
       renderLayerList();
       selectSource(src.id);
     });
+
+    // Initialize multi-canvas UI
+    renderCanvasTabs();
+    renderMultiview();
+  }
+
+  // ── Multi-canvas helpers ──────────────────────────────────────────────────
+
+  function getActiveCanvas() {
+    return studioCanvases.find(c => c.id === studioActiveCanvasId) || studioCanvases[0];
+  }
+
+  // Save current source transforms into the active canvas's layout map
+  function saveCanvasLayouts() {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    canvas.layouts = {};
+    for (const s of engine.sources) {
+      canvas.layouts[s.id] = { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation };
+    }
+  }
+
+  // Apply a canvas's saved layouts to the current engine sources
+  function applyCanvasLayouts(canvas) {
+    for (const s of engine.sources) {
+      const layout = canvas.layouts[s.id];
+      if (layout) {
+        engine.setTransform(s.id, layout);
+      } else {
+        // New source not yet laid out on this canvas — use full-canvas default
+        engine.setTransform(s.id, { x: 0, y: 0, width: canvas.resW, height: canvas.resH, rotation: 0 });
+      }
+    }
+    // Update engine resolution
+    if (canvas.resW && canvas.resH) {
+      engine.outW = canvas.resW;
+      engine.outH = canvas.resH;
+      const canvasEl = $('studio-canvas');
+      if (canvasEl) { canvasEl.width = canvas.resW; canvasEl.height = canvas.resH; }
+      // Update preview aspect ratio
+      const previewWrap = $('studio-preview-wrap');
+      if (previewWrap) {
+        previewWrap.style.aspectRatio = canvas.resW + ' / ' + canvas.resH;
+        // For portrait canvases, limit the height so it doesn't take up the whole screen
+        if (canvas.resH > canvas.resW) {
+          previewWrap.style.width = 'auto';
+          previewWrap.style.maxHeight = '60vh';
+          previewWrap.style.margin = '0 auto';
+        } else {
+          previewWrap.style.width = '100%';
+          previewWrap.style.maxHeight = '';
+          previewWrap.style.margin = '';
+        }
+      }
+    }
+  }
+
+  // Switch to a different canvas
+  function switchToCanvas(canvasId) {
+    if (canvasId === studioActiveCanvasId) return;
+    // Save current layouts
+    saveCanvasLayouts();
+    // Switch
+    studioActiveCanvasId = canvasId;
+    const canvas = getActiveCanvas();
+    // Apply new canvas layouts + resolution
+    applyCanvasLayouts(canvas);
+    // Update output settings UI
+    updateOutputUI(canvas);
+    // Update transform panel
+    if (studioSelectedId != null) {
+      const src = engine.sources.find(s => s.id === studioSelectedId);
+      if (src) {
+        $('studio-tx-x').value = Math.round(src.x);
+        $('studio-tx-y').value = Math.round(src.y);
+        $('studio-tx-w').value = Math.round(src.width);
+        $('studio-tx-h').value = Math.round(src.height);
+      }
+    }
+    // Re-render tabs + multiview
+    renderCanvasTabs();
+    renderMultiview();
+    // Re-render destinations for this canvas
+    renderDestinations();
+    // Persist
+    if (_saveScenes) _saveScenes();
+  }
+
+  // Update output settings UI to reflect the active canvas
+  function updateOutputUI(canvas) {
+    const nameEl = $('studio-output-canvas-name');
+    if (nameEl) nameEl.textContent = canvas.name;
+    const resEl = $('studio-resolution');
+    if (resEl) {
+      // Try to select matching option
+      const resStr = canvas.resW + ' \u00d7 ' + canvas.resH;
+      for (const opt of resEl.options) {
+        if (opt.value === resStr || opt.textContent === resStr) { resEl.value = opt.value; break; }
+      }
+    }
+  }
+
+  // Render canvas pill tabs
+  function renderCanvasTabs() {
+    const container = $('canvas-tabs');
+    if (!container) return;
+    container.innerHTML = '';
+    studioCanvases.forEach(c => {
+      const btn = document.createElement('button');
+      btn.className = 'canvas-tab' + (c.id === studioActiveCanvasId ? ' active' : '');
+      btn.dataset.canvas = c.id;
+      const isLive = false; // TODO: track per-canvas live state
+      const dotClass = isLive ? 'live' : 'idle';
+      btn.innerHTML = `
+        <span class="canvas-tab-dot ${dotClass}"></span>
+        ${c.name}
+        <span class="canvas-tab-res">${c.resW}x${c.resH}</span>
+        ${studioCanvases.length > 1 ? `<button class="canvas-tab-del" data-del="${c.id}" title="Remove canvas">\u00d7</button>` : ''}`;
+      btn.addEventListener('click', (e) => {
+        if (e.target.classList.contains('canvas-tab-del')) return;
+        switchToCanvas(c.id);
+      });
+      container.appendChild(btn);
+    });
+    // Delete button handlers
+    container.querySelectorAll('.canvas-tab-del').forEach(del => {
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const delId = Number(del.dataset.del);
+        removeCanvas(delId);
+      });
+    });
+    // Add button
+    const addBtn = document.createElement('button');
+    addBtn.className = 'canvas-tab-add';
+    addBtn.title = 'Add canvas';
+    addBtn.textContent = '+';
+    addBtn.addEventListener('click', () => showAddCanvasDialog());
+    container.appendChild(addBtn);
+  }
+
+  // Render multi-view strip
+  function renderMultiview() {
+    const container = $('canvas-multiview');
+    if (!container) return;
+    if (studioCanvases.length < 2) { container.style.display = 'none'; return; }
+    container.style.display = 'flex';
+    container.innerHTML = '';
+    studioCanvases.forEach(c => {
+      const isPortrait = c.resH > c.resW;
+      const card = document.createElement('div');
+      card.className = 'mv-card ' + (isPortrait ? 'portrait' : 'landscape') + (c.id === studioActiveCanvasId ? ' active' : '');
+      card.dataset.canvas = c.id;
+      card.innerHTML = `
+        <div class="mv-card-dot idle"></div>
+        <span class="mv-card-label">${c.name}</span>`;
+      card.addEventListener('click', () => switchToCanvas(c.id));
+      container.appendChild(card);
+    });
+  }
+
+  // Add a new canvas
+  function addCanvas(name, resW, resH) {
+    studioCanvasIdCounter++;
+    const newCanvas = { id: studioCanvasIdCounter, name, resW, resH, layouts: {}, destIds: [] };
+    // Copy current source transforms as initial layout
+    for (const s of engine.sources) {
+      // For portrait canvases, auto-generate a reasonable layout
+      if (resH > resW) {
+        // Stack webcam on top, game on bottom for portrait
+        newCanvas.layouts[s.id] = { x: 0, y: 0, width: resW, height: resH, rotation: s.rotation };
+      } else {
+        newCanvas.layouts[s.id] = { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation };
+      }
+    }
+    studioCanvases.push(newCanvas);
+    renderCanvasTabs();
+    renderMultiview();
+    switchToCanvas(newCanvas.id); // this also calls _saveScenes
+  }
+
+  // Remove a canvas
+  function removeCanvas(canvasId) {
+    if (studioCanvases.length <= 1) return;
+    const idx = studioCanvases.findIndex(c => c.id === canvasId);
+    if (idx < 0) return;
+    // If deleting the active canvas, switch first
+    if (studioActiveCanvasId === canvasId) {
+      const nextCanvas = studioCanvases.find(c => c.id !== canvasId);
+      studioCanvases.splice(idx, 1);
+      // Directly set active and apply (skip saveCanvasLayouts for the deleted canvas)
+      studioActiveCanvasId = nextCanvas.id;
+      applyCanvasLayouts(nextCanvas);
+      updateOutputUI(nextCanvas);
+      renderDestinations();
+    } else {
+      studioCanvases.splice(idx, 1);
+    }
+    renderCanvasTabs();
+    renderMultiview();
+    if (_saveScenes) _saveScenes();
+  }
+
+  // Show add-canvas dialog (simple prompt-based for now)
+  function showAddCanvasDialog() {
+    // Create a small inline picker
+    const container = $('canvas-tabs');
+    if (container.querySelector('.canvas-add-picker')) return;
+    const picker = document.createElement('div');
+    picker.className = 'canvas-add-picker';
+    picker.style.cssText = 'display:flex;align-items:center;gap:6px;margin-left:4px;';
+    picker.innerHTML = `
+      <select class="studio-select" style="font-size:11px;padding:4px 8px;border-radius:8px;">
+        <option value="1920x1080">Landscape 1920x1080</option>
+        <option value="1080x1920">Vertical 1080x1920</option>
+        <option value="1280x720">720p 1280x720</option>
+        <option value="720x1280">720p Vertical 720x1280</option>
+      </select>
+      <input type="text" class="studio-input" placeholder="Name…" style="width:80px;font-size:11px;padding:4px 8px;border-radius:8px;">
+      <button class="studio-icon-btn" style="font-size:12px;">✓</button>
+      <button class="studio-icon-btn" style="font-size:12px;">✕</button>`;
+    const select = picker.querySelector('select');
+    const nameInput = picker.querySelector('input');
+    const confirmBtn = picker.querySelectorAll('button')[0];
+    const cancelBtn = picker.querySelectorAll('button')[1];
+    confirmBtn.addEventListener('click', () => {
+      const [w, h] = select.value.split('x').map(Number);
+      const name = nameInput.value.trim() || (h > w ? 'Vertical' : 'Canvas ' + (studioCanvases.length + 1));
+      addCanvas(name, w, h);
+      picker.remove();
+    });
+    cancelBtn.addEventListener('click', () => picker.remove());
+    container.appendChild(picker);
+    nameInput.focus();
   }
 
   // ── Layer list helpers ────────────────────────────────────────────────────
@@ -3055,18 +3335,19 @@ const PLATFORM_META = {
   const destinations    = [];
 
   function addDestination(platform, key, label, server, channelId) {
-    destinations.push({ id: ++destIdCounter, platform, key: key || '', label: label || '', server: server || '', channelId: channelId || '', enabled: true });
+    destinations.push({ id: ++destIdCounter, platform, key: key || '', label: label || '', server: server || '', channelId: channelId || '', enabled: true, canvasId: studioActiveCanvasId });
   }
 
   function renderDestinations() {
     const container = $('studio-destinations');
     if (!container) return;
-    if (!destinations.length) {
+    const canvasDests = destinations.filter(d => d.canvasId === studioActiveCanvasId);
+    if (!canvasDests.length) {
       container.innerHTML = '<div class="studio-audio-empty">No destinations — add one below</div>';
       return;
     }
     container.innerHTML = '';
-    destinations.forEach(d => {
+    canvasDests.forEach(d => {
       const meta = PLATFORM_META[d.platform] || { label: 'Custom RTMP', icon: '📡' };
       const row  = document.createElement('div');
       row.className = 'studio-dest-row';
@@ -3203,6 +3484,25 @@ const PLATFORM_META = {
   }
 
   // Read output settings from the UI
+  // Sync resolution dropdown → active canvas
+  const studioResolutionEl = $('studio-resolution');
+  if (studioResolutionEl) {
+    studioResolutionEl.addEventListener('change', () => {
+      const parts = studioResolutionEl.value.split(/\s*[×x]\s*/);
+      if (parts.length === 2) {
+        const w = parseInt(parts[0]), h = parseInt(parts[1]);
+        if (w && h) {
+          const canvas = getActiveCanvas();
+          canvas.resW = w; canvas.resH = h;
+          applyCanvasLayouts(canvas); // updates engine resolution + preview aspect ratio
+          renderCanvasTabs();
+          renderMultiview();
+          if (_saveScenes) _saveScenes();
+        }
+      }
+    });
+  }
+
   function getStreamOpts() {
     const fpsEl      = $('studio-fps');
     const encoderEl  = $('studio-encoder');

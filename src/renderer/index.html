@@ -299,6 +299,16 @@
           <!-- CENTER: Preview + Transitions + Audio -->
           <div class="studio-center">
 
+            <!-- Canvas tabs (multi-canvas) -->
+            <div class="canvas-tabs" id="canvas-tabs">
+              <button class="canvas-tab active" data-canvas="0">
+                <span class="canvas-tab-dot live"></span>
+                Main
+                <span class="canvas-tab-res">1920x1080</span>
+              </button>
+              <button class="canvas-tab-add" id="canvas-add-btn" title="Add canvas">+</button>
+            </div>
+
             <!-- Preview: always 16:9, scales with center column width -->
             <div class="studio-preview-wrap" id="studio-preview-wrap">
               <video id="studio-preview-video" autoplay muted playsinline></video>
@@ -309,6 +319,9 @@
                 <div class="studio-ph-text" id="studio-ph-text">Preview will appear here</div>
               </div>
             </div>
+
+            <!-- Multi-view strip (shown when 2+ canvases) -->
+            <div class="canvas-multiview" id="canvas-multiview" style="display:none;"></div>
 
             <!-- Audio mixer -->
             <div class="studio-audio">
@@ -331,13 +344,15 @@
 
             <!-- Output settings -->
             <div class="studio-card">
-              <div class="studio-card-hdr">Output</div>
+              <div class="studio-card-hdr">Output <span class="studio-card-hdr-right" id="studio-output-canvas-name">Main</span></div>
               <div class="studio-settings-grid">
                 <label>Resolution
                   <select class="studio-select" id="studio-resolution">
                     <option>1920 × 1080</option>
                     <option>1280 × 720</option>
                     <option>2560 × 1440</option>
+                    <option>1080 × 1920</option>
+                    <option>720 × 1280</option>
                   </select>
                 </label>
                 <label>Frame Rate

@@ -950,6 +950,89 @@ body {
 .studio-badge-rec  { background: rgba(255,51,85,0.15); color: var(--red); border: 1px solid rgba(255,51,85,0.3); }
 .studio-badge-live { background: rgba(34,197,94,0.12); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
 
+/* ── Canvas tabs (multi-canvas) ───────────────────────────────────────────── */
+.canvas-tabs {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 14px 6px; flex-shrink: 0;
+}
+.canvas-tab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 20px;
+  font-family: var(--font); font-size: 12px; font-weight: 600;
+  cursor: pointer; border: none;
+  background: transparent; color: var(--muted);
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  user-select: none;
+}
+.canvas-tab:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.canvas-tab.active {
+  background: var(--cyan); color: #050b12;
+  box-shadow: 0 4px 16px rgba(0,229,255,0.25);
+}
+.canvas-tab-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.canvas-tab-dot.live { background: var(--red); }
+.canvas-tab.active .canvas-tab-dot.live { background: rgba(5,11,18,0.5); }
+.canvas-tab-dot.idle { background: var(--dim); }
+.canvas-tab.active .canvas-tab-dot.idle { background: rgba(5,11,18,0.3); }
+.canvas-tab-res {
+  font-size: 10px; font-weight: 500;
+  background: rgba(255,255,255,0.08); color: var(--dim);
+  padding: 1px 6px; border-radius: 10px;
+  transition: background 0.18s, color 0.18s;
+}
+.canvas-tab.active .canvas-tab-res {
+  background: rgba(5,11,18,0.2); color: rgba(5,11,18,0.6);
+}
+.canvas-tab-del {
+  display: none; border: none; background: none; color: inherit;
+  font-size: 14px; cursor: pointer; padding: 0 2px; line-height: 1;
+  opacity: 0.5; transition: opacity 0.15s;
+}
+.canvas-tab-del:hover { opacity: 1; }
+.canvas-tab:hover .canvas-tab-del { display: inline; }
+.canvas-tab-add {
+  width: 26px; height: 26px; border-radius: 20px;
+  border: 1.5px dashed var(--border-hi); background: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--dim); cursor: pointer;
+  transition: all 0.15s; margin-left: 2px;
+}
+.canvas-tab-add:hover { border-color: var(--cyan); color: var(--cyan); }
+
+/* ── Multi-view strip ────────────────────────────────────────────────────── */
+.canvas-multiview {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+  border-top: 1px solid var(--border); justify-content: center;
+}
+.mv-card {
+  border-radius: 6px; overflow: hidden; position: relative; cursor: pointer;
+  border: 1.5px solid var(--border); transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2); flex-shrink: 0;
+}
+.mv-card:hover { border-color: var(--border-hi); }
+.mv-card.active { border-color: rgba(0,229,255,0.35); box-shadow: 0 0 0 1px rgba(0,229,255,0.15); }
+.mv-card.landscape { width: 100px; height: 56px; }
+.mv-card.portrait  { width: 32px; height: 56px; }
+.mv-card-label {
+  position: absolute; bottom: 0; left: 0; right: 0; text-align: center;
+  font-size: 8px; font-weight: 600; color: var(--dim);
+  background: linear-gradient(transparent, rgba(0,0,0,0.6)); padding: 8px 0 2px;
+}
+.mv-card.active .mv-card-label { color: var(--cyan); }
+.mv-card-dot {
+  position: absolute; top: 3px; right: 3px;
+  width: 5px; height: 5px; border-radius: 50%;
+}
+.mv-card-dot.live { background: var(--red); box-shadow: 0 0 4px rgba(255,51,85,0.5); }
+.mv-card-dot.idle { background: var(--dim); }
+
+.studio-card-hdr-right {
+  margin-left: auto; font-size: 11px; color: var(--cyan); font-weight: 500;
+}
+
 /* ── Three-column body ─────────────────────────────────────────────────────── */
 .studio-body {
   display: flex;
