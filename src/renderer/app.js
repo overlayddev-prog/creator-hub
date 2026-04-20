@@ -14,6 +14,20 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.14.2': {
+    sections: [
+      {
+        title: 'Multi-Canvas Sources',
+        items: [
+          '<b>Per-canvas source membership</b> — removing a source from one canvas now keeps it on your other canvases; each canvas tracks its own set of layers',
+          '<b>New canvases inherit layers</b> — adding a canvas copies the current canvas\'s sources as a starting point; remove any you don\'t need on that canvas',
+          '<b>Per-canvas visibility</b> — hiding a layer on one canvas no longer hides it on the others',
+          '<b>Per-scene canvas state</b> — each scene remembers which sources belong on which canvas and restores them on switch',
+          '<b>Hidden layers in multi-view</b> — multi-view thumbnails skip layers hidden on that canvas',
+        ],
+      },
+    ],
+  },
   '0.14.1': {
     sections: [
       {
@@ -1613,8 +1627,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const src = isImg
           ? await engine.addImageSource(asset.path, asset.name)
           : await engine.addMediaSource(asset.path, asset.name);
+        addSourceToActiveCanvas(src.id);
         renderLayerList();
+        renderMultiview();
         selectSource(src.id);
+        if (_saveScenes) _saveScenes();
         showToast(`Added "${asset.name}" to canvas`);
       } catch (e) {
         console.error('addAssetToCanvas error:', e);
@@ -2147,15 +2164,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Multi-canvas data model ───────────────────────────────────────────────
   // Each canvas has its own resolution and per-source layout overrides.
-  // Sources are shared across all canvases; only positions/sizes differ.
-  // Destinations are assigned per-canvas so different canvases can stream
-  // to different platforms.
+  // Each canvas has its own source membership (sourceIds) so removing a source
+  // from one canvas leaves it intact on others. Layouts and visibility are also
+  // per-canvas. Destinations are assigned per-canvas.
   let studioCanvases = [
-    { id: 0, name: 'Main', resW: 1920, resH: 1080, layouts: {}, destIds: [] },
+    { id: 0, name: 'Main', resW: 1920, resH: 1080, layouts: {}, destIds: [], sourceIds: [], visibility: {} },
   ];
   let studioActiveCanvasId = 0;
   let studioCanvasIdCounter = 0;
   let _saveScenes = null; // set inside initStudio, used by canvas helpers
+  let _captureCanvasesForTab = null; // set inside initStudio, used in outer scene helpers
+  let _applyCanvasesFromTab = null;  // same
 
   const QUALITY_BITS = { high: 10_000_000, medium: 5_000_000, low: 2_500_000 };
 
@@ -2177,11 +2196,61 @@ const PLATFORM_META = {
     // ── Scene persistence ─────────────────────────────────────────────────────
     // Only image/media/browser sources can be saved to disk (live captures re-acquired on restore)
 
+    // Convert runtime canvas state (uses live engine source IDs) to a tab-storable
+    // form that references sources by their index in the scene's source list.
+    function captureCanvasesForTab() {
+      const idToIdx = {};
+      engine.sources.forEach((s, i) => { idToIdx[s.id] = i; });
+      return studioCanvases.map(c => ({
+        id: c.id,
+        sourceIndices: (c.sourceIds || []).map(id => idToIdx[id]).filter(i => i !== undefined),
+        layouts: Object.fromEntries(
+          Object.entries(c.layouts || {})
+            .filter(([id]) => idToIdx[id] !== undefined)
+            .map(([id, l]) => [idToIdx[id], l])
+        ),
+        visibility: Object.fromEntries(
+          Object.entries(c.visibility || {})
+            .filter(([id]) => idToIdx[id] !== undefined)
+            .map(([id, v]) => [idToIdx[id], v])
+        ),
+      }));
+    }
+
+    // Apply a tab-stored canvas payload back onto studioCanvases using the
+    // current engine.sources order to resolve indices → new IDs.
+    function applyCanvasesFromTab(storedCanvasData) {
+      const idxToId = engine.sources.map(s => s.id);
+      const fallbackAllIds = idxToId.slice();
+      for (const c of studioCanvases) {
+        const stored = storedCanvasData?.find(sc => sc.id === c.id);
+        if (!stored) {
+          // No data for this canvas in this scene — default to including all sources
+          c.sourceIds = fallbackAllIds.slice();
+          c.layouts = {};
+          c.visibility = {};
+          continue;
+        }
+        c.sourceIds = (stored.sourceIndices || []).map(i => idxToId[i]).filter(id => id !== undefined);
+        c.layouts = {};
+        for (const [iStr, l] of Object.entries(stored.layouts || {})) {
+          const id = idxToId[Number(iStr)];
+          if (id !== undefined) c.layouts[id] = l;
+        }
+        c.visibility = {};
+        for (const [iStr, v] of Object.entries(stored.visibility || {})) {
+          const id = idxToId[Number(iStr)];
+          if (id !== undefined) c.visibility[id] = v;
+        }
+      }
+    }
+
     function serializeScenes() {
       const tabs = [...studioSceneTabs.querySelectorAll('.studio-scene-tab')];
       const activeTab = studioSceneTabs.querySelector('.studio-scene-tab.active');
       // Save current canvas layouts before serializing
       saveCanvasLayouts();
+      const activeCanvasData = captureCanvasesForTab();
       return {
         activeScene: activeTab?.dataset.scene || null,
         scenes: tabs.map(t => ({
@@ -2196,11 +2265,11 @@ const PLATFORM_META = {
                   aspectRatio: s.type === 'camera' ? (s._aspectRatio || null) : null,
                 }))
             : (t._savedSources || []),
+          canvasData: t === activeTab ? activeCanvasData : (t._savedCanvasData || null),
         })),
         resolution: { w: engine.outW, h: engine.outH },
         canvases: studioCanvases.map(c => ({
-          id: c.id, name: c.name, resW: c.resW, resH: c.resH,
-          layouts: c.layouts, destIds: c.destIds,
+          id: c.id, name: c.name, resW: c.resW, resH: c.resH, destIds: c.destIds,
         })),
         activeCanvasId: studioActiveCanvasId,
         canvasIdCounter: studioCanvasIdCounter,
@@ -2211,6 +2280,8 @@ const PLATFORM_META = {
       await window.creatorhub.scenes.save(serializeScenes());
     }
     _saveScenes = saveScenes;
+    _captureCanvasesForTab = captureCanvasesForTab;
+    _applyCanvasesFromTab = applyCanvasesFromTab;
 
     async function restoreScenes(data) {
       if (!data) return;
@@ -2222,8 +2293,20 @@ const PLATFORM_META = {
         tab.className = 'studio-scene-tab' + (scene.name === data.activeScene ? ' active' : '');
         tab.dataset.scene = scene.name;
         tab._savedSources = scene.sources || [];
+        tab._savedCanvasData = scene.canvasData || null;
         tab.innerHTML = `<span class="studio-tab-dot"></span><span class="studio-tab-name">${scene.name}</span><button class="studio-tab-del" tabindex="-1">×</button>`;
         addBtn.before(tab);
+      }
+      // Restore canvas structure FIRST (so sourceId resolution works when sources load)
+      if (data.canvases && data.canvases.length) {
+        studioCanvases = data.canvases.map(c => ({
+          ...c,
+          destIds: c.destIds || [],
+          // Source data is scene-scoped; filled in below after sources load
+          layouts: {}, sourceIds: [], visibility: {},
+        }));
+        studioActiveCanvasId = data.activeCanvasId || 0;
+        studioCanvasIdCounter = data.canvasIdCounter || data.canvases.length - 1;
       }
       // Restore sources for the active scene
       const activeScene = data.scenes.find(s => s.name === data.activeScene);
@@ -2248,17 +2331,16 @@ const PLATFORM_META = {
             if (!s.visible) src.visible = false;
           } catch (_) {}
         }
-        renderLayerList();
+        // Now resolve per-canvas source membership using new engine IDs
+        applyCanvasesFromTab(activeScene.canvasData);
       }
-      // Restore multi-canvas data
-      if (data.canvases && data.canvases.length) {
-        studioCanvases = data.canvases;
-        studioActiveCanvasId = data.activeCanvasId || 0;
-        studioCanvasIdCounter = data.canvasIdCounter || data.canvases.length - 1;
-        renderCanvasTabs();
-        renderMultiview();
+      renderCanvasTabs();
+      renderMultiview();
+      if (studioCanvases.length) {
+        applyCanvasLayouts(getActiveCanvas());
         updateOutputUI(getActiveCanvas());
       }
+      renderLayerList();
     }
 
     // Load saved scenes on first init
@@ -2423,8 +2505,11 @@ const PLATFORM_META = {
     // Wire up Overlayd Add buttons now that engine is ready
     renderStudioOverlays(async (url, label) => {
       const src = await engine.addBrowserSource(url, label);
+      addSourceToActiveCanvas(src.id);
       renderLayerList();
+      renderMultiview();
       selectSource(src.id);
+      saveScenes();
     });
 
     // Initialize multi-canvas UI
@@ -2442,22 +2527,57 @@ const PLATFORM_META = {
   function saveCanvasLayouts() {
     const canvas = getActiveCanvas();
     if (!canvas) return;
+    if (!canvas.sourceIds) canvas.sourceIds = engine.sources.map(s => s.id);
+    if (!canvas.visibility) canvas.visibility = {};
+    const inCanvas = new Set(canvas.sourceIds);
     canvas.layouts = {};
     for (const s of engine.sources) {
+      if (!inCanvas.has(s.id)) continue;
       canvas.layouts[s.id] = { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation };
     }
   }
 
-  // Apply a canvas's saved layouts to the current engine sources
+  // Add a newly-created source to the active canvas's membership list
+  function addSourceToActiveCanvas(id) {
+    const c = getActiveCanvas();
+    if (!c) return;
+    if (!c.sourceIds) c.sourceIds = [];
+    if (!c.visibility) c.visibility = {};
+    if (!c.sourceIds.includes(id)) c.sourceIds.push(id);
+  }
+
+  // Remove a source from the active canvas. If no canvas still uses it,
+  // also remove it from the engine to free resources.
+  function removeSourceFromActiveCanvas(id) {
+    const c = getActiveCanvas();
+    if (!c) return;
+    c.sourceIds = (c.sourceIds || []).filter(i => i !== id);
+    if (c.layouts) delete c.layouts[id];
+    if (c.visibility) delete c.visibility[id];
+    const stillUsed = studioCanvases.some(cv => (cv.sourceIds || []).includes(id));
+    if (!stillUsed) engine.removeSource(id);
+    else {
+      // Source survives on other canvases; just hide it on this one
+      const src = engine.sources.find(s => s.id === id);
+      if (src) src.visible = false;
+    }
+  }
+
+  // Apply a canvas's saved layouts + visibility/membership to engine sources
   function applyCanvasLayouts(canvas) {
+    if (!canvas.sourceIds) canvas.sourceIds = engine.sources.map(s => s.id);
+    if (!canvas.visibility) canvas.visibility = {};
+    const inCanvas = new Set(canvas.sourceIds);
     for (const s of engine.sources) {
       const layout = canvas.layouts[s.id];
       if (layout) {
         engine.setTransform(s.id, layout);
-      } else {
-        // New source not yet laid out on this canvas — use full-canvas default
+      } else if (inCanvas.has(s.id)) {
+        // Source belongs to this canvas but has no saved layout yet
         engine.setTransform(s.id, { x: 0, y: 0, width: canvas.resW, height: canvas.resH, rotation: 0 });
       }
+      // Sources not in this canvas are hidden; those in it honor per-canvas visibility
+      s.visible = inCanvas.has(s.id) && canvas.visibility[s.id] !== false;
     }
     // Update engine resolution
     if (canvas.resW && canvas.resH) {
@@ -2588,11 +2708,15 @@ const PLATFORM_META = {
       stage.className = 'mv-card-stage';
       // For the active canvas, use live source coords. For others, use stored layouts.
       const isActive = c.id === studioActiveCanvasId;
+      const members = new Set(c.sourceIds || []);
       for (const s of engine.sources) {
+        if (!members.has(s.id)) continue;
         const layout = isActive
           ? { x: s.x, y: s.y, width: s.width, height: s.height }
           : c.layouts[s.id];
         if (!layout) continue;
+        // Honor per-canvas visibility toggle
+        if (c.visibility && c.visibility[s.id] === false) continue;
         const box = document.createElement('div');
         box.className = 'mv-source-box ' + (s.type || 'other');
         box.style.left = (layout.x / c.resW * 100) + '%';
@@ -2617,12 +2741,21 @@ const PLATFORM_META = {
   // Add a new canvas
   function addCanvas(name, resW, resH) {
     studioCanvasIdCounter++;
-    const newCanvas = { id: studioCanvasIdCounter, name, resW, resH, layouts: {}, destIds: [] };
-    // Copy current source transforms as initial layout
+    // Inherit source membership from the currently active canvas so the new
+    // canvas opens with the same layers; user can remove any they don't want.
+    const activeCv = getActiveCanvas();
+    const inheritedIds = activeCv ? (activeCv.sourceIds || []).slice() : engine.sources.map(s => s.id);
+    const newCanvas = {
+      id: studioCanvasIdCounter, name, resW, resH,
+      layouts: {}, destIds: [],
+      sourceIds: inheritedIds,
+      visibility: {},
+    };
+    // Seed layouts for inherited sources
     for (const s of engine.sources) {
-      // For portrait canvases, auto-generate a reasonable layout
+      if (!inheritedIds.includes(s.id)) continue;
       if (resH > resW) {
-        // Stack webcam on top, game on bottom for portrait
+        // Portrait: start full-canvas so user can position per-layer
         newCanvas.layouts[s.id] = { x: 0, y: 0, width: resW, height: resH, rotation: s.rotation };
       } else {
         newCanvas.layouts[s.id] = { x: s.x, y: s.y, width: s.width, height: s.height, rotation: s.rotation };
@@ -2694,8 +2827,11 @@ const PLATFORM_META = {
     const list = $('studio-layer-list');
     if (!list) return;
     list.innerHTML = '';
+    // Only show sources that belong to the active canvas
+    const canvas = getActiveCanvas();
+    const inCanvas = canvas ? new Set(canvas.sourceIds || []) : null;
     // Render top-to-bottom (last source = top layer)
-    const reversed = [...engine.sources].reverse();
+    const reversed = [...engine.sources].reverse().filter(s => !inCanvas || inCanvas.has(s.id));
     for (const src of reversed) {
       const TYPE_ICONS = { screen:'🖥️', window:'🪟', camera:'📷', image:'🖼️', media:'🎵', browser:'🌐' };
       const icon = TYPE_ICONS[src.type] || '📄';
@@ -2737,8 +2873,13 @@ const PLATFORM_META = {
       if (e.target.classList.contains('studio-layer-vis')) {
         const src = engine.sources.find(s => s.id === id);
         if (src) {
-          engine.setVisible(id, !src.visible);
+          const newVis = !src.visible;
+          src.visible = newVis;
+          const c = getActiveCanvas();
+          if (c) { if (!c.visibility) c.visibility = {}; c.visibility[id] = newVis; }
           renderLayerList();
+          renderMultiview();
+          if (_saveScenes) _saveScenes();
         }
         return;
       }
@@ -2751,9 +2892,11 @@ const PLATFORM_META = {
   if (studioRemoveSource) {
     studioRemoveSource.addEventListener('click', () => {
       if (!studioSelectedId) return;
-      engine.removeSource(studioSelectedId);
+      // Remove from active canvas only; keep on other canvases
+      removeSourceFromActiveCanvas(studioSelectedId);
       studioSelectedId = null;
       renderLayerList();
+      renderMultiview();
       saveScenes();
     });
   }
@@ -2950,7 +3093,9 @@ const PLATFORM_META = {
       }
       studioSourcePicker.style.display = 'none';
       pickerReset();
+      if (src) addSourceToActiveCanvas(src.id);
       renderLayerList();
+      renderMultiview();
       if (src) selectSource(src.id);
       saveScenes();
     } catch (e) {
@@ -2968,6 +3113,8 @@ const PLATFORM_META = {
   function saveCurrentSceneToTab() {
     const activeTab = studioSceneTabs?.querySelector('.studio-scene-tab.active');
     if (!activeTab) return;
+    // Flush any in-progress drag/transform into canvas layouts
+    saveCanvasLayouts();
     activeTab._savedSources = engine.sources.map(s => ({
       type: s.type, name: s.name,
       path: s.element?.src || s.element?.currentSrc || s._browserUrl || null,
@@ -2975,6 +3122,7 @@ const PLATFORM_META = {
       x: s.x, y: s.y, width: s.width, height: s.height,
       rotation: s.rotation, visible: s.visible,
     }));
+    if (_captureCanvasesForTab) activeTab._savedCanvasData = _captureCanvasesForTab();
   }
 
   // Clear all engine sources
@@ -3008,8 +3156,19 @@ const PLATFORM_META = {
         if (!s.visible) src.visible = false;
       } catch (_) {}
     }
+    // Resolve per-canvas source membership for this scene, then apply layouts
+    if (_applyCanvasesFromTab) _applyCanvasesFromTab(tab._savedCanvasData);
+    if (studioCanvases.length) applyCanvasLayouts(getActiveCanvas());
+    renderCanvasTabs();
+    renderMultiview();
     renderLayerList();
-    if (engine.sources.length) selectSource(engine.sources[engine.sources.length - 1].id);
+    if (engine.sources.length) {
+      // Only select a source that belongs to the active canvas
+      const c = getActiveCanvas();
+      const inCanvas = new Set(c?.sourceIds || []);
+      const sel = [...engine.sources].reverse().find(s => inCanvas.has(s.id));
+      if (sel) selectSource(sel.id);
+    }
   }
 
   // Switch to a scene tab
@@ -3065,8 +3224,11 @@ const PLATFORM_META = {
         await loadUserData();
         renderStudioOverlays(async (url, label) => {
           const src = await engine.addBrowserSource(url, label);
+          addSourceToActiveCanvas(src.id);
           renderLayerList();
+          renderMultiview();
           selectSource(src.id);
+          saveScenes();
         });
         refreshOverlaysBtn.disabled = false;
       });
