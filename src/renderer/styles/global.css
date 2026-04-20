@@ -1028,6 +1028,21 @@ body {
 }
 .mv-card-dot.live { background: var(--red); box-shadow: 0 0 4px rgba(255,51,85,0.5); }
 .mv-card-dot.idle { background: var(--dim); }
+.mv-card-stage {
+  position: absolute; inset: 0; overflow: hidden;
+  background: linear-gradient(135deg, #0a0e14 0%, #0f1520 100%);
+}
+.mv-source-box {
+  position: absolute; border-radius: 1px;
+  background: rgba(120, 140, 180, 0.35);
+  border: 0.5px solid rgba(255,255,255,0.15);
+}
+.mv-source-box.camera  { background: rgba(66, 153, 225, 0.55); border-color: rgba(99, 179, 237, 0.6); }
+.mv-source-box.screen  { background: rgba(72, 187, 120, 0.45); border-color: rgba(104, 211, 145, 0.6); }
+.mv-source-box.window  { background: rgba(72, 187, 120, 0.45); border-color: rgba(104, 211, 145, 0.6); }
+.mv-source-box.browser { background: rgba(0, 229, 255, 0.45); border-color: rgba(0, 229, 255, 0.7); }
+.mv-source-box.image   { background: rgba(237, 137, 54, 0.45); border-color: rgba(246, 173, 85, 0.6); }
+.mv-source-box.media   { background: rgba(159, 122, 234, 0.45); border-color: rgba(183, 148, 244, 0.6); }
 
 .studio-card-hdr-right {
   margin-left: auto; font-size: 11px; color: var(--cyan); font-weight: 500;

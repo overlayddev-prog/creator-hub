@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.14.1': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Vertical canvas preview</b> — switching to a vertical canvas now correctly shows the preview at the right aspect ratio instead of collapsing to zero width',
+          '<b>Multi-view thumbnails</b> — thumbnails now show a live preview of each canvas\'s source layout (color-coded boxes for camera, screen, browser, etc.) instead of an empty grey card',
+        ],
+      },
+    ],
+  },
   '0.14.0': {
     sections: [
       {
@@ -2406,7 +2417,7 @@ const PLATFORM_META = {
         $('studio-tx-w').value = Math.round(nw); $('studio-tx-h').value = Math.round(nh);
       }
     });
-    canvas.addEventListener('mouseup',    () => { if (canvasDrag) saveScenes(); canvasDrag = null; canvas.style.cursor = ''; });
+    canvas.addEventListener('mouseup',    () => { if (canvasDrag) { saveScenes(); saveCanvasLayouts(); renderMultiview(); } canvasDrag = null; canvas.style.cursor = ''; });
     canvas.addEventListener('mouseleave', () => { canvasDrag = null; canvas.style.cursor = ''; });
 
     // Wire up Overlayd Add buttons now that engine is ready
@@ -2458,13 +2469,17 @@ const PLATFORM_META = {
       const previewWrap = $('studio-preview-wrap');
       if (previewWrap) {
         previewWrap.style.aspectRatio = canvas.resW + ' / ' + canvas.resH;
-        // For portrait canvases, limit the height so it doesn't take up the whole screen
+        // For portrait canvases, use explicit height so width can derive from aspect-ratio
         if (canvas.resH > canvas.resW) {
           previewWrap.style.width = 'auto';
-          previewWrap.style.maxHeight = '60vh';
+          previewWrap.style.height = '60vh';
+          previewWrap.style.maxWidth = '100%';
+          previewWrap.style.maxHeight = '';
           previewWrap.style.margin = '0 auto';
         } else {
           previewWrap.style.width = '100%';
+          previewWrap.style.height = '';
+          previewWrap.style.maxWidth = '';
           previewWrap.style.maxHeight = '';
           previewWrap.style.margin = '';
         }
@@ -2568,9 +2583,32 @@ const PLATFORM_META = {
       const card = document.createElement('div');
       card.className = 'mv-card ' + (isPortrait ? 'portrait' : 'landscape') + (c.id === studioActiveCanvasId ? ' active' : '');
       card.dataset.canvas = c.id;
-      card.innerHTML = `
-        <div class="mv-card-dot idle"></div>
-        <span class="mv-card-label">${c.name}</span>`;
+      // Render source boxes using CSS percentages over canvas dimensions
+      const stage = document.createElement('div');
+      stage.className = 'mv-card-stage';
+      // For the active canvas, use live source coords. For others, use stored layouts.
+      const isActive = c.id === studioActiveCanvasId;
+      for (const s of engine.sources) {
+        const layout = isActive
+          ? { x: s.x, y: s.y, width: s.width, height: s.height }
+          : c.layouts[s.id];
+        if (!layout) continue;
+        const box = document.createElement('div');
+        box.className = 'mv-source-box ' + (s.type || 'other');
+        box.style.left = (layout.x / c.resW * 100) + '%';
+        box.style.top = (layout.y / c.resH * 100) + '%';
+        box.style.width = (layout.width / c.resW * 100) + '%';
+        box.style.height = (layout.height / c.resH * 100) + '%';
+        stage.appendChild(box);
+      }
+      card.appendChild(stage);
+      const dot = document.createElement('div');
+      dot.className = 'mv-card-dot idle';
+      card.appendChild(dot);
+      const label = document.createElement('span');
+      label.className = 'mv-card-label';
+      label.textContent = c.name;
+      card.appendChild(label);
       card.addEventListener('click', () => switchToCanvas(c.id));
       container.appendChild(card);
     });
@@ -2740,6 +2778,8 @@ const PLATFORM_META = {
         rotation: Number($('studio-tx-rot').value),
       });
       saveScenes();
+      saveCanvasLayouts();
+      renderMultiview();
     });
   }
   const studioResetTransform = $('studio-reset-transform');
@@ -2753,6 +2793,8 @@ const PLATFORM_META = {
       }
       engine.setTransform(studioSelectedId, { x: 0, y: 0, width: resetW, height: resetH, rotation: 0 });
       selectSource(studioSelectedId);
+      saveCanvasLayouts();
+      renderMultiview();
     });
   }
 
