@@ -1195,6 +1195,20 @@ body {
 .studio-source-type-item:hover,
 .studio-source-type-item.selected { border-color: var(--cyan); color: var(--cyan); background: rgba(0,229,255,0.06); }
 .studio-source-type-item .sti-icon { font-size: 18px; }
+.studio-source-type-item.special {
+  border-color: #3b82f6;
+  color: #60a5fa;
+  background: rgba(59,130,246,0.08);
+  box-shadow: 0 0 0 1px rgba(59,130,246,0.15) inset;
+  font-weight: 600;
+}
+.studio-source-type-item.special:hover,
+.studio-source-type-item.special.selected {
+  border-color: #60a5fa;
+  color: #93c5fd;
+  background: rgba(59,130,246,0.16);
+  box-shadow: 0 0 12px rgba(59,130,246,0.35);
+}
 .studio-picker-actions { display: flex; gap: 4px; }
 
 /* Device list (step 2 of source picker) */

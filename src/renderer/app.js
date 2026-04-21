@@ -14,6 +14,18 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.15.1': {
+    sections: [
+      {
+        title: 'Polish',
+        items: [
+          '<b>Go Live / Record buttons</b> — fixed incorrect startup state where the stop buttons appeared as if a stream/recording was already running',
+          '<b>Overlayd in Add Source</b> — Overlayd is now a special blue entry in the <i>+ Add source</i> popup; click it to browse and add your overlays directly as browser sources',
+          '<b>Cleaner left sidebar</b> — removed the dedicated Overlayd panel since overlays now live where other sources are added',
+        ],
+      },
+    ],
+  },
   '0.15.0': {
     sections: [
       {
@@ -2962,6 +2974,7 @@ const PLATFORM_META = {
     { icon: '📷', label: 'Webcam',   kind: 'camera'  },
     { icon: '🖼️', label: 'Image',    kind: 'image'   },
     { icon: '🎵', label: 'Media',    kind: 'media'   },
+    { icon: '✨', label: 'Overlayd', kind: 'overlayd', special: true },
   ];
 
   let pickerKind    = null;
@@ -2991,7 +3004,7 @@ const PLATFORM_META = {
   if (studioSourceTypes) {
     SOURCE_TYPES_DEF.forEach(t => {
       const el = document.createElement('div');
-      el.className   = 'studio-source-type-item';
+      el.className   = 'studio-source-type-item' + (t.special ? ' special' : '');
       el.dataset.kind = t.kind;
       el.innerHTML   = `<span class="sti-icon">${t.icon}</span><span>${t.label}</span>`;
       el.addEventListener('click', () => onPickType(t.kind, t.label));
@@ -3026,6 +3039,84 @@ const PLATFORM_META = {
       studioSourceName.value = pickerDevice.name;
       studioSourceName.style.display = '';
       studioConfirmAdd.style.display = '';
+      return;
+    }
+
+    // Overlayd: render overlay browser-source list directly in the picker;
+    // clicking Add adds the browser source and closes the picker.
+    if (kind === 'overlayd') {
+      $('studio-picker-label').textContent = 'Add from Overlayd';
+      studioSourceTypes.style.display = 'none';
+      studioDeviceList.style.display  = '';
+      studioDeviceList.innerHTML      = '<div style="color:var(--muted);font-size:11px;padding:4px 0">Loading overlays…</div>';
+
+      try {
+        if (!overlays.length) await loadUserData();
+        if (!overlays.length) {
+          studioDeviceList.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:4px 0">No overlays — create one at overlayd.gg</div>';
+          return;
+        }
+        studioDeviceList.innerHTML = '';
+        const addOverlaySource = async (url, label, btn) => {
+          btn.disabled = true;
+          btn.textContent = '…';
+          try {
+            const src = await engine.addBrowserSource(url, label);
+            addSourceToActiveCanvas(src.id);
+            renderLayerList();
+            renderMultiview();
+            selectSource(src.id);
+            saveScenes();
+            showToast(`Added ${label}`);
+            studioSourcePicker.style.display = 'none';
+            pickerReset();
+          } catch (e) {
+            btn.textContent = 'Add';
+            btn.disabled = false;
+            showToast('Failed to add overlay');
+          }
+        };
+        overlays.forEach(o => {
+          const item = document.createElement('div');
+          item.className = 'studio-ov-item';
+          item.innerHTML = `
+            <div class="studio-ov-hdr">
+              <span class="studio-ov-arrow">▶</span>
+              <span class="studio-ov-name">${o.name}</span>
+            </div>
+            <div class="studio-ov-sources" style="display:none;">
+              <div class="studio-ov-src-row" data-url="${baseUrl}/overlay/${o.token}" data-label="${o.name} — Alerts">
+                <span class="studio-ov-src-icon">🔔</span><span class="studio-ov-src-name">Alerts / Overlay</span>
+                <button class="studio-overlay-addbtn">Add</button>
+              </div>
+              <div class="studio-ov-src-row" data-url="${baseUrl}/background/${o.token}" data-label="${o.name} — Background">
+                <span class="studio-ov-src-icon">🖼️</span><span class="studio-ov-src-name">Background</span>
+                <button class="studio-overlay-addbtn">Add</button>
+              </div>
+              <div class="studio-ov-src-row" data-url="${baseUrl}/goals/${o.token}" data-label="${o.name} — Goals">
+                <span class="studio-ov-src-icon">🎯</span><span class="studio-ov-src-name">Goals</span>
+                <button class="studio-overlay-addbtn">Add</button>
+              </div>
+            </div>`;
+          const hdr     = item.querySelector('.studio-ov-hdr');
+          const sources = item.querySelector('.studio-ov-sources');
+          const arrow   = item.querySelector('.studio-ov-arrow');
+          hdr.addEventListener('click', () => {
+            const open = sources.style.display !== 'none';
+            sources.style.display = open ? 'none' : 'block';
+            arrow.textContent = open ? '▶' : '▼';
+          });
+          item.querySelectorAll('.studio-ov-src-row').forEach(row => {
+            row.querySelector('.studio-overlay-addbtn').addEventListener('click', (e) => {
+              e.stopPropagation();
+              addOverlaySource(row.dataset.url, row.dataset.label, e.currentTarget);
+            });
+          });
+          studioDeviceList.appendChild(item);
+        });
+      } catch (e) {
+        studioDeviceList.innerHTML = `<div style="color:var(--red);font-size:11px;">${e.message}</div>`;
+      }
       return;
     }
 

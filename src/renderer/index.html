@@ -294,17 +294,6 @@
               </div>
             </div>
 
-            <!-- Overlayd (moved from right panel — overlays are sources, so they live next to Add Source) -->
-            <div class="studio-panel studio-overlayd-panel">
-              <div class="studio-panel-hdr">
-                <span>Overlayd</span>
-                <button class="studio-icon-btn" id="studio-refresh-overlays" title="Refresh">↻</button>
-              </div>
-              <div class="studio-overlay-list" id="studio-overlay-list">
-                <div class="studio-audio-empty">Sign in to see your overlays</div>
-              </div>
-            </div>
-
           </div><!-- end studio-left -->
 
           <!-- CENTER: Preview + Transitions + Audio -->
@@ -447,8 +436,8 @@
               </div>
               <!-- End/Stop buttons (shown only when active) -->
               <div class="studio-ctrl-row" id="studio-broadcast-end-row" style="display:none;">
-                <button class="studio-btn studio-btn-stop" id="studio-end-stream" style="display:none;">⏹ End stream</button>
-                <button class="studio-btn studio-btn-stop" id="studio-stop-rec"   style="display:none;">⏹ Stop recording</button>
+                <button class="studio-btn studio-btn-stop" id="studio-end-stream" style="display:none;" disabled>⏹ End stream</button>
+                <button class="studio-btn studio-btn-stop" id="studio-stop-rec"   style="display:none;" disabled>⏹ Stop recording</button>
               </div>
 
               <!-- Save folder -->
