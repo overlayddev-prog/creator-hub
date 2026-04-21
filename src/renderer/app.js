@@ -14,6 +14,20 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.15.0': {
+    sections: [
+      {
+        title: 'Redesigned Broadcast Panel',
+        items: [
+          '<b>Unified Broadcast card</b> — Record and Stream are now a single card with a shared status row, format/quality controls, and a collapsible destinations section',
+          '<b>Pre-flight modal</b> — clicking <i>Go Live</i> or <i>Start Recording</i> opens a clean confirmation popup to pick the canvas, choose destinations, and confirm before anything starts',
+          '<b>Record while streaming</b> — the Go Live modal has a toggle to start a local recording at the same time you go live',
+          '<b>Overlayd moved</b> — the Overlayd browser-source panel now lives in the left sidebar next to Add Sources, where it belongs',
+          '<b>Test Alerts</b> — kept as its own card on the right panel for quick access',
+        ],
+      },
+    ],
+  },
   '0.14.2': {
     sections: [
       {
@@ -3840,6 +3854,152 @@ const PLATFORM_META = {
       if ($('stream-health-bitrate')) $('stream-health-bitrate').textContent = '--';
     });
   }
+
+  // ── Broadcast pre-flight modal ──────────────────────────────────────────
+  // Opened by the visible "Go Live" / "Record" buttons; after the user picks
+  // a canvas + destinations and confirms, we apply those choices to the
+  // underlying destinations array and trigger the hidden legacy action buttons.
+  const broadcastLiveBtn = $('studio-broadcast-live');
+  const broadcastRecBtn  = $('studio-broadcast-rec');
+  const broadcastEndRow  = $('studio-broadcast-end-row');
+  const modalEl          = $('studio-broadcast-modal');
+  const modalTitle       = $('studio-modal-title');
+  const modalCanvasList  = $('studio-modal-canvas-list');
+  const modalDestList    = $('studio-modal-dest-list');
+  const modalDestSection = $('studio-modal-dests-section');
+  const modalRecSection  = $('studio-modal-record-section');
+  const modalRecToo      = $('studio-modal-record-too');
+  const modalClose       = $('studio-modal-close');
+  const modalCancel      = $('studio-modal-cancel');
+  const modalConfirm     = $('studio-modal-confirm');
+
+  let modalMode = 'live'; // 'live' | 'record'
+  let modalSelectedCanvasId = null;
+  let modalDestEnabled = {}; // { destId: bool } — temp picks, applied on confirm
+
+  function openBroadcastModal(mode) {
+    if (!modalEl) return;
+    if (!studioReady) { showToast('Open the studio first to add sources'); return; }
+    modalMode = mode;
+    modalTitle.textContent = mode === 'live' ? 'Go Live' : 'Start Recording';
+    modalConfirm.textContent = mode === 'live' ? 'Go Live' : 'Start Recording';
+    modalRecSection.style.display = mode === 'live' ? '' : 'none';
+    modalDestSection.style.display = mode === 'live' ? '' : 'none';
+    modalRecToo.checked = false;
+    modalSelectedCanvasId = studioActiveCanvasId;
+    modalDestEnabled = {};
+    renderModalCanvasList();
+    renderModalDestList();
+    modalEl.style.display = 'flex';
+  }
+
+  function closeBroadcastModal() {
+    if (modalEl) modalEl.style.display = 'none';
+  }
+
+  function renderModalCanvasList() {
+    if (!modalCanvasList) return;
+    modalCanvasList.innerHTML = '';
+    for (const c of studioCanvases) {
+      const row = document.createElement('label');
+      row.className = 'studio-modal-canvas-row' + (c.id === modalSelectedCanvasId ? ' checked' : '');
+      const isPortrait = c.resH > c.resW;
+      row.innerHTML = `
+        <input type="radio" name="modal-canvas" value="${c.id}" ${c.id === modalSelectedCanvasId ? 'checked' : ''}>
+        <span class="studio-modal-canvas-name">${c.name}${isPortrait ? ' (vertical)' : ''}</span>
+        <span class="studio-modal-canvas-res">${c.resW}×${c.resH}</span>`;
+      row.querySelector('input').addEventListener('change', (e) => {
+        modalSelectedCanvasId = Number(e.target.value);
+        modalDestEnabled = {};
+        renderModalCanvasList();
+        renderModalDestList();
+      });
+      modalCanvasList.appendChild(row);
+    }
+  }
+
+  function renderModalDestList() {
+    if (!modalDestList) return;
+    modalDestList.innerHTML = '';
+    const canvasDests = destinations.filter(d => d.canvasId === modalSelectedCanvasId);
+    if (!canvasDests.length) {
+      const empty = document.createElement('div');
+      empty.className = 'studio-modal-empty';
+      empty.textContent = 'No destinations for this canvas — add one in the Broadcast card';
+      modalDestList.appendChild(empty);
+      return;
+    }
+    for (const d of canvasDests) {
+      const meta = PLATFORM_META[d.platform] || { label: 'Custom RTMP', icon: '📡' };
+      const hasKey = !!d.key.trim();
+      // Default all with-key destinations to enabled
+      if (modalDestEnabled[d.id] === undefined) modalDestEnabled[d.id] = hasKey;
+      const row = document.createElement('label');
+      row.className = 'studio-modal-dest-row' + (modalDestEnabled[d.id] ? ' checked' : '');
+      row.innerHTML = `
+        <input type="checkbox" ${modalDestEnabled[d.id] ? 'checked' : ''} ${hasKey ? '' : 'disabled'}>
+        <span class="studio-modal-dest-icon">${meta.icon}</span>
+        <span class="studio-modal-dest-name">${d.label || meta.label}</span>
+        ${hasKey ? '' : '<span class="studio-modal-dest-warn">no stream key</span>'}`;
+      row.querySelector('input').addEventListener('change', (e) => {
+        modalDestEnabled[d.id] = e.target.checked;
+        row.classList.toggle('checked', e.target.checked);
+      });
+      modalDestList.appendChild(row);
+    }
+  }
+
+  async function confirmBroadcastModal() {
+    // Switch to selected canvas if not already active
+    if (modalSelectedCanvasId !== studioActiveCanvasId) {
+      switchToCanvas(modalSelectedCanvasId);
+    }
+
+    if (modalMode === 'record') {
+      closeBroadcastModal();
+      if (studioStartRec) studioStartRec.click();
+      return;
+    }
+
+    // Live mode: apply destination picks, then trigger go-live
+    for (const d of destinations) {
+      if (d.canvasId === modalSelectedCanvasId) {
+        d.enabled = !!modalDestEnabled[d.id];
+      }
+    }
+    renderDestinations();
+    const wantRecord = modalRecToo.checked;
+    closeBroadcastModal();
+    if (studioGoLive) studioGoLive.click();
+    if (wantRecord && studioStartRec) {
+      // Small delay so MediaRecorder for streaming has time to init first
+      setTimeout(() => studioStartRec.click(), 1200);
+    }
+  }
+
+  if (broadcastLiveBtn) broadcastLiveBtn.addEventListener('click', () => openBroadcastModal('live'));
+  if (broadcastRecBtn)  broadcastRecBtn.addEventListener('click',  () => openBroadcastModal('record'));
+  if (modalClose)       modalClose.addEventListener('click',       closeBroadcastModal);
+  if (modalCancel)      modalCancel.addEventListener('click',      closeBroadcastModal);
+  if (modalConfirm)     modalConfirm.addEventListener('click',     confirmBroadcastModal);
+  if (modalEl) {
+    modalEl.querySelector('.studio-modal-backdrop')?.addEventListener('click', closeBroadcastModal);
+  }
+
+  // Toggle visibility of primary vs end buttons based on active state.
+  // We watch the hidden legacy buttons' disabled state and reflect it.
+  function updateBroadcastButtonVisibility() {
+    const recActive    = studioStopRec && !studioStopRec.disabled;
+    const streamActive = studioEndStream && !studioEndStream.disabled;
+    if (broadcastLiveBtn) broadcastLiveBtn.style.display = streamActive ? 'none' : '';
+    if (broadcastRecBtn)  broadcastRecBtn.style.display  = recActive    ? 'none' : '';
+    if (studioEndStream)  studioEndStream.style.display  = streamActive ? ''     : 'none';
+    if (studioStopRec)    studioStopRec.style.display    = recActive    ? ''     : 'none';
+    if (broadcastEndRow)  broadcastEndRow.style.display  = (recActive || streamActive) ? '' : 'none';
+  }
+  // Poll (cheap) every 400ms so visibility reacts to async state changes
+  setInterval(updateBroadcastButtonVisibility, 400);
+  updateBroadcastButtonVisibility();
 
   // ── Video Editor Module ────────────────────────────────────────────────────
   function initVideoEditor() { // eslint-disable-line max-lines-per-function

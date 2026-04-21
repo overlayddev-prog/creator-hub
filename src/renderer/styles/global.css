@@ -1658,6 +1658,137 @@ body {
 .studio-test-btn:active { transform: scale(0.96); }
 .studio-test-btn.sent { border-color: var(--green); color: var(--green); }
 
+/* ── Broadcast card (combined record + stream) ───────────────────────────── */
+.studio-broadcast-status {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 7px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.studio-bs-item {
+  display: flex; align-items: center; gap: 6px;
+}
+.studio-bs-item .studio-timer { font-size: 11px; }
+.studio-rec-size { font-size: 10px; color: var(--dim); margin-left: 6px; }
+.studio-broadcast-dests {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0;
+  background: var(--surface);
+}
+.studio-broadcast-dests summary {
+  cursor: pointer; padding: 6px 8px;
+  font-size: 11px; font-weight: 500; color: var(--muted);
+  user-select: none;
+  list-style: none;
+}
+.studio-broadcast-dests summary::-webkit-details-marker { display: none; }
+.studio-broadcast-dests summary::before {
+  content: '▸'; display: inline-block; margin-right: 5px; transition: transform 0.15s;
+}
+.studio-broadcast-dests[open] summary::before { transform: rotate(90deg); }
+.studio-broadcast-dests[open] summary { border-bottom: 1px solid var(--border); }
+.studio-broadcast-dests > div, .studio-broadcast-dests > button {
+  margin: 6px 8px;
+}
+
+/* Overlayd panel on the left sidebar */
+.studio-overlayd-panel {
+  border-top: 1px solid var(--border);
+  padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 220px;
+}
+.studio-overlayd-panel .studio-overlay-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── Pre-flight modal ─────────────────────────────────────────────────────── */
+.studio-modal {
+  position: fixed; inset: 0; z-index: 9000;
+  display: flex; align-items: center; justify-content: center;
+}
+.studio-modal-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+}
+.studio-modal-card {
+  position: relative; z-index: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 420px; max-width: 90vw;
+  max-height: 85vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.studio-modal-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.studio-modal-title { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+.studio-modal-body {
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 16px;
+  overflow-y: auto;
+}
+.studio-modal-section { display: flex; flex-direction: column; gap: 6px; }
+.studio-modal-sec-label {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.studio-modal-canvas-list, .studio-modal-dest-list {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.studio-modal-canvas-row, .studio-modal-dest-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-size: 12px;
+}
+.studio-modal-canvas-row:hover, .studio-modal-dest-row:hover {
+  border-color: var(--border-hi);
+  background: var(--surface2);
+}
+.studio-modal-canvas-row.checked, .studio-modal-dest-row.checked {
+  border-color: var(--cyan);
+  background: rgba(0, 229, 255, 0.08);
+}
+.studio-modal-canvas-row input, .studio-modal-dest-row input {
+  accent-color: var(--cyan);
+}
+.studio-modal-canvas-name { font-weight: 500; flex: 1; }
+.studio-modal-canvas-res { color: var(--dim); font-size: 10px; font-family: var(--mono); }
+.studio-modal-dest-icon { font-size: 14px; }
+.studio-modal-dest-name { flex: 1; }
+.studio-modal-dest-warn { color: var(--amber); font-size: 10px; }
+.studio-modal-toggle {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; font-size: 12px;
+}
+.studio-modal-toggle input { accent-color: var(--cyan); }
+.studio-modal-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.studio-modal-empty {
+  font-size: 11px; color: var(--dim);
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  text-align: center;
+}
+
 /* ── Assets Module ────────────────────────────────────────────────────────── */
 .assets-topbar {
   display: flex; align-items: center; justify-content: space-between;

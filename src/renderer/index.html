@@ -294,6 +294,17 @@
               </div>
             </div>
 
+            <!-- Overlayd (moved from right panel — overlays are sources, so they live next to Add Source) -->
+            <div class="studio-panel studio-overlayd-panel">
+              <div class="studio-panel-hdr">
+                <span>Overlayd</span>
+                <button class="studio-icon-btn" id="studio-refresh-overlays" title="Refresh">↻</button>
+              </div>
+              <div class="studio-overlay-list" id="studio-overlay-list">
+                <div class="studio-audio-empty">Sign in to see your overlays</div>
+              </div>
+            </div>
+
           </div><!-- end studio-left -->
 
           <!-- CENTER: Preview + Transitions + Audio -->
@@ -382,14 +393,26 @@
               </div>
             </div>
 
-            <!-- Record -->
+            <!-- Broadcast (combined record + stream) -->
             <div class="studio-card">
-              <div class="studio-card-hdr">
-                <span class="status-dot disconnected" id="studio-rec-dot"></span>
-                <span id="studio-rec-label">Not recording</span>
-                <span class="studio-timer" id="studio-rec-timer"></span>
-                <span class="studio-rec-size" id="studio-rec-size" style="display:none;font-size:10px;color:rgba(232,237,245,0.45);margin-left:6px;"></span>
+              <div class="studio-card-hdr">Broadcast</div>
+
+              <!-- Unified status row: rec + live indicators -->
+              <div class="studio-broadcast-status">
+                <div class="studio-bs-item">
+                  <span class="status-dot disconnected" id="studio-rec-dot"></span>
+                  <span id="studio-rec-label">Not recording</span>
+                  <span class="studio-timer" id="studio-rec-timer"></span>
+                  <span class="studio-rec-size" id="studio-rec-size" style="display:none;"></span>
+                </div>
+                <div class="studio-bs-item">
+                  <span class="status-dot disconnected" id="studio-stream-dot"></span>
+                  <span id="studio-stream-label">Not streaming</span>
+                  <span class="studio-timer" id="studio-stream-timer"></span>
+                </div>
               </div>
+
+              <!-- Format / quality -->
               <div class="studio-settings-grid" style="grid-template-columns:1fr 1fr;">
                 <label>Format
                   <select class="studio-select" id="studio-rec-format">
@@ -407,32 +430,38 @@
                   </select>
                 </label>
               </div>
-              <div class="studio-ctrl-row">
-                <button class="studio-btn studio-btn-rec"  id="studio-start-rec">⏺ Record</button>
-                <button class="studio-btn studio-btn-stop" id="studio-stop-rec" disabled>⏹ Stop</button>
-              </div>
-              <div class="studio-folder-row">
-                <span class="studio-folder-lbl" id="studio-rec-dir">📁 Videos</span>
-                <button class="studio-icon-btn" id="studio-change-dir" title="Change folder">⋯</button>
-              </div>
-            </div>
 
-            <!-- Stream -->
-            <div class="studio-card">
-              <div class="studio-card-hdr">
-                <span class="status-dot disconnected" id="studio-stream-dot"></span>
-                <span id="studio-stream-label">Not streaming</span>
-                <span class="studio-timer" id="studio-stream-timer"></span>
+              <!-- Manage destinations (still here for editing keys/adding platforms) -->
+              <details class="studio-broadcast-dests">
+                <summary>Destinations</summary>
+                <div id="studio-destinations">
+                  <div class="studio-audio-empty">Sign in to load your stream destinations</div>
+                </div>
+                <button class="studio-dest-add-btn" id="studio-add-destination">+ Add destination</button>
+              </details>
+
+              <!-- Primary actions: open the pre-flight modal -->
+              <div class="studio-ctrl-row">
+                <button class="studio-btn studio-btn-live" id="studio-broadcast-live">🔴 Go Live</button>
+                <button class="studio-btn studio-btn-rec"  id="studio-broadcast-rec">⏺ Record</button>
               </div>
-              <div id="studio-destinations">
-                <div class="studio-audio-empty">Sign in to load your stream destinations</div>
+              <!-- End/Stop buttons (shown only when active) -->
+              <div class="studio-ctrl-row" id="studio-broadcast-end-row" style="display:none;">
+                <button class="studio-btn studio-btn-stop" id="studio-end-stream" style="display:none;">⏹ End stream</button>
+                <button class="studio-btn studio-btn-stop" id="studio-stop-rec"   style="display:none;">⏹ Stop recording</button>
               </div>
-              <button class="studio-dest-add-btn" id="studio-add-destination">+ Add destination</button>
-              <div class="studio-ctrl-row" style="margin-top:6px;">
-                <button class="studio-btn studio-btn-live" id="studio-go-live">🔴 Go Live</button>
-                <button class="studio-btn studio-btn-stop" id="studio-end-stream" disabled>⏹ End</button>
+
+              <!-- Save folder -->
+              <div class="studio-folder-row">
+                <span class="studio-folder-lbl" id="studio-rec-dir" title="Click ⋯ to change">📁 Videos</span>
+                <button class="studio-icon-btn" id="studio-change-dir" title="Change save folder">⋯</button>
               </div>
-              <!-- Stream health monitor -->
+
+              <!-- Hidden legacy triggers (kept for hotkey + internal use) -->
+              <button id="studio-start-rec" style="display:none;"></button>
+              <button id="studio-go-live"   style="display:none;"></button>
+
+              <!-- Stream health -->
               <div id="studio-stream-health" style="display:none;margin-top:6px;font-size:11px;color:rgba(232,237,245,0.6);border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;">
                 <div style="display:flex;justify-content:space-between;">
                   <span>FPS: <span id="stream-health-fps">--</span></span>
@@ -442,17 +471,11 @@
               </div>
             </div>
 
-            <!-- Overlayd -->
+            <!-- Test Alerts (Overlayd moved to left sidebar; keep test alerts here) -->
             <div class="studio-card">
               <div class="studio-card-hdr">
-                <span>Overlayd</span>
-                <button class="studio-icon-btn" id="studio-refresh-overlays">↻</button>
+                <span>Test Alerts</span>
               </div>
-              <div class="studio-overlay-list" id="studio-overlay-list">
-                <div class="studio-audio-empty">Sign in to see your overlays</div>
-              </div>
-              <div class="studio-card-divider"></div>
-              <div class="studio-card-sub-hdr">Test Alerts</div>
               <div class="studio-test-grid">
                 <button class="studio-test-btn" data-type="follower">👤 Follow</button>
                 <button class="studio-test-btn" data-type="subscriber">⭐ Sub</button>
@@ -466,6 +489,37 @@
           </div><!-- end studio-right -->
 
         </div><!-- end studio-body -->
+
+        <!-- Pre-flight modal (shared by Go Live + Record) -->
+        <div class="studio-modal" id="studio-broadcast-modal" style="display:none;">
+          <div class="studio-modal-backdrop"></div>
+          <div class="studio-modal-card">
+            <div class="studio-modal-hdr">
+              <span class="studio-modal-title" id="studio-modal-title">Go Live</span>
+              <button class="studio-icon-btn" id="studio-modal-close" title="Cancel">×</button>
+            </div>
+            <div class="studio-modal-body">
+              <div class="studio-modal-section">
+                <div class="studio-modal-sec-label">Canvas</div>
+                <div class="studio-modal-canvas-list" id="studio-modal-canvas-list"></div>
+              </div>
+              <div class="studio-modal-section" id="studio-modal-dests-section">
+                <div class="studio-modal-sec-label">Destinations</div>
+                <div class="studio-modal-dest-list" id="studio-modal-dest-list"></div>
+              </div>
+              <div class="studio-modal-section studio-modal-record-toggle" id="studio-modal-record-section">
+                <label class="studio-modal-toggle">
+                  <input type="checkbox" id="studio-modal-record-too">
+                  <span>Also record while streaming</span>
+                </label>
+              </div>
+            </div>
+            <div class="studio-modal-footer">
+              <button class="studio-btn" id="studio-modal-cancel">Cancel</button>
+              <button class="studio-btn studio-btn-primary" id="studio-modal-confirm">Start</button>
+            </div>
+          </div>
+        </div>
       </div><!-- end module-recstream -->
 
       <!-- ── Assets Module ──────────────────────────────────────────────── -->
