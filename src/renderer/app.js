@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.15.2': {
+    sections: [
+      {
+        title: 'Fix',
+        items: [
+          '<b>Instant canvas switch</b> — switching canvas tabs now re-renders the Layers list immediately, instead of showing the previous canvas\'s layers until you click into the preview',
+        ],
+      },
+    ],
+  },
   '0.15.1': {
     sections: [
       {
@@ -2658,6 +2668,8 @@ const PLATFORM_META = {
     // Re-render tabs + multiview
     renderCanvasTabs();
     renderMultiview();
+    // Re-render layers for this canvas (per-canvas source membership + visibility)
+    renderLayerList();
     // Re-render destinations for this canvas
     renderDestinations();
     // Persist
