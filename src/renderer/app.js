@@ -14,7 +14,7 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
-  '0.15.2': {
+  '0.16.0': {
     sections: [
       {
         title: 'Fix',
