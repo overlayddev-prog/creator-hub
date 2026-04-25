@@ -1802,6 +1802,41 @@ body {
   border-radius: 8px;
   text-align: center;
 }
+.studio-modal-sec-hint { color: var(--dim); font-weight: 400; font-size: 10px; margin-left: 6px; }
+.studio-modal-dest-canvas { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.studio-modal-dest-canvas:last-child { margin-bottom: 0; }
+.studio-modal-dest-canvas-hdr {
+  font-size: 10px; font-weight: 700; color: var(--cyan);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 2px 4px;
+}
+.studio-modal-record-toggle { display: flex; flex-direction: column; gap: 6px; }
+
+/* ── Broadcast destinations grouped by canvas (Option A) ───────────────── */
+.studio-dest-canvas-group {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.015);
+  margin-bottom: 6px;
+}
+.studio-dest-canvas-group:last-child { margin-bottom: 0; }
+.studio-dest-canvas-group.active { border-color: rgba(0,229,255,0.25); }
+.studio-dest-canvas-hdr {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+}
+.studio-dest-canvas-name { font-weight: 700; color: var(--cyan); flex: 1; letter-spacing: 0.02em; }
+.studio-dest-canvas-res  { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+.studio-dest-canvas-count { font-size: 10px; color: var(--dim); }
+.studio-dest-canvas-body { display: flex; flex-direction: column; gap: 4px; padding: 6px; }
+.studio-dest-canvas-empty {
+  font-size: 10px; color: var(--dim);
+  padding: 4px 6px; text-align: center;
+  border: 1px dashed var(--border); border-radius: 6px;
+}
 
 /* ── Assets Module ────────────────────────────────────────────────────────── */
 .assets-topbar {

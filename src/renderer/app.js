@@ -14,6 +14,26 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.17.0': {
+    sections: [
+      {
+        title: 'Multi-Canvas Streaming + Recording',
+        items: [
+          '<b>Stream multiple canvases at once</b> — go live on a vertical canvas to YouTube/TikTok and on a horizontal canvas to Twitch/Kick at the same time, with each canvas encoded independently and routed to its own destinations',
+          '<b>Encode once, send many</b> — within a canvas, all destinations still share the same encoder; multi-canvas just runs that pattern in parallel per canvas',
+          '<b>Record each canvas separately</b> — new toggle in the pre-flight modal records each selected canvas to its own file (filename includes the canvas name)',
+          '<b>Per-canvas pre-flight modal</b> — pick canvases with checkboxes, see destinations grouped by canvas, confirm before anything starts',
+          '<b>Destinations grouped by canvas</b> — Broadcast card now shows destinations under their canvas section; clearer who streams where',
+        ],
+      },
+      {
+        title: 'Notes',
+        items: [
+          'Encoding multiple canvases is N× CPU. NVENC handles 2 canvases easily; software H.264 may be tight beyond 2',
+        ],
+      },
+    ],
+  },
   '0.16.0': {
     sections: [
       {
@@ -3607,6 +3627,20 @@ const PLATFORM_META = {
 
   if (studioStopRec) {
     studioStopRec.addEventListener('click', async () => {
+      // Multi-canvas record path
+      if (multiCanvasRecords.size) {
+        $('studio-rec-label').textContent = 'Saving…';
+        await endMultiCanvasRecord();
+        if (stopRecClock) { stopRecClock(); stopRecClock = null; }
+        studioStartRec.disabled = false;
+        studioStopRec.disabled  = true;
+        $('studio-rec-dot').style.background = '';
+        $('studio-rec-dot').className = 'status-dot disconnected';
+        $('studio-rec-label').textContent = 'Not recording';
+        $('studio-rec-timer').textContent  = '';
+        if ($('studio-rec-badge')) $('studio-rec-badge').style.display = 'none';
+        return;
+      }
       if (!mediaRecorder) return;
       await new Promise(res => { mediaRecorder.addEventListener('stop', res, { once: true }); mediaRecorder.stop(); });
       await mediaRecorder._chunkQueue(); // flush all pending chunks (including final stop chunk)
@@ -3662,36 +3696,60 @@ const PLATFORM_META = {
   function renderDestinations() {
     const container = $('studio-destinations');
     if (!container) return;
-    const canvasDests = destinations.filter(d => d.canvasId === studioActiveCanvasId);
-    if (!canvasDests.length) {
+    if (!destinations.length) {
       container.innerHTML = '<div class="studio-audio-empty">No destinations — add one below</div>';
       return;
     }
     container.innerHTML = '';
-    canvasDests.forEach(d => {
-      const meta = PLATFORM_META[d.platform] || { label: 'Custom RTMP', icon: '📡' };
-      const row  = document.createElement('div');
-      row.className = 'studio-dest-row';
-      row.innerHTML = `
-        <input type="checkbox" class="studio-dest-check" ${d.enabled ? 'checked' : ''}>
-        <span class="studio-dest-icon">${meta.icon}</span>
-        <span class="studio-dest-name">${d.label || meta.label}</span>
-        <input class="studio-input studio-dest-key" type="password" value="${d.key}" placeholder="${d.key ? '' : 'Paste stream key…'}">
-        ${d.platform === 'custom' ? `<input class="studio-input studio-dest-server" type="text" value="${d.server}" placeholder="rtmp://…">` : ''}
-        <button class="studio-rm-btn studio-dest-rm" title="Remove">×</button>`;
-      row.querySelector('.studio-dest-check').addEventListener('change', e => { d.enabled = e.target.checked; });
-      row.querySelector('.studio-dest-key').addEventListener('input',  e => {
-        d.key = e.target.value;
-        if (d.channelId) saveKey(d.platform, d.channelId, d.key);
-      });
-      const sv = row.querySelector('.studio-dest-server');
-      if (sv) sv.addEventListener('input', e => { d.server = e.target.value; });
-      row.querySelector('.studio-dest-rm').addEventListener('click', () => {
-        destinations.splice(destinations.indexOf(d), 1);
-        renderDestinations();
-      });
-      container.appendChild(row);
-    });
+    // Option A — group destinations by canvas, one section per canvas (in canvas order).
+    // Empty canvases still show a header so users see they could add one there.
+    for (const c of studioCanvases) {
+      const canvasDests = destinations.filter(d => d.canvasId === c.id);
+      const sec = document.createElement('div');
+      sec.className = 'studio-dest-canvas-group' + (c.id === studioActiveCanvasId ? ' active' : '');
+      const isPortrait = c.resH > c.resW;
+      sec.innerHTML = `
+        <div class="studio-dest-canvas-hdr">
+          <span class="studio-dest-canvas-name">${c.name}${isPortrait ? ' (vertical)' : ''}</span>
+          <span class="studio-dest-canvas-res">${c.resW}×${c.resH}</span>
+          <span class="studio-dest-canvas-count">${canvasDests.length} dest${canvasDests.length === 1 ? '' : 's'}</span>
+        </div>`;
+      const body = document.createElement('div');
+      body.className = 'studio-dest-canvas-body';
+      if (!canvasDests.length) {
+        const empty = document.createElement('div');
+        empty.className = 'studio-dest-canvas-empty';
+        empty.textContent = 'No destinations on this canvas';
+        body.appendChild(empty);
+      } else {
+        canvasDests.forEach(d => {
+          const meta = PLATFORM_META[d.platform] || { label: 'Custom RTMP', icon: '📡' };
+          const row  = document.createElement('div');
+          row.className = 'studio-dest-row';
+          row.innerHTML = `
+            <input type="checkbox" class="studio-dest-check" ${d.enabled ? 'checked' : ''}>
+            <span class="studio-dest-icon">${meta.icon}</span>
+            <span class="studio-dest-name">${d.label || meta.label}</span>
+            <input class="studio-input studio-dest-key" type="password" value="${d.key}" placeholder="${d.key ? '' : 'Paste stream key…'}">
+            ${d.platform === 'custom' ? `<input class="studio-input studio-dest-server" type="text" value="${d.server}" placeholder="rtmp://…">` : ''}
+            <button class="studio-rm-btn studio-dest-rm" title="Remove">×</button>`;
+          row.querySelector('.studio-dest-check').addEventListener('change', e => { d.enabled = e.target.checked; });
+          row.querySelector('.studio-dest-key').addEventListener('input',  e => {
+            d.key = e.target.value;
+            if (d.channelId) saveKey(d.platform, d.channelId, d.key);
+          });
+          const sv = row.querySelector('.studio-dest-server');
+          if (sv) sv.addEventListener('input', e => { d.server = e.target.value; });
+          row.querySelector('.studio-dest-rm').addEventListener('click', () => {
+            destinations.splice(destinations.indexOf(d), 1);
+            renderDestinations();
+          });
+          body.appendChild(row);
+        });
+      }
+      sec.appendChild(body);
+      container.appendChild(sec);
+    }
   }
 
   // Stream keys persisted locally (users enter once, app remembers)
@@ -3938,6 +3996,10 @@ const PLATFORM_META = {
 
   if (studioEndStream) {
     studioEndStream.addEventListener('click', async () => {
+      // Multi-canvas live: tear down each canvas's pipeline first
+      if (multiCanvasStreams.size) {
+        await endMultiCanvasLive();
+      }
       if (streamMediaRecorder) {
         await new Promise(res => { streamMediaRecorder.addEventListener('stop', res, { once: true }); streamMediaRecorder.stop(); });
         streamMediaRecorder = null;
@@ -3958,26 +4020,243 @@ const PLATFORM_META = {
     });
   }
 
+  // ── Multi-canvas streaming + recording ──────────────────────────────────
+  // canvasId → { recorder, preBuffer:[Uint8Array], preBufferDone:bool }
+  const multiCanvasStreams  = new Map();
+  // canvasId → { recorder, fmt }
+  const multiCanvasRecords = new Map();
+
+  function pickStreamMime() {
+    // Prefer H.264 passthrough so FFmpeg can copy without re-encoding
+    if (typeof MediaRecorder.isTypeSupported === 'function' &&
+        MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
+      return { mime: 'video/webm;codecs=h264,opus', h264Passthrough: true };
+    }
+    return { mime: 'video/webm;codecs=vp8,opus', h264Passthrough: false };
+  }
+
+  async function startMultiCanvasLive(canvasIds) {
+    const baseOpts = getStreamOpts();
+    const { mime, h264Passthrough } = pickStreamMime();
+    const opts = { ...baseOpts, h264Passthrough };
+    const videoBps = parseInt(opts.videoBitrate) * 1000;
+
+    if (engine.audioCtx && engine.audioCtx.state === 'suspended') {
+      await engine.audioCtx.resume();
+    }
+
+    let totalDests = 0;
+    for (const canvasId of canvasIds) {
+      const canvas = studioCanvases.find(c => c.id === canvasId);
+      if (!canvas) continue;
+      const canvasDests = destinations
+        .filter(d => d.canvasId === canvasId && d.enabled && d.key.trim())
+        .map(d => ({
+          id:     d.id,
+          server: d.platform === 'custom' ? d.server.trim() : PLATFORM_META[d.platform].server,
+          key:    d.key.trim(),
+        }))
+        .filter(d => d.server);
+      if (!canvasDests.length) continue;
+
+      // Register an offscreen output canvas for this studio canvas
+      engine.addStreamOutput(canvasId, {
+        outW: canvas.resW,
+        outH: canvas.resH,
+        sourceIds: canvas.sourceIds || [],
+        layouts: canvas.layouts || {},
+        visibility: canvas.visibility || {},
+      });
+
+      const stream = engine.captureStreamFor(canvasId);
+      if (!stream) continue;
+      const rec = new MediaRecorder(stream, {
+        mimeType: mime,
+        videoBitsPerSecond: videoBps,
+        audioBitsPerSecond: 192000,
+      });
+      const entry = { recorder: rec, preBuffer: [], preBufferDone: false };
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          e.data.arrayBuffer().then(buf => {
+            const chunk = new Uint8Array(buf);
+            if (!entry.preBufferDone) entry.preBuffer.push(chunk);
+            else window.creatorhub.studio.streamChunkForCanvas(canvasId, chunk);
+          });
+        }
+      };
+      rec.start(100);
+      multiCanvasStreams.set(canvasId, entry);
+
+      // Wait briefly for header chunks to accumulate
+      await new Promise(r => setTimeout(r, 700));
+
+      const res = window.creatorhub.studio.streamAddCanvas(canvasId, canvasDests, opts);
+      if (!res || !res.ok) {
+        console.error('streamAddCanvas failed', res);
+        continue;
+      }
+
+      // Flush pre-buffer as one merged write so FFmpeg's format probe sees a clean header
+      entry.preBufferDone = true;
+      if (entry.preBuffer.length) {
+        const total = entry.preBuffer.reduce((n, c) => n + c.length, 0);
+        const merged = new Uint8Array(total);
+        let off = 0;
+        for (const c of entry.preBuffer) { merged.set(c, off); off += c.length; }
+        window.creatorhub.studio.streamChunkForCanvas(canvasId, merged);
+      }
+
+      totalDests += canvasDests.length;
+    }
+
+    if (!multiCanvasStreams.size) {
+      showToast('No canvas had any enabled destinations');
+      return;
+    }
+
+    engine.outputActive = true;
+    studioGoLive.disabled    = true;
+    studioEndStream.disabled = false;
+    $('studio-stream-dot').className = 'status-dot';
+    $('studio-stream-dot').style.background = 'var(--green)';
+    $('studio-stream-label').textContent = `Live → ${multiCanvasStreams.size} canvas${multiCanvasStreams.size > 1 ? 'es' : ''}, ${totalDests} destination${totalDests > 1 ? 's' : ''}`;
+    if ($('studio-live-badge')) $('studio-live-badge').style.display = '';
+    if ($('studio-stream-health')) $('studio-stream-health').style.display = '';
+    stopStreamClock = makeClock(t => {
+      $('studio-stream-timer').textContent = t;
+      if ($('studio-live-clock')) $('studio-live-clock').textContent = t;
+    });
+  }
+
+  async function endMultiCanvasLive() {
+    // Stop each canvas's MediaRecorder, flush, then tell preload to close its FFmpegs.
+    // Keep the engine's stream output alive if a recording is still using the same canvas.
+    const canvasIds = Array.from(multiCanvasStreams.keys());
+    for (const canvasId of canvasIds) {
+      const entry = multiCanvasStreams.get(canvasId);
+      if (!entry) continue;
+      try {
+        await new Promise(res => { entry.recorder.addEventListener('stop', res, { once: true }); entry.recorder.stop(); });
+      } catch (_) {}
+      window.creatorhub.studio.streamRemoveCanvas(canvasId);
+      if (!multiCanvasRecords.has(canvasId)) engine.removeStreamOutput(canvasId);
+    }
+    multiCanvasStreams.clear();
+    if (!multiCanvasRecords.size) engine.outputActive = false;
+  }
+
+  async function startMultiCanvasRecord(canvasIds) {
+    const baseOpts = getStreamOpts();
+    const { mime, h264Passthrough } = pickStreamMime();
+    const videoBps = parseInt(baseOpts.videoBitrate) * 1000;
+    const fmtEl = $('studio-rec-format');
+    const fmt = fmtEl ? (fmtEl.value || 'mp4') : 'mp4';
+
+    if (engine.audioCtx && engine.audioCtx.state === 'suspended') {
+      await engine.audioCtx.resume();
+    }
+
+    for (const canvasId of canvasIds) {
+      const canvas = studioCanvases.find(c => c.id === canvasId);
+      if (!canvas) continue;
+
+      // Reuse the existing stream output if streaming is already running for this canvas;
+      // otherwise create one just for recording.
+      if (!engine._streamOutputs.has(canvasId)) {
+        engine.addStreamOutput(canvasId, {
+          outW: canvas.resW,
+          outH: canvas.resH,
+          sourceIds: canvas.sourceIds || [],
+          layouts: canvas.layouts || {},
+          visibility: canvas.visibility || {},
+        });
+      }
+
+      const stream = engine.captureStreamFor(canvasId);
+      if (!stream) continue;
+      const rec = new MediaRecorder(stream, {
+        mimeType: mime,
+        videoBitsPerSecond: videoBps,
+        audioBitsPerSecond: 192000,
+      });
+      window.creatorhub.studio.recordStartForCanvas(canvasId, canvas.name, h264Passthrough);
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          e.data.arrayBuffer().then(buf => {
+            window.creatorhub.studio.recordChunkForCanvas(canvasId, new Uint8Array(buf));
+          });
+        }
+      };
+      rec.start(500);
+      multiCanvasRecords.set(canvasId, { recorder: rec, fmt });
+    }
+
+    if (!multiCanvasRecords.size) {
+      showToast('No canvases to record');
+      return;
+    }
+
+    engine.outputActive = true;
+    studioStartRec.disabled = true;
+    studioStopRec.disabled  = false;
+    $('studio-rec-dot').className = 'status-dot';
+    $('studio-rec-dot').style.background = 'var(--red)';
+    $('studio-rec-label').textContent = `Recording ${multiCanvasRecords.size} canvas${multiCanvasRecords.size > 1 ? 'es' : ''}`;
+    if (!stopRecClock) stopRecClock = makeClock(t => { $('studio-rec-timer').textContent = t; });
+  }
+
+  async function endMultiCanvasRecord() {
+    const fmtEl = $('studio-rec-format');
+    const fmt = fmtEl ? (fmtEl.value || 'mp4') : 'mp4';
+    const canvasIds = Array.from(multiCanvasRecords.keys());
+    for (const canvasId of canvasIds) {
+      const entry = multiCanvasRecords.get(canvasId);
+      if (!entry) continue;
+      try {
+        await new Promise(res => { entry.recorder.addEventListener('stop', res, { once: true }); entry.recorder.stop(); });
+      } catch (_) {}
+      try {
+        const res = await window.creatorhub.studio.recordStopForCanvas(canvasId, fmt, studioRecDir);
+        if (res && res.ok) {
+          showToast(`Saved: ${(res.outputPath || '').replace(/.*[\\/]/, '')}`);
+          if (res.outputPath && typeof addRecording === 'function') addRecording(res.outputPath);
+        } else if (res && res.error) {
+          showToast('Save error: ' + res.error);
+        }
+      } catch (e) {
+        console.error('recordStopForCanvas failed', e);
+      }
+      // Free the offscreen output if it was created just for recording (no streaming on this canvas)
+      if (!multiCanvasStreams.has(canvasId)) engine.removeStreamOutput(canvasId);
+    }
+    multiCanvasRecords.clear();
+    if (!multiCanvasStreams.size) engine.outputActive = false;
+  }
+
   // ── Broadcast pre-flight modal ──────────────────────────────────────────
   // Opened by the visible "Go Live" / "Record" buttons; after the user picks
-  // a canvas + destinations and confirms, we apply those choices to the
-  // underlying destinations array and trigger the hidden legacy action buttons.
+  // canvases + destinations and confirms, we drive the multi-canvas pipelines
+  // directly (each selected canvas runs its own MediaRecorder + FFmpegs).
   const broadcastLiveBtn = $('studio-broadcast-live');
   const broadcastRecBtn  = $('studio-broadcast-rec');
   const broadcastEndRow  = $('studio-broadcast-end-row');
   const modalEl          = $('studio-broadcast-modal');
   const modalTitle       = $('studio-modal-title');
   const modalCanvasList  = $('studio-modal-canvas-list');
+  const modalCanvasHint  = $('studio-modal-canvas-hint');
   const modalDestList    = $('studio-modal-dest-list');
   const modalDestSection = $('studio-modal-dests-section');
   const modalRecSection  = $('studio-modal-record-section');
   const modalRecToo      = $('studio-modal-record-too');
+  const modalRecEachRow  = $('studio-modal-record-each-row');
+  const modalRecEach     = $('studio-modal-record-each');
   const modalClose       = $('studio-modal-close');
   const modalCancel      = $('studio-modal-cancel');
   const modalConfirm     = $('studio-modal-confirm');
 
   let modalMode = 'live'; // 'live' | 'record'
-  let modalSelectedCanvasId = null;
+  let modalSelectedCanvasIds = new Set();
   let modalDestEnabled = {}; // { destId: bool } — temp picks, applied on confirm
 
   function openBroadcastModal(mode) {
@@ -3989,10 +4268,18 @@ const PLATFORM_META = {
     modalRecSection.style.display = mode === 'live' ? '' : 'none';
     modalDestSection.style.display = mode === 'live' ? '' : 'none';
     modalRecToo.checked = false;
-    modalSelectedCanvasId = studioActiveCanvasId;
+    if (modalRecEach) modalRecEach.checked = false;
+    // Default selection: just the active canvas
+    modalSelectedCanvasIds = new Set([studioActiveCanvasId]);
     modalDestEnabled = {};
+    if (modalCanvasHint) {
+      modalCanvasHint.textContent = mode === 'live'
+        ? '— pick the canvases you want to go live with'
+        : '— pick the canvases you want to record';
+    }
     renderModalCanvasList();
     renderModalDestList();
+    updateRecordEachVisibility();
     modalEl.style.display = 'flex';
   }
 
@@ -4000,22 +4287,45 @@ const PLATFORM_META = {
     if (modalEl) modalEl.style.display = 'none';
   }
 
+  function updateRecordEachVisibility() {
+    if (!modalRecEachRow) return;
+    // "Record each canvas separately" only makes sense when:
+    // - mode is record and >1 canvas selected, OR
+    // - mode is live, "record while streaming" is checked, and >1 canvas selected
+    const multi = modalSelectedCanvasIds.size > 1;
+    if (modalMode === 'record') {
+      modalRecEachRow.style.display = multi ? '' : 'none';
+    } else {
+      modalRecEachRow.style.display = (multi && modalRecToo.checked) ? '' : 'none';
+    }
+  }
+
   function renderModalCanvasList() {
     if (!modalCanvasList) return;
     modalCanvasList.innerHTML = '';
     for (const c of studioCanvases) {
       const row = document.createElement('label');
-      row.className = 'studio-modal-canvas-row' + (c.id === modalSelectedCanvasId ? ' checked' : '');
+      const checked = modalSelectedCanvasIds.has(c.id);
+      row.className = 'studio-modal-canvas-row' + (checked ? ' checked' : '');
       const isPortrait = c.resH > c.resW;
       row.innerHTML = `
-        <input type="radio" name="modal-canvas" value="${c.id}" ${c.id === modalSelectedCanvasId ? 'checked' : ''}>
+        <input type="checkbox" value="${c.id}" ${checked ? 'checked' : ''}>
         <span class="studio-modal-canvas-name">${c.name}${isPortrait ? ' (vertical)' : ''}</span>
         <span class="studio-modal-canvas-res">${c.resW}×${c.resH}</span>`;
       row.querySelector('input').addEventListener('change', (e) => {
-        modalSelectedCanvasId = Number(e.target.value);
-        modalDestEnabled = {};
+        const id = Number(e.target.value);
+        if (e.target.checked) modalSelectedCanvasIds.add(id);
+        else                  modalSelectedCanvasIds.delete(id);
+        // Don't allow zero canvases
+        if (modalSelectedCanvasIds.size === 0) {
+          modalSelectedCanvasIds.add(id);
+          e.target.checked = true;
+          showToast('At least one canvas required');
+          return;
+        }
         renderModalCanvasList();
         renderModalDestList();
+        updateRecordEachVisibility();
       });
       modalCanvasList.appendChild(row);
     }
@@ -4024,59 +4334,95 @@ const PLATFORM_META = {
   function renderModalDestList() {
     if (!modalDestList) return;
     modalDestList.innerHTML = '';
-    const canvasDests = destinations.filter(d => d.canvasId === modalSelectedCanvasId);
-    if (!canvasDests.length) {
-      const empty = document.createElement('div');
-      empty.className = 'studio-modal-empty';
-      empty.textContent = 'No destinations for this canvas — add one in the Broadcast card';
-      modalDestList.appendChild(empty);
-      return;
-    }
-    for (const d of canvasDests) {
-      const meta = PLATFORM_META[d.platform] || { label: 'Custom RTMP', icon: '📡' };
-      const hasKey = !!d.key.trim();
-      // Default all with-key destinations to enabled
-      if (modalDestEnabled[d.id] === undefined) modalDestEnabled[d.id] = hasKey;
-      const row = document.createElement('label');
-      row.className = 'studio-modal-dest-row' + (modalDestEnabled[d.id] ? ' checked' : '');
-      row.innerHTML = `
-        <input type="checkbox" ${modalDestEnabled[d.id] ? 'checked' : ''} ${hasKey ? '' : 'disabled'}>
-        <span class="studio-modal-dest-icon">${meta.icon}</span>
-        <span class="studio-modal-dest-name">${d.label || meta.label}</span>
-        ${hasKey ? '' : '<span class="studio-modal-dest-warn">no stream key</span>'}`;
-      row.querySelector('input').addEventListener('change', (e) => {
-        modalDestEnabled[d.id] = e.target.checked;
-        row.classList.toggle('checked', e.target.checked);
-      });
-      modalDestList.appendChild(row);
+    if (modalMode !== 'live') return;
+    // One section per selected canvas (Option A — destinations grouped by canvas)
+    for (const canvasId of modalSelectedCanvasIds) {
+      const canvas = studioCanvases.find(c => c.id === canvasId);
+      const canvasName = canvas ? canvas.name : ('Canvas ' + canvasId);
+      const canvasDests = destinations.filter(d => d.canvasId === canvasId);
+      const sec = document.createElement('div');
+      sec.className = 'studio-modal-dest-canvas';
+      const hdr = document.createElement('div');
+      hdr.className = 'studio-modal-dest-canvas-hdr';
+      hdr.textContent = canvasName;
+      sec.appendChild(hdr);
+      if (!canvasDests.length) {
+        const empty = document.createElement('div');
+        empty.className = 'studio-modal-empty';
+        empty.textContent = 'No destinations for this canvas — add one in the Broadcast card';
+        sec.appendChild(empty);
+      } else {
+        for (const d of canvasDests) {
+          const meta = PLATFORM_META[d.platform] || { label: 'Custom RTMP', icon: '📡' };
+          const hasKey = !!d.key.trim();
+          if (modalDestEnabled[d.id] === undefined) modalDestEnabled[d.id] = hasKey;
+          const row = document.createElement('label');
+          row.className = 'studio-modal-dest-row' + (modalDestEnabled[d.id] ? ' checked' : '');
+          row.innerHTML = `
+            <input type="checkbox" ${modalDestEnabled[d.id] ? 'checked' : ''} ${hasKey ? '' : 'disabled'}>
+            <span class="studio-modal-dest-icon">${meta.icon}</span>
+            <span class="studio-modal-dest-name">${d.label || meta.label}</span>
+            ${hasKey ? '' : '<span class="studio-modal-dest-warn">no stream key</span>'}`;
+          row.querySelector('input').addEventListener('change', (e) => {
+            modalDestEnabled[d.id] = e.target.checked;
+            row.classList.toggle('checked', e.target.checked);
+          });
+          sec.appendChild(row);
+        }
+      }
+      modalDestList.appendChild(sec);
     }
   }
 
+  if (modalRecToo) modalRecToo.addEventListener('change', updateRecordEachVisibility);
+
   async function confirmBroadcastModal() {
-    // Switch to selected canvas if not already active
-    if (modalSelectedCanvasId !== studioActiveCanvasId) {
-      switchToCanvas(modalSelectedCanvasId);
-    }
+    const canvasIds = Array.from(modalSelectedCanvasIds);
+    if (!canvasIds.length) { showToast('Pick at least one canvas'); return; }
 
     if (modalMode === 'record') {
       closeBroadcastModal();
-      if (studioStartRec) studioStartRec.click();
+      const recordEach = canvasIds.length > 1 && modalRecEach && modalRecEach.checked;
+      if (canvasIds.length === 1 || !recordEach) {
+        // Single-canvas record (or "all canvases into one file" — which we don't really do;
+        // in that case just record the first selected canvas).
+        const canvasId = canvasIds[0];
+        if (canvasId !== studioActiveCanvasId) switchToCanvas(canvasId);
+        if (studioStartRec) studioStartRec.click();
+      } else {
+        await startMultiCanvasRecord(canvasIds);
+      }
       return;
     }
 
-    // Live mode: apply destination picks, then trigger go-live
+    // Live mode: apply destination picks
     for (const d of destinations) {
-      if (d.canvasId === modalSelectedCanvasId) {
+      if (modalSelectedCanvasIds.has(d.canvasId)) {
         d.enabled = !!modalDestEnabled[d.id];
       }
     }
     renderDestinations();
-    const wantRecord = modalRecToo.checked;
+    const wantRecord  = modalRecToo.checked;
+    const recordEach  = wantRecord && canvasIds.length > 1 && modalRecEach && modalRecEach.checked;
     closeBroadcastModal();
-    if (studioGoLive) studioGoLive.click();
-    if (wantRecord && studioStartRec) {
-      // Small delay so MediaRecorder for streaming has time to init first
-      setTimeout(() => studioStartRec.click(), 1200);
+
+    if (canvasIds.length === 1) {
+      // Single-canvas live — use the legacy fast path
+      const canvasId = canvasIds[0];
+      if (canvasId !== studioActiveCanvasId) switchToCanvas(canvasId);
+      if (studioGoLive) studioGoLive.click();
+      if (wantRecord && studioStartRec) setTimeout(() => studioStartRec.click(), 1200);
+      return;
+    }
+
+    // Multi-canvas live
+    await startMultiCanvasLive(canvasIds);
+    if (wantRecord) {
+      // Slight delay so each MediaRecorder for streaming gets its header out first
+      setTimeout(() => {
+        if (recordEach) startMultiCanvasRecord(canvasIds);
+        else if (studioStartRec) studioStartRec.click();
+      }, 1200);
     }
   }
 

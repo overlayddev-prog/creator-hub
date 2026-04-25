@@ -812,13 +812,14 @@ ipcMain.handle('studio:desktop-sources', async (_e, types) => {
 
 // ── Studio — recording ────────────────────────────────────────────────────────
 // Recording: preload writes chunks directly to disk, main only does FFmpeg conversion
-ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath, isH264) => {
+ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath, isH264, nameSuffix) => {
   if (!tmpPath) return { ok: false, error: 'No recording file' };
 
   const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const ext = (format || 'mp4').toLowerCase();
   const dir = outputDir || app.getPath('videos');
-  const outPath = path.join(dir, `CreatorHub-${ts}.${ext}`);
+  const safeSuffix = nameSuffix ? '-' + String(nameSuffix).replace(/[<>:"/\\|?*]/g, '_').slice(0, 40) : '';
+  const outPath = path.join(dir, `CreatorHub-${ts}${safeSuffix}.${ext}`);
 
   let args;
   if (['webm', 'mkv'].includes(ext)) {

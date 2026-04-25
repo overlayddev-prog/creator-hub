@@ -32,6 +32,9 @@ class StudioEngine {
     this.audioCtx   = null;
     this.audioDest  = null;   // MediaStreamAudioDestinationNode
     this._audioNodes = new Map(); // sourceId → { source, gain, stream }
+    // Per-canvas streaming outputs: canvasId → { canvas, ctx, outW, outH, sourceIds:Set, layouts:{srcId→{x,y,width,height,rotation,visible}}, frameCtr }
+    // Each output has its own hidden DOM canvas so captureStream() works (OffscreenCanvas has no captureStream).
+    this._streamOutputs = new Map();
     // Bind once to avoid allocating a new closure every rAF tick (reduces GC stutter)
     this._boundLoop = this._loop.bind(this);
   }
@@ -87,7 +90,92 @@ class StudioEngine {
   _loop() {
     if (!this.running) return;
     this._render();
+    if (this._streamOutputs.size) this._renderStreamOutputs();
     this._rafId = requestAnimationFrame(this._boundLoop);
+  }
+
+  // Register an extra composition output (for streaming/recording a non-preview canvas).
+  // `layouts` and `visibility` are keyed by source id.  Sources not in `sourceIds` are skipped.
+  addStreamOutput(canvasId, { outW, outH, sourceIds, layouts, visibility }) {
+    if (this._streamOutputs.has(canvasId)) this.removeStreamOutput(canvasId);
+    const canvas = document.createElement('canvas');
+    canvas.width  = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext('2d', { alpha: false });
+    this._streamOutputs.set(canvasId, {
+      canvas, ctx, outW, outH,
+      sourceIds: new Set(sourceIds || []),
+      layouts:    layouts    || {},
+      visibility: visibility || {},
+      frameCtr: 0,
+      _counterImg: null,
+    });
+  }
+
+  removeStreamOutput(canvasId) {
+    this._streamOutputs.delete(canvasId);
+  }
+
+  updateStreamOutput(canvasId, { sourceIds, layouts, visibility } = {}) {
+    const out = this._streamOutputs.get(canvasId);
+    if (!out) return;
+    if (sourceIds)  out.sourceIds  = new Set(sourceIds);
+    if (layouts)    out.layouts    = layouts;
+    if (visibility) out.visibility = visibility;
+  }
+
+  captureStreamFor(canvasId, fps = 30) {
+    const out = this._streamOutputs.get(canvasId);
+    if (!out) return null;
+    const videoStream = out.canvas.captureStream(fps);
+    // Clone audio tracks so multiple MediaRecorders consuming this canvas's stream
+    // don't share track-internal state.  Cloned tracks are backed by the same source.
+    const audioTracks = this.audioDest.stream.getAudioTracks().map(t => t.clone());
+    return new MediaStream([
+      ...videoStream.getVideoTracks(),
+      ...audioTracks,
+    ]);
+  }
+
+  _renderStreamOutputs() {
+    for (const out of this._streamOutputs.values()) {
+      const { ctx, outW, outH, sourceIds, layouts, visibility } = out;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, outW, outH);
+      for (let i = 0, len = this.sources.length; i < len; i++) {
+        const src = this.sources[i];
+        if (!sourceIds.has(src.id)) continue;
+        // Per-canvas visibility override (defaults to visible)
+        if (visibility && visibility[src.id] === false) continue;
+        const el = src.element;
+        if (!el) continue;
+        if (el.tagName === 'VIDEO' && el.readyState < 2) continue;
+        if (src.type === 'browser' && !src._hasFrame) continue;
+        const layout = layouts && layouts[src.id];
+        if (!layout) continue;
+        if (layout.rotation) {
+          ctx.save();
+          const cx = layout.x + layout.width  / 2;
+          const cy = layout.y + layout.height / 2;
+          ctx.translate(cx, cy);
+          ctx.rotate(layout.rotation * Math.PI / 180);
+          ctx.translate(-cx, -cy);
+          ctx.drawImage(el, layout.x, layout.y, layout.width, layout.height);
+          ctx.restore();
+        } else {
+          ctx.drawImage(el, layout.x, layout.y, layout.width, layout.height);
+        }
+      }
+      // Counter-pixel block so captureStream always detects a change (same pattern as preview)
+      if (!out._counterImg) out._counterImg = ctx.createImageData(2, 2);
+      out.frameCtr = (out.frameCtr + 1) & 0xFF;
+      const v = out.frameCtr;
+      const d = out._counterImg.data;
+      for (let p = 0; p < 16; p += 4) {
+        d[p] = v; d[p + 1] = (v * 7) & 0xFF; d[p + 2] = (v * 13) & 0xFF; d[p + 3] = 255;
+      }
+      ctx.putImageData(out._counterImg, 0, 0);
+    }
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────

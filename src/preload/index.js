@@ -16,6 +16,8 @@ function getFFmpegPath() {
 // ── Recording — direct file write (bypasses IPC for bulk binary data) ───────
 let _recStream = null;
 let _recPath = null;
+// Multi-canvas recording: canvasId → { stream, path, h264, chunks, bytes }
+const _recPerCanvas = new Map();
 let _recChunks = 0;
 let _recBytes = 0;
 let _recH264 = false;
@@ -139,9 +141,13 @@ function spawnStreamFFmpeg(dest, opts, entry) {
   return proc;
 }
 
-// Create a new stream entry + spawn FFmpeg for it
-function addStreamDest(dest, opts) {
-  const entry = { proc: null, dest, opts, reconnecting: false, reconnectAttempts: 0 };
+// Create a new stream entry + spawn FFmpeg for it.  `canvasId` tags which source
+// canvas this destination belongs to — streamChunk only sends chunks to entries
+// whose canvasId matches the canvas that produced them.  Older callers that
+// pass `addStreamDest(dest, opts)` without a canvasId get a null canvasId,
+// which behaves as "receives from the default (null-keyed) canvas".
+function addStreamDest(dest, opts, canvasId = null) {
+  const entry = { proc: null, dest, opts, canvasId, reconnecting: false, reconnectAttempts: 0 };
   entry.proc = spawnStreamFFmpeg(dest, opts, entry);
   _streamProcs.push(entry);
 }
@@ -259,23 +265,86 @@ contextBridge.exposeInMainWorld('creatorhub', {
       return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath, _recH264);
     },
 
+    // ── Multi-canvas recording ──────────────────────────────────────────────
+    // Each canvas writes to its own temp file; on stop the file is remuxed
+    // and saved with a per-canvas suffix (e.g. "...-Main.mp4", "...-Vertical.mp4").
+    recordStartForCanvas: (canvasId, canvasName, h264) => {
+      const tag = String(canvasName || canvasId).replace(/[<>:"/\\|?*]/g, '_').slice(0, 40);
+      const recPath = path.join(os.tmpdir(), `ch-rec-${tag}-${Date.now()}.webm`);
+      const stream = fs.createWriteStream(recPath);
+      _recPerCanvas.set(canvasId, { stream, path: recPath, h264: !!h264, chunks: 0, bytes: 0, name: tag });
+      console.log('[preload] recording canvas', canvasId, 'to', recPath);
+      return { ok: true };
+    },
+    recordChunkForCanvas: (canvasId, data) => {
+      const ent = _recPerCanvas.get(canvasId);
+      if (!ent || !ent.stream || ent.stream.destroyed) return;
+      const buf = Buffer.from(data);
+      ent.chunks++;
+      ent.bytes += buf.length;
+      ent.stream.write(buf);
+    },
+    recordStopForCanvas: async (canvasId, fmt, dir) => {
+      const ent = _recPerCanvas.get(canvasId);
+      if (!ent) return { ok: false, error: 'No recording for canvas ' + canvasId };
+      console.log(`[preload] recordStopForCanvas ${canvasId} — wrote ${ent.chunks} chunks, ${ent.bytes} bytes`);
+      _recPerCanvas.delete(canvasId);
+      if (ent.stream && !ent.stream.destroyed) {
+        await new Promise(r => ent.stream.end(r));
+      }
+      return ipcRenderer.invoke('studio:record-stop', fmt, dir, ent.path, ent.h264, ent.name);
+    },
+
     // ── Streaming (FFmpeg spawned directly in preload — no IPC for data) ────
+    // Single-canvas entry point (back-compat).  Spawns one FFmpeg per destination
+    // with canvasId=null; streamChunk(data) fans out to all of them.
     streamStart: (destinations, opts) => {
       if (_streamProcs.length > 0) return { ok: false, error: 'Already streaming' };
       _streamStopping = false;
       _streamChunkCount = 0;
       for (const dest of destinations) {
-        addStreamDest(dest, opts);
+        addStreamDest(dest, opts, null);
       }
       return { ok: true };
     },
+    // Add a canvas's destinations to an already-running multi-canvas stream.
+    // Each canvas gets its own MediaRecorder in the renderer, and its chunks
+    // arrive here via streamChunkForCanvas(canvasId, data) — only entries
+    // tagged with the same canvasId receive them.
+    streamAddCanvas: (canvasId, destinations, opts) => {
+      _streamStopping = false;
+      for (const dest of destinations) {
+        addStreamDest(dest, opts, canvasId);
+      }
+      return { ok: true };
+    },
+    streamRemoveCanvas: (canvasId) => {
+      for (const entry of _streamProcs) {
+        if (entry.canvasId === canvasId) {
+          try { entry.proc.stdin.end(); } catch (_) {}
+        }
+      }
+      _streamProcs = _streamProcs.filter(e => e.canvasId !== canvasId);
+      return { ok: true };
+    },
     streamChunk: (data) => {
+      // Legacy path (canvasId=null): fans out to every null-keyed entry.
       const buf = Buffer.from(data);
       _streamChunkCount++;
       if (_streamChunkCount <= 5) {
         console.log(`[preload FFmpeg pipe] chunk #${_streamChunkCount}, size=${buf.length}, first8=${buf.subarray(0, 8).toString('hex')}`);
       }
       for (const entry of _streamProcs) {
+        if (entry.canvasId !== null) continue;
+        if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {
+          entry.proc.stdin.write(buf);
+        }
+      }
+    },
+    streamChunkForCanvas: (canvasId, data) => {
+      const buf = Buffer.from(data);
+      for (const entry of _streamProcs) {
+        if (entry.canvasId !== canvasId) continue;
         if (entry.proc && !entry.proc.stdin.destroyed && !entry.reconnecting) {
           entry.proc.stdin.write(buf);
         }
