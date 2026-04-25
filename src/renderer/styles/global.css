@@ -1760,20 +1760,52 @@ body {
 .studio-modal-canvas-list, .studio-modal-dest-list {
   display: flex; flex-direction: column; gap: 4px;
 }
-.studio-modal-canvas-row, .studio-modal-dest-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px;
+.studio-modal-canvas-row {
+  display: flex; flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 8px;
+  font-size: 12px;
+  transition: border-color 0.15s, background 0.15s;
+  overflow: hidden;
+}
+.studio-modal-canvas-row:hover { border-color: var(--border-hi); }
+.studio-modal-canvas-row.checked {
+  border-color: var(--cyan);
+  background: rgba(0, 229, 255, 0.04);
+}
+.studio-modal-canvas-hdr {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.studio-modal-canvas-row.checked .studio-modal-canvas-hdr {
+  background: rgba(0, 229, 255, 0.08);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.18);
+}
+.studio-modal-canvas-body {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px 10px;
+}
+.studio-modal-sub-label {
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+.studio-modal-record-this { padding: 4px 0 0; }
+.studio-modal-dest-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   font-size: 12px;
 }
-.studio-modal-canvas-row:hover, .studio-modal-dest-row:hover {
+.studio-modal-dest-row:hover {
   border-color: var(--border-hi);
   background: var(--surface2);
 }
-.studio-modal-canvas-row.checked, .studio-modal-dest-row.checked {
+.studio-modal-dest-row.checked {
   border-color: var(--cyan);
   background: rgba(0, 229, 255, 0.08);
 }
