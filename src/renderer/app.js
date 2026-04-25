@@ -14,6 +14,28 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.19.0': {
+    sections: [
+      {
+        title: 'Live Control Bundle',
+        items: [
+          '<b>Hotkeys</b> — global key bindings active when no input is focused. Defaults: Ctrl+Shift+R toggle record, Ctrl+Shift+S toggle stream, Ctrl+Shift+M toggle mic mute, hold V for push-to-talk, F1 shortcut help, Alt+1-9 toggle layer visibility (top to bottom), Ctrl+1-9 switch scene',
+          '<b>Studio Settings</b> — gear icon in the studio toolbar opens a settings modal where you can rebind every hotkey (click the binding, press a new key) or clear/reset to defaults',
+          '<b>Push-to-talk</b> — hold the bound key (default V) to unmute mics; release to restore previous state. Works alongside the toggle-mute hotkey',
+          '<b>Mic mute hotkey</b> — toggles every active mic at once with on-screen toast feedback',
+          '<b>Layer visibility hotkeys</b> — Alt+1 through Alt+9 toggle the top 9 layers on the active canvas (useful for quick overlay shows/hides during stream)',
+          '<b>Scene switch hotkeys</b> — Ctrl+1 through Ctrl+9 jump to the Nth scene tab',
+          '<b>Shortcut reference</b> — F1 opens a list of every active binding grouped by category',
+        ],
+      },
+      {
+        title: 'Notes',
+        items: [
+          'The system-wide F9 record hotkey (works even when CreatorHub is unfocused) keeps working — it\'s a separate main-process registration. Renderer hotkeys default to Ctrl+Shift combos to avoid collisions',
+        ],
+      },
+    ],
+  },
   '0.18.0': {
     sections: [
       {
@@ -680,6 +702,115 @@ function checkPatchNotes(version) {
 
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
+
+// ── Hotkey infrastructure (module-level singleton) ──────────────────────────
+// Renderer-side bindings, persisted in localStorage. Independent of the
+// main-process globalShortcut F9 registration (which keeps working system-wide
+// even when CreatorHub isn't focused). To avoid double-fire on F9, the
+// renderer's record-toggle defaults to Ctrl+Shift+R rather than F9.
+const HOTKEY_DEFAULTS = {
+  'record.toggle':  'Ctrl+Shift+R',
+  'stream.toggle':  'Ctrl+Shift+S',
+  'mic.mute':       'Ctrl+Shift+M',
+  'mic.ptt':        'V',
+  'help':           'F1',
+  'layer.toggle.1': 'Alt+1', 'layer.toggle.2': 'Alt+2', 'layer.toggle.3': 'Alt+3',
+  'layer.toggle.4': 'Alt+4', 'layer.toggle.5': 'Alt+5', 'layer.toggle.6': 'Alt+6',
+  'layer.toggle.7': 'Alt+7', 'layer.toggle.8': 'Alt+8', 'layer.toggle.9': 'Alt+9',
+  'scene.switch.1': 'Ctrl+1', 'scene.switch.2': 'Ctrl+2', 'scene.switch.3': 'Ctrl+3',
+  'scene.switch.4': 'Ctrl+4', 'scene.switch.5': 'Ctrl+5', 'scene.switch.6': 'Ctrl+6',
+  'scene.switch.7': 'Ctrl+7', 'scene.switch.8': 'Ctrl+8', 'scene.switch.9': 'Ctrl+9',
+};
+
+const hotkeyActions  = new Map(); // id → { label, category, handler, isHold, onPress, onRelease }
+let   hotkeyBindings = new Map();
+
+function loadHotkeyBindings() {
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem('ch_hotkeys') || '{}'); } catch (_) {}
+  hotkeyBindings = new Map(Object.entries({ ...HOTKEY_DEFAULTS, ...stored }));
+}
+loadHotkeyBindings();
+
+function saveHotkeyBindings() {
+  const out = {};
+  for (const [id, key] of hotkeyBindings) out[id] = key;
+  localStorage.setItem('ch_hotkeys', JSON.stringify(out));
+}
+
+function registerHotkey(id, opts) { hotkeyActions.set(id, opts); }
+function getHotkeyBinding(id) { return hotkeyBindings.get(id) || ''; }
+function setHotkeyBinding(id, combo) {
+  if (combo) hotkeyBindings.set(id, combo); else hotkeyBindings.delete(id);
+  saveHotkeyBindings();
+}
+function resetHotkeyBindings() {
+  hotkeyBindings = new Map(Object.entries(HOTKEY_DEFAULTS));
+  saveHotkeyBindings();
+}
+
+function comboFromEvent(e) {
+  const parts = [];
+  if (e.ctrlKey)  parts.push('Ctrl');
+  if (e.altKey)   parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+  if (e.metaKey)  parts.push('Meta');
+  let key = e.key;
+  if (['Control','Alt','Shift','Meta'].includes(key)) return ''; // pure modifier press
+  if (key === ' ') key = 'Space';
+  else if (key.length === 1) key = key.toUpperCase();
+  parts.push(key);
+  return parts.join('+');
+}
+
+let _captureHotkeyCb = null;
+function startHotkeyCapture(cb) { _captureHotkeyCb = cb; }
+function cancelHotkeyCapture()   { _captureHotkeyCb = null; }
+
+document.addEventListener('keydown', (e) => {
+  // Rebind capture mode swallows the next non-modifier keydown
+  if (_captureHotkeyCb) {
+    if (['Control','Alt','Shift','Meta'].includes(e.key)) return;
+    e.preventDefault(); e.stopPropagation();
+    const combo = comboFromEvent(e);
+    const cb = _captureHotkeyCb; _captureHotkeyCb = null;
+    cb(combo);
+    return;
+  }
+  // Skip when typing in inputs/contenteditable
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  const combo = comboFromEvent(e);
+  if (!combo) return;
+  for (const [id, key] of hotkeyBindings) {
+    if (key !== combo) continue;
+    const action = hotkeyActions.get(id);
+    if (!action) continue;
+    if (action.isHold) {
+      if (action._holding) { e.preventDefault(); return; }
+      action._holding = true;
+      try { action.onPress && action.onPress(); } catch (err) { console.error('[hotkey]', err); }
+    } else {
+      try { action.handler && action.handler(); } catch (err) { console.error('[hotkey]', err); }
+    }
+    e.preventDefault();
+    return;
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  const upKey = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  for (const [id, key] of hotkeyBindings) {
+    const action = hotkeyActions.get(id);
+    if (!action || !action.isHold || !action._holding) continue;
+    // Release if the trigger key (last + segment) is released
+    const trigger = key.includes('+') ? key.split('+').pop() : key;
+    if (trigger === upKey) {
+      action._holding = false;
+      try { action.onRelease && action.onRelease(); } catch (err) { console.error('[hotkey]', err); }
+    }
+  }
+});
 
 function showToast(msg, duration = 2200) {
   const t = $('toast');
@@ -4429,6 +4560,279 @@ const PLATFORM_META = {
   // Poll (cheap) every 400ms so visibility reacts to async state changes
   setInterval(updateBroadcastButtonVisibility, 400);
   updateBroadcastButtonVisibility();
+
+  // ── Live control helpers (used by hotkey actions) ────────────────────────
+  function getActiveMicKeys() {
+    const keys = [];
+    if (!engine || !engine._audioNodes) return keys;
+    for (const k of engine._audioNodes.keys()) {
+      if (typeof k === 'string' && k.startsWith('mic')) keys.push(k);
+    }
+    return keys;
+  }
+
+  // Toggles mute on every active mic. Returns: true if newly muted, false if newly unmuted, null if no mics.
+  function toggleAllMicsMuted() {
+    const mics = getActiveMicKeys();
+    if (!mics.length) return null;
+    let anyUnmuted = false;
+    for (const k of mics) {
+      const node = engine._audioNodes.get(k);
+      if (node && node.gain.gain.value > 0) { anyUnmuted = true; break; }
+    }
+    for (const k of mics) {
+      const node = engine._audioNodes.get(k);
+      if (!node) continue;
+      if (anyUnmuted) {
+        node._lastVol = node.gain.gain.value || node._lastVol || 1;
+        node.gain.gain.value = 0;
+      } else {
+        node.gain.gain.value = node._lastVol || 1;
+      }
+    }
+    // Reflect new state in the audio-tracks UI mute buttons (best-effort)
+    document.querySelectorAll('#studio-audio-tracks [data-key^="mic"] .audio-track-mute').forEach(btn => {
+      btn.classList.toggle('active', anyUnmuted);
+    });
+    return anyUnmuted;
+  }
+
+  // Push-to-talk: snapshot mic gains, force mics on; on release, restore.
+  let _pttSavedState = null;
+  function pttPress() {
+    const mics = getActiveMicKeys();
+    if (!mics.length) return;
+    _pttSavedState = mics.map(k => {
+      const node = engine._audioNodes.get(k);
+      return node ? { k, vol: node.gain.gain.value } : null;
+    }).filter(Boolean);
+    for (const k of mics) {
+      const node = engine._audioNodes.get(k);
+      if (node) node.gain.gain.value = node._lastVol || 1;
+    }
+  }
+  function pttRelease() {
+    if (!_pttSavedState) return;
+    for (const { k, vol } of _pttSavedState) {
+      const node = engine._audioNodes.get(k);
+      if (node) node.gain.gain.value = vol;
+    }
+    _pttSavedState = null;
+  }
+
+  // Toggle visibility of the Nth layer (0-indexed) on the active canvas, top-first.
+  function toggleLayerByIndex(idx) {
+    const canvas = getActiveCanvas();
+    if (!canvas) return;
+    if (!canvas.sourceIds || !canvas.sourceIds.length) return;
+    if (!canvas.visibility) canvas.visibility = {};
+    const inSet = new Set(canvas.sourceIds);
+    // Match the order shown in the layers panel: bottom-up array reversed → top-first
+    const reversed = [...engine.sources].reverse().filter(s => inSet.has(s.id));
+    if (idx >= reversed.length) return;
+    const src = reversed[idx];
+    const newVis = !(canvas.visibility[src.id] !== false);
+    canvas.visibility[src.id] = newVis;
+    src.visible = newVis;
+    renderLayerList();
+    renderMultiview();
+    if (_saveScenes) _saveScenes();
+  }
+
+  // Switch to scene tab N (0-indexed)
+  function switchToSceneByIndex(idx) {
+    const tabs = document.querySelectorAll('#studio-scene-tabs .studio-scene-tab');
+    if (!tabs[idx]) return;
+    tabs[idx].click();
+  }
+
+  // ── Hotkey action registrations ──────────────────────────────────────────
+  registerHotkey('record.toggle', {
+    label: 'Toggle recording', category: 'Recording',
+    handler: () => {
+      // If anything is recording, stop it; else open the pre-flight modal
+      if ((mediaRecorder && mediaRecorder.state !== 'inactive') || multiCanvasRecords.size) {
+        if (studioStopRec && !studioStopRec.disabled) studioStopRec.click();
+      } else if (broadcastRecBtn) {
+        broadcastRecBtn.click();
+      } else if (studioStartRec && !studioStartRec.disabled) {
+        studioStartRec.click();
+      }
+    },
+  });
+
+  registerHotkey('stream.toggle', {
+    label: 'Toggle streaming', category: 'Streaming',
+    handler: () => {
+      if ((streamMediaRecorder && streamMediaRecorder.state !== 'inactive') || multiCanvasStreams.size) {
+        if (studioEndStream && !studioEndStream.disabled) studioEndStream.click();
+      } else if (broadcastLiveBtn) {
+        broadcastLiveBtn.click();
+      } else if (studioGoLive && !studioGoLive.disabled) {
+        studioGoLive.click();
+      }
+    },
+  });
+
+  registerHotkey('mic.mute', {
+    label: 'Toggle microphone mute', category: 'Audio',
+    handler: () => {
+      const muted = toggleAllMicsMuted();
+      if (muted === null) showToast('No microphone active');
+      else showToast(muted ? '🎤 Mic muted' : '🎤 Mic unmuted', 1200);
+    },
+  });
+
+  registerHotkey('mic.ptt', {
+    label: 'Push-to-talk (hold)', category: 'Audio',
+    isHold: true,
+    onPress: pttPress,
+    onRelease: pttRelease,
+  });
+
+  registerHotkey('help', {
+    label: 'Show keyboard shortcuts', category: 'General',
+    handler: () => openHotkeyHelp(),
+  });
+
+  for (let i = 1; i <= 9; i++) {
+    registerHotkey(`layer.toggle.${i}`, {
+      label: `Toggle layer ${i} visibility`, category: 'Sources',
+      handler: () => toggleLayerByIndex(i - 1),
+    });
+    registerHotkey(`scene.switch.${i}`, {
+      label: `Switch to scene ${i}`, category: 'Scenes',
+      handler: () => switchToSceneByIndex(i - 1),
+    });
+  }
+
+  // ── Studio Settings modal (gear icon) ────────────────────────────────────
+  const studioSettingsBtn   = $('studio-settings-open');
+  const studioSettingsModal = $('studio-settings-modal');
+  const studioSettingsClose = $('studio-settings-close');
+  const studioSettingsList  = $('studio-settings-hotkeys');
+  const studioSettingsReset = $('studio-hotkeys-reset');
+
+  function renderHotkeySettings() {
+    if (!studioSettingsList) return;
+    studioSettingsList.innerHTML = '';
+    const byCategory = new Map();
+    for (const [id, action] of hotkeyActions) {
+      const cat = action.category || 'Other';
+      if (!byCategory.has(cat)) byCategory.set(cat, []);
+      byCategory.get(cat).push({ id, action });
+    }
+    for (const [cat, items] of byCategory) {
+      const hdr = document.createElement('div');
+      hdr.className = 'studio-settings-cat';
+      hdr.textContent = cat;
+      studioSettingsList.appendChild(hdr);
+      for (const { id, action } of items) {
+        const row = document.createElement('div');
+        row.className = 'studio-settings-row';
+        const combo = getHotkeyBinding(id) || '—';
+        row.innerHTML = `
+          <span class="studio-settings-label">${action.label}</span>
+          <button class="studio-settings-keybtn" data-id="${id}">${combo}</button>
+          <button class="studio-settings-clear" data-id="${id}" title="Clear binding">×</button>`;
+        studioSettingsList.appendChild(row);
+      }
+    }
+    studioSettingsList.querySelectorAll('.studio-settings-keybtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.textContent = '… press a key …';
+        btn.classList.add('capturing');
+        startHotkeyCapture((combo) => {
+          // Auto-resolve conflict: any other action holding this combo gets unbound
+          for (const [otherId, key] of [...hotkeyBindings]) {
+            if (key === combo && otherId !== btn.dataset.id) hotkeyBindings.delete(otherId);
+          }
+          setHotkeyBinding(btn.dataset.id, combo);
+          renderHotkeySettings();
+        });
+      });
+    });
+    studioSettingsList.querySelectorAll('.studio-settings-clear').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setHotkeyBinding(btn.dataset.id, '');
+        renderHotkeySettings();
+      });
+    });
+  }
+
+  function openStudioSettings() {
+    if (!studioSettingsModal) return;
+    renderHotkeySettings();
+    studioSettingsModal.style.display = 'flex';
+  }
+  function closeStudioSettings() {
+    if (!studioSettingsModal) return;
+    studioSettingsModal.style.display = 'none';
+    cancelHotkeyCapture();
+  }
+
+  const studioSettingsDone = $('studio-settings-done');
+  if (studioSettingsBtn)   studioSettingsBtn.addEventListener('click',   openStudioSettings);
+  if (studioSettingsClose) studioSettingsClose.addEventListener('click', closeStudioSettings);
+  if (studioSettingsDone)  studioSettingsDone.addEventListener('click',  closeStudioSettings);
+  if (studioSettingsReset) studioSettingsReset.addEventListener('click', () => {
+    if (!confirm('Reset all hotkey bindings to defaults?')) return;
+    resetHotkeyBindings();
+    renderHotkeySettings();
+  });
+  if (studioSettingsModal) {
+    studioSettingsModal.querySelector('.studio-modal-backdrop')?.addEventListener('click', closeStudioSettings);
+  }
+
+  // ── Help / shortcut reference modal ──────────────────────────────────────
+  const studioHelpModal = $('studio-help-modal');
+  const studioHelpClose = $('studio-help-close');
+  const studioHelpList  = $('studio-help-list');
+
+  function openHotkeyHelp() {
+    if (!studioHelpModal || !studioHelpList) return;
+    studioHelpList.innerHTML = '';
+    const byCategory = new Map();
+    for (const [id, action] of hotkeyActions) {
+      const cat = action.category || 'Other';
+      if (!byCategory.has(cat)) byCategory.set(cat, []);
+      byCategory.get(cat).push({ id, action });
+    }
+    for (const [cat, items] of byCategory) {
+      const sec = document.createElement('div');
+      sec.className = 'studio-help-section';
+      const hdr = document.createElement('div');
+      hdr.className = 'studio-help-cat';
+      hdr.textContent = cat;
+      sec.appendChild(hdr);
+      let any = false;
+      for (const { id, action } of items) {
+        const combo = getHotkeyBinding(id);
+        if (!combo) continue;
+        any = true;
+        const row = document.createElement('div');
+        row.className = 'studio-help-row';
+        row.innerHTML = `<span class="studio-help-label">${action.label}</span><kbd class="studio-help-key">${combo}</kbd>`;
+        sec.appendChild(row);
+      }
+      if (any) studioHelpList.appendChild(sec);
+    }
+    studioHelpModal.style.display = 'flex';
+  }
+  function closeHotkeyHelp() {
+    if (studioHelpModal) studioHelpModal.style.display = 'none';
+  }
+  if (studioHelpClose) studioHelpClose.addEventListener('click', closeHotkeyHelp);
+  if (studioHelpModal) {
+    studioHelpModal.querySelector('.studio-modal-backdrop')?.addEventListener('click', closeHotkeyHelp);
+  }
+
+  // Esc closes any open studio modal (settings/help/broadcast)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (studioSettingsModal && studioSettingsModal.style.display === 'flex') { closeStudioSettings(); e.preventDefault(); }
+    if (studioHelpModal     && studioHelpModal.style.display === 'flex')     { closeHotkeyHelp();    e.preventDefault(); }
+  });
 
   // ── Video Editor Module ────────────────────────────────────────────────────
   function initVideoEditor() { // eslint-disable-line max-lines-per-function

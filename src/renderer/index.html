@@ -238,6 +238,7 @@
             <div class="studio-tabbar-sep"></div>
             <span class="studio-badge studio-badge-rec"  id="studio-rec-badge"  style="display:none;">⏺ REC <span id="studio-rec-clock">00:00:00</span></span>
             <span class="studio-badge studio-badge-live" id="studio-live-badge" style="display:none;">● LIVE <span id="studio-live-clock">00:00:00</span></span>
+            <button class="studio-icon-btn" id="studio-settings-open" title="Studio settings (hotkeys, defaults)">⚙</button>
           </div>
         </div>
 
@@ -496,6 +497,44 @@
             <div class="studio-modal-footer">
               <button class="studio-btn" id="studio-modal-cancel">Cancel</button>
               <button class="studio-btn studio-btn-primary" id="studio-modal-confirm">Start</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Studio Settings modal: hotkey rebinding + studio defaults -->
+        <div class="studio-modal" id="studio-settings-modal" style="display:none;">
+          <div class="studio-modal-backdrop"></div>
+          <div class="studio-modal-card studio-settings-card">
+            <div class="studio-modal-hdr">
+              <span class="studio-modal-title">Studio Settings</span>
+              <button class="studio-icon-btn" id="studio-settings-close" title="Close">×</button>
+            </div>
+            <div class="studio-modal-body">
+              <div class="studio-modal-section">
+                <div class="studio-modal-sec-label">Hotkeys
+                  <span class="studio-modal-sec-hint">— click a binding to rebind, × to clear</span>
+                </div>
+                <div class="studio-settings-hotkeys" id="studio-settings-hotkeys"></div>
+              </div>
+            </div>
+            <div class="studio-modal-footer">
+              <button class="studio-btn" id="studio-hotkeys-reset">Reset to defaults</button>
+              <button class="studio-btn studio-btn-primary" id="studio-settings-done">Done</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Help modal: keyboard shortcut reference (F1) -->
+        <div class="studio-modal" id="studio-help-modal" style="display:none;">
+          <div class="studio-modal-backdrop"></div>
+          <div class="studio-modal-card studio-help-card">
+            <div class="studio-modal-hdr">
+              <span class="studio-modal-title">Keyboard Shortcuts</span>
+              <button class="studio-icon-btn" id="studio-help-close" title="Close">×</button>
+            </div>
+            <div class="studio-modal-body">
+              <div id="studio-help-list"></div>
+              <div class="studio-help-hint">Press <kbd>F1</kbd> to open · <kbd>Esc</kbd> to close · Edit bindings in <kbd>⚙</kbd> Studio Settings</div>
             </div>
           </div>
         </div>

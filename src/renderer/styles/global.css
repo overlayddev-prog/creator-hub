@@ -1844,6 +1844,78 @@ body {
 }
 .studio-modal-record-toggle { display: flex; flex-direction: column; gap: 6px; }
 
+/* ── Studio Settings (hotkey rebinding) ──────────────────────────────────── */
+.studio-settings-card { width: 480px; max-width: 90vw; max-height: 85vh; }
+.studio-settings-hotkeys { display: flex; flex-direction: column; gap: 4px; }
+.studio-settings-cat {
+  font-size: 10px; font-weight: 700; color: var(--cyan);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-top: 8px; padding: 0 4px;
+}
+.studio-settings-cat:first-child { margin-top: 0; }
+.studio-settings-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+.studio-settings-label { flex: 1; color: var(--muted); }
+.studio-settings-keybtn {
+  font-family: var(--mono); font-size: 11px;
+  padding: 4px 10px; border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--cyan);
+  cursor: pointer; min-width: 110px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.studio-settings-keybtn:hover { border-color: var(--cyan); }
+.studio-settings-keybtn.capturing {
+  border-color: var(--amber); color: var(--amber);
+  background: rgba(255,180,40,0.08);
+}
+.studio-settings-clear {
+  width: 22px; height: 22px;
+  border: 1px solid var(--border);
+  background: transparent; color: var(--dim);
+  border-radius: 4px; cursor: pointer;
+  font-size: 14px; line-height: 1;
+}
+.studio-settings-clear:hover { color: var(--red); border-color: var(--red); }
+
+/* ── Studio Help (shortcut reference) ───────────────────────────────────── */
+.studio-help-card { width: 480px; max-width: 90vw; max-height: 85vh; }
+.studio-help-section { margin-bottom: 12px; }
+.studio-help-section:last-child { margin-bottom: 0; }
+.studio-help-cat {
+  font-size: 10px; font-weight: 700; color: var(--cyan);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.studio-help-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.studio-help-label { flex: 1; color: var(--muted); }
+.studio-help-key, kbd.studio-help-key {
+  font-family: var(--mono); font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--cyan);
+}
+.studio-help-hint {
+  margin-top: 12px;
+  font-size: 11px; color: var(--dim);
+  text-align: center;
+}
+.studio-help-hint kbd {
+  font-family: var(--mono); font-size: 10px;
+  padding: 1px 5px; border-radius: 3px;
+  border: 1px solid var(--border); background: var(--surface2); color: var(--muted);
+}
+
 /* ── Broadcast destinations grouped by canvas (Option A) ───────────────── */
 .studio-dest-canvas-group {
   display: flex; flex-direction: column;
