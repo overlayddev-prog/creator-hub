@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.20.1': {
+    sections: [
+      {
+        title: 'Soundboard fixes',
+        items: [
+          '<b>No more double-playback in recordings</b> — soundboard sounds were going straight to the speakers AND being re-captured by any desktop-audio source you had added, producing a delayed second copy. Now they route through the same monitor path mics use, so by default no speaker output → no loopback into desktop audio. Toggle the monitor button if you want to hear them locally during a recording.',
+          '<b>"Mute all" actually mutes everything</b> — was missing the soundboard\'s currently-playing sounds because they weren\'t in the persistent _audioNodes map. Mute/unmute/state-check now also iterate the active-sounds list.',
+        ],
+      },
+    ],
+  },
   '0.20.0': {
     sections: [
       {

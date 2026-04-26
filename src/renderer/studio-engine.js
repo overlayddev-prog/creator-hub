@@ -461,10 +461,14 @@ class StudioEngine {
   }
 
   // ── One-shot soundboard trigger ─────────────────────────────────────────
-  // Plays a file once, routed through audioDest (so it lands in recordings +
-  // streams) AND audioCtx.destination (speakers). Auto-cleans up Web Audio
-  // nodes on the audio element's `ended` event. Active triggers are tracked
-  // so stopAllSounds() can interrupt every currently-playing one.
+  // Plays a file once, routed through audioDest (recording/stream) and through
+  // the engine's _monitorGain (controllable global "hear yourself" toggle —
+  // same routing mics use). Routing through _monitorGain instead of straight
+  // to audioCtx.destination means: with monitor off (default) the sound does
+  // NOT come out of the speakers locally, which avoids it being re-captured
+  // by any desktop-audio source the user has added (which would otherwise
+  // double up the sound in the recording with a small delay).
+  // With monitor on the user hears the sound locally as expected.
   triggerSound(filePath, volume = 1) {
     if (!this.audioCtx) return null;
     const url = filePath.includes('://') ? filePath
@@ -478,8 +482,8 @@ class StudioEngine {
       gainNode = this.audioCtx.createGain();
       gainNode.gain.value = Math.max(0, Math.min(1, volume));
       srcNode.connect(gainNode);
-      gainNode.connect(this.audioDest);            // → recording / stream
-      gainNode.connect(this.audioCtx.destination); // → speakers (always audible locally)
+      gainNode.connect(this.audioDest);                   // → recording / stream
+      if (this._monitorGain) gainNode.connect(this._monitorGain); // → speakers (only when monitor is on)
     } catch (e) {
       console.error('[soundboard] failed to wire audio graph', e);
       return null;
@@ -509,27 +513,50 @@ class StudioEngine {
     this._activeSounds = [];
   }
 
-  // Mute every audio source in the graph (mics, media, system audio) at once.
-  // Stores prior gain on each node so unmuteAll() restores the previous state.
+  // Mute every audio source in the graph at once: persistent sources (mics,
+  // media, system) live in _audioNodes; one-shot soundboard plays live in
+  // _activeSounds. Both must be muted for "mute all" to actually silence.
+  // Stores prior gain on each node so unmuteAll() restores the previous mix.
   muteAll() {
-    if (!this._audioNodes) return;
-    for (const node of this._audioNodes.values()) {
-      if (!node.gain) continue;
-      if (node.gain.gain.value > 0) node._lastVol = node.gain.gain.value;
-      node.gain.gain.value = 0;
+    if (this._audioNodes) {
+      for (const node of this._audioNodes.values()) {
+        if (!node.gain) continue;
+        if (node.gain.gain.value > 0) node._lastVol = node.gain.gain.value;
+        node.gain.gain.value = 0;
+      }
+    }
+    if (this._activeSounds) {
+      for (const e of this._activeSounds) {
+        if (!e.gainNode) continue;
+        if (e.gainNode.gain.value > 0) e._lastVol = e.gainNode.gain.value;
+        e.gainNode.gain.value = 0;
+      }
     }
   }
   unmuteAll() {
-    if (!this._audioNodes) return;
-    for (const node of this._audioNodes.values()) {
-      if (!node.gain) continue;
-      node.gain.gain.value = node._lastVol || 1;
+    if (this._audioNodes) {
+      for (const node of this._audioNodes.values()) {
+        if (!node.gain) continue;
+        node.gain.gain.value = node._lastVol || 1;
+      }
+    }
+    if (this._activeSounds) {
+      for (const e of this._activeSounds) {
+        if (!e.gainNode) continue;
+        e.gainNode.gain.value = e._lastVol || 1;
+      }
     }
   }
   isAnyAudioUnmuted() {
-    if (!this._audioNodes) return false;
-    for (const node of this._audioNodes.values()) {
-      if (node.gain && node.gain.gain.value > 0) return true;
+    if (this._audioNodes) {
+      for (const node of this._audioNodes.values()) {
+        if (node.gain && node.gain.gain.value > 0) return true;
+      }
+    }
+    if (this._activeSounds) {
+      for (const e of this._activeSounds) {
+        if (e.gainNode && e.gainNode.gain.value > 0) return true;
+      }
     }
     return false;
   }
