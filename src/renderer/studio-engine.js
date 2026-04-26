@@ -460,6 +460,80 @@ class StudioEngine {
     return src;
   }
 
+  // ── One-shot soundboard trigger ─────────────────────────────────────────
+  // Plays a file once, routed through audioDest (so it lands in recordings +
+  // streams) AND audioCtx.destination (speakers). Auto-cleans up Web Audio
+  // nodes on the audio element's `ended` event. Active triggers are tracked
+  // so stopAllSounds() can interrupt every currently-playing one.
+  triggerSound(filePath, volume = 1) {
+    if (!this.audioCtx) return null;
+    const url = filePath.includes('://') ? filePath
+      : 'asset:///' + filePath.replace(/\\/g, '/').replace(/^([A-Za-z]):/, '$1');
+    const audio = new Audio(url);
+    audio.crossOrigin = 'anonymous';
+    audio.preload = 'auto';
+    let srcNode, gainNode;
+    try {
+      srcNode  = this.audioCtx.createMediaElementSource(audio);
+      gainNode = this.audioCtx.createGain();
+      gainNode.gain.value = Math.max(0, Math.min(1, volume));
+      srcNode.connect(gainNode);
+      gainNode.connect(this.audioDest);            // → recording / stream
+      gainNode.connect(this.audioCtx.destination); // → speakers (always audible locally)
+    } catch (e) {
+      console.error('[soundboard] failed to wire audio graph', e);
+      return null;
+    }
+    if (!this._activeSounds) this._activeSounds = [];
+    const entry = { audio, srcNode, gainNode };
+    this._activeSounds.push(entry);
+    const cleanup = () => {
+      try { srcNode.disconnect(); } catch (_) {}
+      try { gainNode.disconnect(); } catch (_) {}
+      this._activeSounds = (this._activeSounds || []).filter(e => e !== entry);
+    };
+    audio.addEventListener('ended', cleanup, { once: true });
+    audio.addEventListener('error', cleanup, { once: true });
+    if (this.audioCtx.state === 'suspended') this.audioCtx.resume();
+    audio.play().catch(err => { console.error('[soundboard] play failed', err); cleanup(); });
+    return audio;
+  }
+
+  stopAllSounds() {
+    if (!this._activeSounds) return;
+    for (const e of [...this._activeSounds]) {
+      try { e.audio.pause(); e.audio.currentTime = 0; } catch (_) {}
+      try { e.srcNode.disconnect(); }  catch (_) {}
+      try { e.gainNode.disconnect(); } catch (_) {}
+    }
+    this._activeSounds = [];
+  }
+
+  // Mute every audio source in the graph (mics, media, system audio) at once.
+  // Stores prior gain on each node so unmuteAll() restores the previous state.
+  muteAll() {
+    if (!this._audioNodes) return;
+    for (const node of this._audioNodes.values()) {
+      if (!node.gain) continue;
+      if (node.gain.gain.value > 0) node._lastVol = node.gain.gain.value;
+      node.gain.gain.value = 0;
+    }
+  }
+  unmuteAll() {
+    if (!this._audioNodes) return;
+    for (const node of this._audioNodes.values()) {
+      if (!node.gain) continue;
+      node.gain.gain.value = node._lastVol || 1;
+    }
+  }
+  isAnyAudioUnmuted() {
+    if (!this._audioNodes) return false;
+    for (const node of this._audioNodes.values()) {
+      if (node.gain && node.gain.gain.value > 0) return true;
+    }
+    return false;
+  }
+
   // ── Audio-only media file (not a visual source, just audio in the mix) ───
   async addMediaAudioTrack(filePath, name) {
     const url = filePath.includes('://') ? filePath

@@ -1916,6 +1916,69 @@ body {
   border: 1px solid var(--border); background: var(--surface2); color: var(--muted);
 }
 
+/* ── Soundboard ──────────────────────────────────────────────────────────── */
+.studio-soundboard {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 200px; overflow-y: auto;
+}
+.studio-sb-row {
+  display: flex; align-items: center; gap: 4px;
+}
+.studio-sb-play {
+  flex: 1; display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s, transform 0.05s;
+}
+.studio-sb-play:hover  { border-color: var(--cyan); background: rgba(0,229,255,0.06); }
+.studio-sb-play:active { transform: scale(0.98); background: rgba(0,229,255,0.12); }
+.studio-sb-key {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  border-radius: 4px;
+  background: var(--cyan);
+  color: #050b12;
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+}
+.studio-sb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-sb-vol  { width: 60px; accent-color: var(--cyan); }
+.studio-sb-rm {
+  width: 24px; height: 24px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--dim);
+  border-radius: 4px;
+  font-size: 14px; line-height: 1;
+  cursor: pointer;
+}
+.studio-sb-rm:hover { color: var(--red); border-color: var(--red); }
+
+/* ── Broadcast-row VU meter ─────────────────────────────────────────────── */
+.studio-bs-meter {
+  display: inline-block;
+  position: relative;
+  width: 60px; height: 8px;
+  margin-left: auto;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+  --meter: 0%;
+}
+.studio-bs-meter::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: var(--meter);
+  background: linear-gradient(90deg, var(--green) 0%, var(--green) 60%, var(--amber) 80%, var(--red) 100%);
+  transition: width 0.05s linear;
+}
+
 /* ── Broadcast destinations grouped by canvas (Option A) ───────────────── */
 .studio-dest-canvas-group {
   display: flex; flex-direction: column;

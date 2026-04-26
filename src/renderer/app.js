@@ -14,6 +14,28 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.20.0': {
+    sections: [
+      {
+        title: 'Audio Bundle (phase 1)',
+        items: [
+          '<b>Soundboard</b> — new card on the right panel; click + to add audio files (mp3/wav/ogg/etc), each gets a play button + volume slider + remove. Sounds play through the live mix so they land in stream + recording, not just speakers',
+          '<b>Soundboard hotkeys</b> — keys <kbd>1</kbd> through <kbd>9</kbd> trigger the first 9 sounds; <kbd>Backspace</kbd> stops every active sound. Rebindable in Studio Settings',
+          '<b>"Mute all" panic hotkey</b> — <kbd>Ctrl+Shift+X</kbd> toggles every audio source (mics, system, media) at once for emergencies; remembers prior gain so unmute restores the mix',
+          '<b>VU meter on the broadcast status row</b> — small gradient peak meter visible while recording or streaming so you can see audio is going out without opening the audio panel',
+          '<b>Sounds persist</b> — soundboard contents stored in localStorage; survive restarts',
+        ],
+      },
+      {
+        title: 'Coming next (deferred)',
+        items: [
+          '<b>RNNoise noise suppression</b> — needs a focused session to wire the WASM AudioWorklet; planned for v0.21.0',
+          '<b>Multi-track audio recording</b> — separate mic + desktop tracks in the output file; deferred (recording-pipeline architecture change)',
+          '<b>Per-source monitor toggle</b> in the audio mixer — defer; currently only the global monitor button exists',
+        ],
+      },
+    ],
+  },
   '0.19.0': {
     sections: [
       {
@@ -4833,6 +4855,173 @@ const PLATFORM_META = {
     if (studioSettingsModal && studioSettingsModal.style.display === 'flex') { closeStudioSettings(); e.preventDefault(); }
     if (studioHelpModal     && studioHelpModal.style.display === 'flex')     { closeHotkeyHelp();    e.preventDefault(); }
   });
+
+  // ── Soundboard ───────────────────────────────────────────────────────────
+  // One-shot audio buttons. Each click plays the file through engine.audioDest
+  // (so it lands in stream + recording) AND audioCtx.destination (speakers).
+  // Persisted in localStorage as 'ch_soundboard'.
+  let soundboard = [];
+  try { soundboard = JSON.parse(localStorage.getItem('ch_soundboard') || '[]'); } catch (_) { soundboard = []; }
+  function saveSoundboard() {
+    localStorage.setItem('ch_soundboard', JSON.stringify(soundboard));
+  }
+
+  const sbContainer = $('studio-soundboard');
+  const sbAddBtn    = $('studio-soundboard-add');
+  const sbStopBtn   = $('studio-soundboard-stop');
+
+  function renderSoundboard() {
+    if (!sbContainer) return;
+    sbContainer.innerHTML = '';
+    if (!soundboard.length) {
+      sbContainer.innerHTML = '<div class="studio-audio-empty">Add sounds to play instantly into the live mix</div>';
+      return;
+    }
+    soundboard.forEach((s, idx) => {
+      const row = document.createElement('div');
+      row.className = 'studio-sb-row';
+      const hotkeyTag = idx < 9 ? `<span class="studio-sb-key">${idx + 1}</span>` : '';
+      row.innerHTML = `
+        <button class="studio-sb-play" data-id="${s.id}">
+          ${hotkeyTag}<span class="studio-sb-name">${s.name}</span>
+        </button>
+        <input type="range" class="studio-sb-vol" min="0" max="100" value="${Math.round((s.volume ?? 1) * 100)}" title="Volume">
+        <button class="studio-sb-rm" data-id="${s.id}" title="Remove">×</button>`;
+      row.querySelector('.studio-sb-play').addEventListener('click', () => triggerSoundboardSound(s.id));
+      row.querySelector('.studio-sb-vol').addEventListener('input', (e) => {
+        s.volume = Number(e.target.value) / 100;
+        saveSoundboard();
+      });
+      row.querySelector('.studio-sb-rm').addEventListener('click', () => {
+        soundboard = soundboard.filter(x => x.id !== s.id);
+        saveSoundboard();
+        renderSoundboard();
+      });
+      sbContainer.appendChild(row);
+    });
+  }
+
+  function triggerSoundboardSound(id) {
+    const s = soundboard.find(x => x.id === id);
+    if (!s) return;
+    if (engine.audioCtx && engine.audioCtx.state === 'suspended') engine.audioCtx.resume();
+    engine.triggerSound(s.filePath, s.volume ?? 1);
+  }
+
+  if (sbAddBtn) {
+    sbAddBtn.addEventListener('click', async () => {
+      const file = await window.creatorhub.app.openFileDialog({
+        filters: [{ name: 'Audio', extensions: ['mp3','wav','ogg','aac','m4a','flac','webm','opus'] }],
+      });
+      if (!file) return;
+      const baseName = file.replace(/.*[\\/]/, '').replace(/\.[^.]+$/, '');
+      const id = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      soundboard.push({ id, name: baseName, filePath: file, volume: 1 });
+      saveSoundboard();
+      renderSoundboard();
+    });
+  }
+  if (sbStopBtn) {
+    sbStopBtn.addEventListener('click', () => {
+      engine.stopAllSounds();
+      showToast('Stopped all soundboard sounds', 1200);
+    });
+  }
+  renderSoundboard();
+
+  // Soundboard hotkeys 1-9 → play first 9 sounds.  Bindings registered with
+  // the v0.19.0 hotkey infra so the user can rebind them in Studio Settings.
+  for (let i = 1; i <= 9; i++) {
+    const idx = i - 1;
+    registerHotkey(`soundboard.play.${i}`, {
+      label: `Play soundboard slot ${i}`, category: 'Soundboard',
+      handler: () => {
+        const s = soundboard[idx];
+        if (!s) return;
+        triggerSoundboardSound(s.id);
+      },
+    });
+  }
+  registerHotkey('soundboard.stopAll', {
+    label: 'Stop all soundboard sounds', category: 'Soundboard',
+    handler: () => {
+      engine.stopAllSounds();
+      showToast('Stopped all soundboard sounds', 1200);
+    },
+  });
+
+  // Soundboard hotkey defaults — just plain digits 1-9 (no modifier needed)
+  // when no input is focused. Apply only if the user hasn't set a binding yet.
+  const SOUNDBOARD_DEFAULTS = {
+    'soundboard.play.1': '1', 'soundboard.play.2': '2', 'soundboard.play.3': '3',
+    'soundboard.play.4': '4', 'soundboard.play.5': '5', 'soundboard.play.6': '6',
+    'soundboard.play.7': '7', 'soundboard.play.8': '8', 'soundboard.play.9': '9',
+    'soundboard.stopAll': 'Backspace',
+  };
+  for (const [id, key] of Object.entries(SOUNDBOARD_DEFAULTS)) {
+    if (!hotkeyBindings.has(id)) hotkeyBindings.set(id, key);
+  }
+  saveHotkeyBindings();
+
+  // ── Mute-all emergency hotkey ────────────────────────────────────────────
+  registerHotkey('audio.muteAll', {
+    label: 'Mute / unmute every audio source (panic)', category: 'Audio',
+    handler: () => {
+      const anyOn = engine.isAnyAudioUnmuted();
+      if (anyOn) { engine.muteAll();   showToast('🔇 All audio muted',   1200); }
+      else       { engine.unmuteAll(); showToast('🔊 All audio unmuted', 1200); }
+    },
+  });
+  if (!hotkeyBindings.has('audio.muteAll')) {
+    hotkeyBindings.set('audio.muteAll', 'Ctrl+Shift+X');
+    saveHotkeyBindings();
+  }
+
+  // ── Broadcast-row VU meter ───────────────────────────────────────────────
+  // Tiny peak meter that appears on the rec/stream status rows whenever audio
+  // is being captured for output.  Reads from a single analyser hooked to the
+  // engine's audio destination so we don't need per-source instrumentation.
+  if (engine.audioCtx && engine.audioDest) {
+    const analyser = engine.audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    const masterTap = engine.audioCtx.createGain();
+    masterTap.gain.value = 1;
+    // Tap the audioDest's input by re-routing: connect the same source nodes.
+    // Simpler: connect the destination stream back to the analyser via a
+    // MediaStreamAudioSourceNode of audioDest.stream.
+    try {
+      const audioDestSource = engine.audioCtx.createMediaStreamSource(engine.audioDest.stream);
+      audioDestSource.connect(analyser);
+    } catch (e) {
+      console.warn('[broadcast meter] could not tap audioDest stream', e);
+    }
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    function paintMeter(meterEl) {
+      if (!meterEl) return;
+      analyser.getByteFrequencyData(data);
+      // Use the average of the lower half (voice band)
+      let sum = 0; const n = Math.min(64, data.length);
+      for (let i = 0; i < n; i++) sum += data[i];
+      const level = (sum / n) / 255; // 0..1
+      const pct = Math.min(100, Math.round(level * 140));
+      meterEl.style.setProperty('--meter', pct + '%');
+    }
+    // Inject a meter element into each broadcast status row once at init.
+    const recItem    = document.querySelector('.studio-bs-item:nth-child(1)');
+    const streamItem = document.querySelector('.studio-bs-item:nth-child(2)');
+    let recMeter = null, streamMeter = null;
+    if (recItem)    { recMeter    = document.createElement('span'); recMeter.className    = 'studio-bs-meter'; recItem.appendChild(recMeter); }
+    if (streamItem) { streamMeter = document.createElement('span'); streamMeter.className = 'studio-bs-meter'; streamItem.appendChild(streamMeter); }
+    setInterval(() => {
+      // Show meter only when something's actively running
+      const recActive    = (mediaRecorder && mediaRecorder.state !== 'inactive') || multiCanvasRecords.size;
+      const streamActive = (streamMediaRecorder && streamMediaRecorder.state !== 'inactive') || multiCanvasStreams.size;
+      if (recMeter)    recMeter.style.display    = recActive    ? '' : 'none';
+      if (streamMeter) streamMeter.style.display = streamActive ? '' : 'none';
+      if (recActive)    paintMeter(recMeter);
+      if (streamActive) paintMeter(streamMeter);
+    }, 80);
+  }
 
   // ── Video Editor Module ────────────────────────────────────────────────────
   function initVideoEditor() { // eslint-disable-line max-lines-per-function
