@@ -43,10 +43,37 @@ function startLocalServer(rendererRoot) {
         res.end(data);
       });
     });
-    server.listen(0, '127.0.0.1', () => {
+
+    // Pin the port across launches: localStorage is keyed by origin
+    // (host + port), so a fresh random port every launch silently wipes
+    // soundboard, hotkey bindings, stream keys, and everything else
+    // saved in localStorage. Read the last-used port from userData and
+    // try it first; fall back to a random port if it's in use.
+    const portFile = path.join(app.getPath('userData'), 'local-server-port.txt');
+    let preferredPort = 0;
+    try {
+      const saved = parseInt(fs.readFileSync(portFile, 'utf8'), 10);
+      if (saved > 1024 && saved < 65536) preferredPort = saved;
+    } catch (_) {}
+
+    const tryListen = (port) => {
+      server.listen(port, '127.0.0.1');
+    };
+    server.once('error', (err) => {
+      if (err.code !== 'EADDRINUSE' || preferredPort === 0) {
+        return; // give up; let the listening callback never fire
+      }
+      console.warn('[local-server] preferred port', preferredPort, 'in use; falling back');
+      // Fall back to OS-assigned. New port will be saved on success.
+      preferredPort = 0;
+      tryListen(0);
+    });
+    server.on('listening', () => {
       localPort = server.address().port;
+      try { fs.writeFileSync(portFile, String(localPort)); } catch (_) {}
       resolve(localPort);
     });
+    tryListen(preferredPort);
   });
 }
 

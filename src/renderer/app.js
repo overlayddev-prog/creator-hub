@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.20.2': {
+    sections: [
+      {
+        title: 'Critical fix — settings now persist across launches',
+        items: [
+          '<b>Pinned the local server port</b> — the renderer was loading from <code>http://127.0.0.1:&lt;random port&gt;</code>, and because <code>localStorage</code> is keyed by origin (host + port), a fresh random port every launch silently wiped <i>everything</i> stored locally: soundboard, hotkey rebinds, stream destination keys, "patch notes already shown" flags, etc. The port is now saved to userData on first launch and reused; falls back to a random port only if the saved one is taken.',
+          '<b>Heads up</b>: existing data is unfortunately gone (was already lost on every launch before this fix); from this version forward your soundboard, hotkeys, and stream keys will stick.',
+        ],
+      },
+    ],
+  },
   '0.20.1': {
     sections: [
       {
