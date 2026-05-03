@@ -482,8 +482,8 @@ class StudioEngine {
       gainNode = this.audioCtx.createGain();
       gainNode.gain.value = Math.max(0, Math.min(1, volume));
       srcNode.connect(gainNode);
-      gainNode.connect(this.audioDest);                   // → recording / stream
-      if (this._monitorGain) gainNode.connect(this._monitorGain); // → speakers (only when monitor is on)
+      gainNode.connect(this.audioDest);            // → recording / stream
+      gainNode.connect(this.audioCtx.destination); // → speakers (always audible locally)
     } catch (e) {
       console.error('[soundboard] failed to wire audio graph', e);
       return null;

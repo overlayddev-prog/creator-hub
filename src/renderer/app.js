@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.20.3': {
+    sections: [
+      {
+        title: 'Soundboard sounds play locally again',
+        items: [
+          '<b>Reverted v0.20.1\'s monitor-routing change</b> — that fix avoided a double-recording issue on some setups, but at the cost of soundboard sounds being silent until you toggled the global monitor on. Sounds now go straight to your speakers/headphones again so you can actually hear them when you press the button. The mute-all fix from v0.20.1 stays.',
+          '<b>If you previously saw doubled audio in recordings</b>, send me a sample file — the actual loopback source needs a closer look on real recording data instead of educated guesses about routing.',
+        ],
+      },
+    ],
+  },
   '0.20.2': {
     sections: [
       {
