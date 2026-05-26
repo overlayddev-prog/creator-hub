@@ -739,6 +739,7 @@
             </div>
             <div class="ve-topbar-actions">
               <button class="ve-btn ve-btn-outline" id="ve-btn-addclip">+ Add Clip</button>
+              <button class="ve-btn ve-btn-outline" id="ve-btn-addtext">T+ Add Text</button>
               <button class="ve-btn ve-btn-outline" id="ve-btn-fromrec">From Recordings</button>
               <button class="ve-btn ve-btn-outline" id="ve-btn-save">💾 Save</button>
               <button class="ve-btn ve-btn-primary" id="ve-btn-export-top">Export</button>
@@ -816,7 +817,7 @@
               <div class="ve-panel-body active" id="ve-panel-props">
                 <div class="ve-tools-hdr">Selected Clip</div>
                 <div class="ve-info-row"><span class="ve-info-label">File</span><span class="ve-info-val ve-clip-name-val" id="ve-clip-name">—</span></div>
-                <div class="ve-trim-inputs">
+                <div class="ve-trim-inputs" id="ve-trim-inputs">
                   <div class="ve-trim-input-row">
                     <span class="ve-trim-input-label">In</span>
                     <input class="ve-trim-input" id="ve-in-input" value="00:00:00">
@@ -827,8 +828,8 @@
                   </div>
                 </div>
 
-                <div class="ve-tools-hdr" style="margin-top:8px;">Speed</div>
-                <div class="ve-speed-row">
+                <div class="ve-tools-hdr" id="ve-speed-hdr" style="margin-top:8px;">Speed</div>
+                <div class="ve-speed-row" id="ve-speed-row">
                   <button class="ve-speed-btn" data-speed="0.25">0.25×</button>
                   <button class="ve-speed-btn" data-speed="0.5">0.5×</button>
                   <button class="ve-speed-btn active" data-speed="1">1×</button>
@@ -865,6 +866,74 @@
                     <button class="ve-btn ve-btn-outline" id="ve-trans-pick" style="flex:1; font-size:10px;">🎬 Pick Transition</button>
                     <button class="ve-btn ve-btn-outline" id="ve-trans-remove" style="flex:1; font-size:10px; display:none; color:var(--red); border-color:rgba(255,51,85,0.3);">✕ Remove</button>
                   </div>
+                </div>
+
+                <!-- Text clip panel (text overlay selected) -->
+                <div id="ve-text-panel" style="display:none;">
+                  <div class="ve-tools-hdr" style="color:#f59e0b; margin-top:8px;">Text Overlay</div>
+                  <textarea id="ve-text-content" class="ve-text-content" rows="3" placeholder="Type your text…"></textarea>
+                  <div class="ve-text-grid">
+                    <label class="ve-text-field">
+                      <span class="ve-text-field-label">Font</span>
+                      <select id="ve-text-font" class="ve-text-input">
+                        <option value="Inter, sans-serif">Inter</option>
+                        <option value="system-ui, sans-serif">System</option>
+                        <option value="Arial, Helvetica, sans-serif">Arial</option>
+                        <option value="'Times New Roman', serif">Times</option>
+                        <option value="'Courier New', monospace">Courier</option>
+                        <option value="Georgia, serif">Georgia</option>
+                        <option value="Impact, sans-serif">Impact</option>
+                      </select>
+                    </label>
+                    <label class="ve-text-field">
+                      <span class="ve-text-field-label">Weight</span>
+                      <select id="ve-text-weight" class="ve-text-input">
+                        <option value="400">Regular</option>
+                        <option value="600" selected>Semibold</option>
+                        <option value="700">Bold</option>
+                        <option value="900">Black</option>
+                      </select>
+                    </label>
+                    <label class="ve-text-field">
+                      <span class="ve-text-field-label">Size</span>
+                      <input type="number" id="ve-text-size" class="ve-text-input" value="48" min="8" max="400" step="1">
+                    </label>
+                    <label class="ve-text-field">
+                      <span class="ve-text-field-label">Align</span>
+                      <select id="ve-text-align" class="ve-text-input">
+                        <option value="left">Left</option>
+                        <option value="center" selected>Center</option>
+                        <option value="right">Right</option>
+                      </select>
+                    </label>
+                    <label class="ve-text-field">
+                      <span class="ve-text-field-label">Color</span>
+                      <input type="color" id="ve-text-color" class="ve-text-input ve-text-color-input" value="#ffffff">
+                    </label>
+                    <label class="ve-text-field">
+                      <span class="ve-text-field-label">Background</span>
+                      <div class="ve-text-bg-row">
+                        <input type="color" id="ve-text-bg-color" class="ve-text-input ve-text-color-input" value="#000000">
+                        <input type="range" id="ve-text-bg-alpha" class="ve-text-input" min="0" max="100" value="0" title="Background opacity">
+                      </div>
+                    </label>
+                    <label class="ve-text-field">
+                      <span class="ve-text-field-label">Outline</span>
+                      <div class="ve-text-bg-row">
+                        <input type="color" id="ve-text-outline-color" class="ve-text-input ve-text-color-input" value="#000000">
+                        <input type="range" id="ve-text-outline-width" class="ve-text-input" min="0" max="20" value="0" title="Outline width (px)">
+                      </div>
+                    </label>
+                    <label class="ve-text-field">
+                      <span class="ve-text-field-label">Shadow</span>
+                      <input type="checkbox" id="ve-text-shadow-on">
+                    </label>
+                  </div>
+                  <div class="ve-ovl-btns">
+                    <button class="ve-btn ve-btn-outline ve-ovl-action-btn" id="ve-text-goto">⏩ Go to clip</button>
+                    <button class="ve-btn ve-btn-outline ve-ovl-action-btn ve-ovl-del-btn" id="ve-text-delete">🗑 Remove text</button>
+                  </div>
+                  <div class="ve-ovl-hint">Drag in preview to reposition · Drag corners to resize · Edit text above</div>
                 </div>
 
                 <!-- Layer clip panel (V2+ selected) -->

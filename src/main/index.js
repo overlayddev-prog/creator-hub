@@ -759,21 +759,106 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
   if (fadeOut > 0) { vf.push(`fade=type=out:start_time=${totalDur - fadeOut}:duration=${fadeOut}`); af.push(`afade=type=out:start_time=${totalDur - fadeOut}:duration=${fadeOut}`); }
   if (vf.length) { filterParts.push(`${finalV}${vf.join(',')}[vfades]`); filterParts.push(`${finalA}${af.join(',')}[afades]`); finalV = '[vfades]'; finalA = '[afades]'; }
 
-  // Overlay (PiP) clips — added as extra inputs after the main clips
+  // Overlay (PiP video) and Text (drawtext) clips — both live in overlayClips.
+  // Text clips don't need an extra input; they apply a drawtext filter to the
+  // current video chain. Video overlays get added as extra inputs.
+  function escFFmpegText(s) {
+    return String(s || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g,  "\\'")
+      .replace(/:/g,  '\\:')
+      .replace(/\n/g, ' ');  // drawtext supports newlines but escaping is brittle; flatten for v1
+  }
+  function pickFontFile() {
+    // Hardcoded fallbacks per OS. ffmpeg-static doesn't bundle fontconfig.
+    const candidates = process.platform === 'win32'
+      ? ['C\\:/Windows/Fonts/arialbd.ttf', 'C\\:/Windows/Fonts/arial.ttf', 'C\\:/Windows/Fonts/segoeuib.ttf']
+      : process.platform === 'darwin'
+        ? ['/Library/Fonts/Arial.ttf', '/System/Library/Fonts/Helvetica.ttc']
+        : ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'];
+    // FFmpeg drawtext fontfile is colon-escaped on Windows
+    return candidates[0];
+  }
+  const FONTFILE = pickFontFile();
+
   if (hasOverlays) {
     const baseIdx = clips.length;
+    let extraInputCounter = 0;
     overlayClips.forEach((ov, oi) => {
-      const idx = baseIdx + oi;
+      const tStart = (ov.startSec || 0).toFixed(3);
+      const tEnd   = (ov.endSec   || 9999).toFixed(3);
+      const out    = `[vwith_ov${oi}]`;
+
+      if (ov.type === 'text') {
+        // Text overlay — drawtext directly on the current video chain.
+        // FFmpeg drawtext doesn't honor a bounding box, so we compute x/y per
+        // alignment within the canvas-relative box (canvas_w*x/100, canvas_h*y/100,
+        // canvas_w*w/100, canvas_h*h/100). Text is vertically centered within the box.
+        const px = (ov.x || 0) / 100, py = (ov.y || 40) / 100;
+        const pw = (ov.w || 80) / 100, ph = (ov.h || 20) / 100;
+        const boxX = `main_w*${px.toFixed(4)}`;
+        const boxY = `main_h*${py.toFixed(4)}`;
+        const boxW = `main_w*${pw.toFixed(4)}`;
+        const boxH = `main_h*${ph.toFixed(4)}`;
+        // Horizontal alignment within the box
+        const align = ov.align || 'center';
+        let xExpr;
+        if (align === 'left')        xExpr = `${boxX}`;
+        else if (align === 'right')  xExpr = `(${boxX}+${boxW}-text_w)`;
+        else                          xExpr = `(${boxX}+(${boxW}-text_w)/2)`;
+        // Vertical: center within box
+        const yExpr = `(${boxY}+(${boxH}-text_h)/2)`;
+
+        // Font size — fontSize is at 1080p reference; scale to output canvas height
+        const refH = 1080;
+        const sizeExpr = `main_h*${(((ov.fontSize ?? 48) / refH)).toFixed(4)}`;
+
+        const color   = (ov.color || '#ffffff').replace('#', '0x');
+        const filterArgs = [
+          `fontfile=${FONTFILE}`,
+          `text='${escFFmpegText(ov.text)}'`,
+          `x=${xExpr}`,
+          `y=${yExpr}`,
+          `fontsize=${sizeExpr}`,
+          `fontcolor=${color}`,
+        ];
+        // Outline (stroke around text)
+        if ((ov.outlineWidth ?? 0) > 0) {
+          const outColor = (ov.outlineColor || '#000000').replace('#', '0x');
+          filterArgs.push(`bordercolor=${outColor}`);
+          filterArgs.push(`borderw=${Math.round(ov.outlineWidth)}`);
+        }
+        // Shadow (FFmpeg drawtext has shadowx/shadowy/shadowcolor)
+        if (ov.shadow) {
+          filterArgs.push(`shadowx=2`);
+          filterArgs.push(`shadowy=2`);
+          filterArgs.push(`shadowcolor=black@0.6`);
+        }
+        // Background box (filled rect behind the text — covers whole text bbox)
+        if ((ov.bgAlpha ?? 0) > 0) {
+          const bg = (ov.bgColor || '#000000').replace('#', '0x');
+          filterArgs.push(`box=1`);
+          filterArgs.push(`boxcolor=${bg}@${Math.max(0, Math.min(1, ov.bgAlpha)).toFixed(3)}`);
+          filterArgs.push(`boxborderw=8`);
+        }
+        // Timing
+        filterArgs.push(`enable='between(t\\,${tStart}\\,${tEnd})'`);
+
+        filterParts.push(`${finalV}drawtext=${filterArgs.join(':')}${out}`);
+        finalV = out;
+        return;
+      }
+
+      // Video overlay (existing PiP behavior)
+      const idx = baseIdx + extraInputCounter;
+      extraInputCounter++;
       inputs.push('-i', ov.filePath);
       const xExpr  = `main_w*${((ov.x || 0) / 100).toFixed(4)}`;
       const yExpr  = `main_h*${((ov.y || 0) / 100).toFixed(4)}`;
       const wExpr  = `main_w*${((ov.w || 30) / 100).toFixed(4)}`;
       const hExpr  = `main_h*${((ov.h || 30) / 100).toFixed(4)}`;
-      const tStart = (ov.startSec || 0).toFixed(3);
-      const tEnd   = (ov.endSec   || 9999).toFixed(3);
       const shifted = `[ovshift${oi}]`;
       const scaled  = `[ovscaled${oi}]`;
-      const out     = `[vwith_ov${oi}]`;
       filterParts.push(`[${idx}:v]setpts=PTS+${tStart}/TB${shifted}`);
       filterParts.push(`${shifted}scale=${wExpr}:${hExpr}${scaled}`);
       filterParts.push(`${finalV}${scaled}overlay=x=${xExpr}:y=${yExpr}:enable='between(t\\,${tStart}\\,${tEnd})'${out}`);

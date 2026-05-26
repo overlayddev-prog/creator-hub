@@ -14,6 +14,28 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.21.0': {
+    sections: [
+      {
+        title: 'Editor: Text System Bundle',
+        items: [
+          '<b>T+ Add Text</b> — new button in the editor topbar drops a text overlay clip at the playhead. Text clips are V2+ layer clips like any other overlay — drag in the preview to reposition, drag corners to resize, drag in the timeline to move/trim.',
+          '<b>Text properties panel</b> — selecting a text clip opens a side-panel section with: text content (multi-line), font family, font weight, size, color, background color + opacity, outline color + width, drop shadow, and horizontal alignment.',
+          '<b>Live preview</b> — every edit reflects in the preview immediately. Sizes scale with the preview canvas so the layout looks right at any zoom.',
+          '<b>Click routing</b> — text overlays are selectable by clicking them in the preview (uses the existing V1→V2+ click delegation). Single-click selects the text, then use the side panel or drag handles to edit.',
+          '<b>Export support</b> — text clips render into the exported video via FFmpeg <code>drawtext</code>: positioned per canvas-relative bounds, timed to the clip\'s time range, with outline / shadow / background-box. Uses system fonts (Arial / DejaVu) — no font bundling yet.',
+          '<b>Persisted in <code>.editor</code> projects</b> — text clips save and load with their full styling. (Older saved projects that had the OLD per-clip text overlay format are still loaded the legacy way; no migration needed.)',
+        ],
+      },
+      {
+        title: 'Notes',
+        items: [
+          'This is the first half of the editor refresh. Next prompts on deck: Captions Bundle (Whisper auto-captioning, builds on this text system), Editor Polish Bundle (crop, trim ripple, chapter markers), Speed & Color Bundle.',
+          'Multi-line text in exports is currently flattened to a single line; native multi-line drawtext is a v0.21.x follow-up.',
+        ],
+      },
+    ],
+  },
   '0.20.4': {
     sections: [
       {
@@ -5129,14 +5151,56 @@ const PLATFORM_META = {
       const ph = document.createElement('div');
       ph.className = 've-ov-placeholder';
       ph.innerHTML = '<span class="ve-ov-placeholder-hint">outside active range</span>';
+      // Text element for text-type V2+ clips. Hidden by default; shown
+      // instead of <video> when the active clip on this track is a text clip.
+      const txt = document.createElement('div');
+      txt.className = 've-ov-text';
+      txt.style.display = 'none';
       ['nw','ne','sw','se'].forEach(corner => {
         const h = document.createElement('div'); h.className = `ve-ov-handle ${corner}`; wrap.appendChild(h);
       });
-      wrap.appendChild(vid); wrap.appendChild(ph);
+      wrap.appendChild(vid); wrap.appendChild(ph); wrap.appendChild(txt);
       layersContainer.appendChild(wrap);
-      veLayers.push({ wrap, video: vid, placeholder: ph });
+      veLayers.push({ wrap, video: vid, placeholder: ph, text: txt });
     }
     layersContainer.style.pointerEvents = 'none';
+
+    // ── Text clip defaults ────────────────────────────────────────────────
+    const TEXT_DEFAULTS = {
+      text: 'Your text here',
+      fontFamily: 'Inter, sans-serif',
+      fontWeight: '600',
+      fontSize: 48,       // px at 1080p reference; preview scales by canvas height
+      color: '#ffffff',
+      bgColor: '#000000',
+      bgAlpha: 0,         // 0-1
+      align: 'center',
+      outlineColor: '#000000',
+      outlineWidth: 0,
+      shadow: false,
+    };
+    function applyTextStyleTo(el, clip, refH) {
+      const scale = (refH || 1080) / 1080; // text sized at 1080p reference; scales with preview height
+      el.style.fontFamily = clip.fontFamily || TEXT_DEFAULTS.fontFamily;
+      el.style.fontWeight = clip.fontWeight || TEXT_DEFAULTS.fontWeight;
+      el.style.fontSize   = ((clip.fontSize ?? TEXT_DEFAULTS.fontSize) * scale) + 'px';
+      el.style.color      = clip.color      || TEXT_DEFAULTS.color;
+      el.style.textAlign  = clip.align      || TEXT_DEFAULTS.align;
+      const bgA = (clip.bgAlpha ?? TEXT_DEFAULTS.bgAlpha);
+      el.style.background = bgA > 0 ? hexToRgba(clip.bgColor || TEXT_DEFAULTS.bgColor, bgA) : 'transparent';
+      const ow = clip.outlineWidth ?? TEXT_DEFAULTS.outlineWidth;
+      el.style.webkitTextStroke = ow > 0 ? `${ow * scale}px ${clip.outlineColor || TEXT_DEFAULTS.outlineColor}` : 'none';
+      const shadow = !!clip.shadow;
+      el.style.textShadow = shadow ? `${2*scale}px ${2*scale}px ${6*scale}px rgba(0,0,0,0.6)` : 'none';
+      el.textContent = clip.text ?? TEXT_DEFAULTS.text;
+    }
+    function hexToRgba(hex, alpha01) {
+      const m = /^#?([a-f0-9]{6})$/i.exec(hex || '');
+      if (!m) return `rgba(0,0,0,${alpha01})`;
+      const v = parseInt(m[1], 16);
+      const r = (v >> 16) & 0xff, g = (v >> 8) & 0xff, b = v & 0xff;
+      return `rgba(${r},${g},${b},${alpha01})`;
+    }
 
     // ── Audio element pool (detached audio tracks) ─────────────────────────────
     const MAX_AUDIO_TRACKS = 4;
@@ -5224,8 +5288,10 @@ const PLATFORM_META = {
     function genId() { return 've' + (++veIdSeq); }
 
     function computeLayout() {
-      // All clips keep their own timelineStart — just recalculate duration
+      // All clips keep their own timelineStart — just recalculate duration.
+      // Text clips own their own duration (no inPoint/outPoint), so skip them.
       for (const c of veClips) {
+        if (c.type === 'text') continue;
         c.timelineDuration = (c.outPoint - c.inPoint) / (c.speed || 1);
       }
       // Audio clips: recalc duration
@@ -5563,6 +5629,31 @@ const PLATFORM_META = {
           const cw  = cx2 - cx1;
           if (cx2 < LW || cx1 > W) continue;
           const isSel = clip.id === veSelId;
+
+          // Text clips render with an amber palette to distinguish them from video
+          if (clip.type === 'text') {
+            bgCtx.save();
+            const clipL = Math.max(LW, cx1), clipR = Math.min(W, cx2);
+            const visW  = Math.max(0, clipR - clipL);
+            bgCtx.beginPath(); rrect(bgCtx, clipL, ry + 2, visW, VID_H - 4, 4); bgCtx.clip();
+            bgCtx.fillStyle = isSel ? 'rgba(245,158,11,0.35)' : 'rgba(245,158,11,0.18)';
+            bgCtx.fillRect(clipL, ry + 2, visW, VID_H - 4);
+            // T+ chip on the left
+            bgCtx.fillStyle = '#f59e0b'; bgCtx.font = 'bold 11px sans-serif'; bgCtx.textAlign = 'left';
+            bgCtx.fillText('T', clipL + 6, ry + 16);
+            // Truncated text snippet
+            bgCtx.fillStyle = 'rgba(255,255,255,0.92)'; bgCtx.font = 'bold 11px sans-serif';
+            const snippet = (clip.text || '').split('\n')[0].slice(0, 60);
+            bgCtx.fillText(snippet, clipL + 20, ry + 16);
+            bgCtx.fillStyle = 'rgba(255,255,255,0.6)'; bgCtx.font = '9px sans-serif';
+            bgCtx.fillText(`${clip.fontSize ?? TEXT_DEFAULTS.fontSize}px · ${clip.align || 'center'}`, clipL + 20, ry + 30);
+            bgCtx.restore();
+            if (isSel) {
+              bgCtx.strokeStyle = '#f59e0b'; bgCtx.lineWidth = 2;
+              rrect(bgCtx, cx1, ry + 2, cw, VID_H - 4, 4); bgCtx.stroke();
+            }
+            continue;
+          }
 
           bgCtx.save();
           bgCtx.beginPath(); bgCtx.rect(Math.max(LW,cx1), ry, Math.min(cw, W-Math.max(LW,cx1)), VID_H); bgCtx.clip();
@@ -5902,6 +5993,20 @@ const PLATFORM_META = {
         layer.wrap.style.width    = pct(kPos.w, 5) + '%';
         layer.wrap.style.height   = pct(kPos.h, 5) + '%';
         layer.wrap.classList.toggle('ve-ov-selected', displayClip.id === veSelId);
+        layer.wrap.classList.toggle('ve-text-clip',   displayClip.type === 'text');
+
+        // ── Text clip: render text instead of video ────────────────────────
+        if (displayClip.type === 'text') {
+          if (!layer.video.paused) layer.video.pause();
+          layer.video.style.display = 'none';
+          if (layer.placeholder) layer.placeholder.style.display = 'none';
+          layer.text.style.display = 'flex';
+          const cRect = $('ve-video-container').getBoundingClientRect();
+          applyTextStyleTo(layer.text, displayClip, cRect.height);
+          continue;
+        }
+        // For video clips below, ensure the text element stays hidden
+        layer.text.style.display = 'none';
 
         {
           // ── Video clip: sync video ────────────────────────────────────────
@@ -6209,6 +6314,106 @@ const PLATFORM_META = {
       });
       const v1WrapEl = $('ve-v1-wrap');
       if (v1WrapEl) v1WrapEl.style.pointerEvents = 'auto';
+
+      // ── Text-clip panel ────────────────────────────────────────────────
+      const isText = clip && clip.type === 'text';
+      const textPanel = $('ve-text-panel');
+      if (textPanel) textPanel.style.display = isText ? 'block' : 'none';
+      // Sections that don't apply to text clips
+      const trimInputs = $('ve-trim-inputs');
+      const speedRow   = $('ve-speed-row');
+      const speedHdr   = $('ve-speed-hdr');
+      if (trimInputs) trimInputs.style.display = isText ? 'none' : '';
+      if (speedRow)   speedRow.style.display   = isText ? 'none' : '';
+      if (speedHdr)   speedHdr.style.display   = isText ? 'none' : '';
+      // Text clips have no audio — hide volume / mute / separate-audio
+      if (isText) {
+        const volRowEl = $('ve-vol-row');         if (volRowEl) volRowEl.style.display = 'none';
+        const sepBtnEl = $('ve-sep-audio-btn');   if (sepBtnEl) sepBtnEl.style.display = 'none';
+        const muteBtnEl = $('ve-mute-btn');       if (muteBtnEl) muteBtnEl.style.display = 'none';
+      }
+      // The Layer-Clip (V2+ video) panel must hide for text — text panel replaces it
+      if (isText && layerPanel) layerPanel.style.display = 'none';
+      if (isText) {
+        $('ve-clip-name').textContent = `Text: ${(clip.text || '').slice(0, 28)}${(clip.text || '').length > 28 ? '…' : ''}`;
+        const cc = $('ve-text-content');
+        if (cc && document.activeElement !== cc) cc.value = clip.text || '';
+        const fld = (id, v) => { const el = $(id); if (el && document.activeElement !== el) el.value = v; };
+        fld('ve-text-font',          clip.fontFamily   || TEXT_DEFAULTS.fontFamily);
+        fld('ve-text-weight',        clip.fontWeight   || TEXT_DEFAULTS.fontWeight);
+        fld('ve-text-size',          clip.fontSize     ?? TEXT_DEFAULTS.fontSize);
+        fld('ve-text-align',         clip.align        || TEXT_DEFAULTS.align);
+        fld('ve-text-color',         clip.color        || TEXT_DEFAULTS.color);
+        fld('ve-text-bg-color',      clip.bgColor      || TEXT_DEFAULTS.bgColor);
+        fld('ve-text-bg-alpha',      Math.round((clip.bgAlpha ?? TEXT_DEFAULTS.bgAlpha) * 100));
+        fld('ve-text-outline-color', clip.outlineColor || TEXT_DEFAULTS.outlineColor);
+        fld('ve-text-outline-width', clip.outlineWidth ?? TEXT_DEFAULTS.outlineWidth);
+        const shEl = $('ve-text-shadow-on');
+        if (shEl) shEl.checked = !!clip.shadow;
+      }
+    }
+
+    // ── Wire text-panel inputs (one-time setup; refreshClipPanel populates values) ──
+    function bindTextInput(id, prop, transform = v => v) {
+      const el = $(id);
+      if (!el) return;
+      const handler = () => {
+        const c = selectedClip();
+        if (!c || c.type !== 'text') return;
+        c[prop] = transform(el.value);
+        // Re-render preview text immediately + refresh panel name
+        const li = (c.track || 0) - 1;
+        if (li >= 0 && li < MAX_LAYERS) {
+          const cRect = $('ve-video-container').getBoundingClientRect();
+          applyTextStyleTo(veLayers[li].text, c, cRect.height);
+        }
+        if (prop === 'text') {
+          $('ve-clip-name').textContent = `Text: ${(c.text || '').slice(0, 28)}${(c.text || '').length > 28 ? '…' : ''}`;
+        }
+        drawTimeline();
+      };
+      el.addEventListener('input',  handler);
+      el.addEventListener('change', handler);
+    }
+    bindTextInput('ve-text-content',        'text');
+    bindTextInput('ve-text-font',           'fontFamily');
+    bindTextInput('ve-text-weight',         'fontWeight');
+    bindTextInput('ve-text-size',           'fontSize',     v => Math.max(8, Math.min(400, parseInt(v, 10) || TEXT_DEFAULTS.fontSize)));
+    bindTextInput('ve-text-align',          'align');
+    bindTextInput('ve-text-color',          'color');
+    bindTextInput('ve-text-bg-color',       'bgColor');
+    bindTextInput('ve-text-bg-alpha',       'bgAlpha',      v => Math.max(0, Math.min(1, (parseInt(v, 10) || 0) / 100)));
+    bindTextInput('ve-text-outline-color',  'outlineColor');
+    bindTextInput('ve-text-outline-width',  'outlineWidth', v => Math.max(0, Math.min(20, parseInt(v, 10) || 0)));
+    {
+      const sh = $('ve-text-shadow-on');
+      if (sh) sh.addEventListener('change', () => {
+        const c = selectedClip();
+        if (!c || c.type !== 'text') return;
+        c.shadow = !!sh.checked;
+        const li = (c.track || 0) - 1;
+        if (li >= 0 && li < MAX_LAYERS) {
+          const cRect = $('ve-video-container').getBoundingClientRect();
+          applyTextStyleTo(veLayers[li].text, c, cRect.height);
+        }
+      });
+    }
+    // Side-panel buttons: go-to (seek to clip) + delete
+    {
+      const gotoBtn = $('ve-text-goto');
+      if (gotoBtn) gotoBtn.addEventListener('click', () => {
+        const c = selectedClip();
+        if (c && c.type === 'text') seekToPos(c.timelineStart);
+      });
+      const delBtn = $('ve-text-delete');
+      if (delBtn) delBtn.addEventListener('click', () => {
+        const c = selectedClip();
+        if (!c || c.type !== 'text') return;
+        veClips = veClips.filter(x => x.id !== c.id);
+        veSelId = null;
+        computeLayout(); pushHistory();
+        refreshClipPanel(); drawTimeline();
+      });
     }
 
     // ── Timeline mouse interactions ───────────────────────────────────────────
@@ -6340,14 +6545,26 @@ const PLATFORM_META = {
       }
 
       if (veDragging === 'trimL' && clip) {
-        clip.inPoint = Math.max(0, Math.min(clip.outPoint - 0.1, (t - clip.timelineStart) * clip.speed));
+        if (clip.type === 'text') {
+          const end = clip.timelineStart + clip.timelineDuration;
+          const newStart = Math.max(0, Math.min(end - 0.1, t));
+          clip.timelineDuration = Math.max(0.1, end - newStart);
+          clip.timelineStart = newStart;
+        } else {
+          clip.inPoint = Math.max(0, Math.min(clip.outPoint - 0.1, (t - clip.timelineStart) * clip.speed));
+          $('ve-in-input').value = veSecsToHMS(clip.inPoint);
+        }
         computeLayout(); clampScroll();
-        $('ve-in-input').value = veSecsToHMS(clip.inPoint);
       } else if (veDragging === 'trimR' && clip) {
-        const relEnd = t - clip.timelineStart;
-        clip.outPoint = Math.max(clip.inPoint + 0.1, Math.min(clip.fileDuration, clip.inPoint + relEnd * clip.speed));
+        if (clip.type === 'text') {
+          const newEnd = Math.max(clip.timelineStart + 0.1, t);
+          clip.timelineDuration = newEnd - clip.timelineStart;
+        } else {
+          const relEnd = t - clip.timelineStart;
+          clip.outPoint = Math.max(clip.inPoint + 0.1, Math.min(clip.fileDuration, clip.inPoint + relEnd * clip.speed));
+          $('ve-out-input').value = veSecsToHMS(clip.outPoint);
+        }
         computeLayout(); clampScroll();
-        $('ve-out-input').value = veSecsToHMS(clip.outPoint);
       } else if (veDragging === 'audioTrimL' && aclip) {
         aclip.inPoint = Math.max(0, Math.min(aclip.outPoint - 0.1, t - aclip.timelineStart));
         computeLayout(); clampScroll();
@@ -6722,6 +6939,49 @@ const PLATFORM_META = {
       $('ve-btn-hype').disabled = false; $('ve-btn-hype').textContent = '⚡ Find Hype';
     });
 
+    // ── Add a text overlay (V2+ text clip) ───────────────────────────────
+    function addTextClip(textContent) {
+      // Find the lowest V2+ track that has no clip overlapping the current playhead
+      const defaultDur = 5; // seconds
+      const pos = vePlayPos;
+      let track = 1;
+      for (; track <= MAX_LAYERS; track++) {
+        const conflict = veClips.find(c => c.track === track &&
+          pos < c.timelineStart + c.timelineDuration && pos + defaultDur > c.timelineStart);
+        if (!conflict) break;
+      }
+      if (track > MAX_LAYERS) {
+        showToast('No free V-layer to place text on');
+        return null;
+      }
+      const clip = {
+        id: genId(),
+        type: 'text',
+        track,
+        timelineStart:    pos,
+        timelineDuration: defaultDur,
+        // Position: centered horizontally, slightly above center vertically
+        x: 10, y: 40, w: 80, h: 20,
+        // Text-specific
+        text:         (textContent && textContent.trim()) || TEXT_DEFAULTS.text,
+        fontFamily:   TEXT_DEFAULTS.fontFamily,
+        fontWeight:   TEXT_DEFAULTS.fontWeight,
+        fontSize:     TEXT_DEFAULTS.fontSize,
+        color:        TEXT_DEFAULTS.color,
+        bgColor:      TEXT_DEFAULTS.bgColor,
+        bgAlpha:      TEXT_DEFAULTS.bgAlpha,
+        align:        TEXT_DEFAULTS.align,
+        outlineColor: TEXT_DEFAULTS.outlineColor,
+        outlineWidth: TEXT_DEFAULTS.outlineWidth,
+        shadow:       TEXT_DEFAULTS.shadow,
+      };
+      veClips.push(clip);
+      veSelId = clip.id;
+      computeLayout(); pushHistory();
+      refreshClipPanel(); drawTimeline();
+      return clip;
+    }
+
     // ── Add / load clip ───────────────────────────────────────────────────────
     async function addClipFromFile(fp, targetTrack = 0) {
       const fileName = fp.split(/[\\/]/).pop();
@@ -6805,11 +7065,30 @@ const PLATFORM_META = {
         muted: c.muted || false,
         transitionIn: c.transitionIn || null,
       }));
-      const overlayClips = veClips.filter(c => c.track > 0).map(c => ({
-        filePath: c.filePath, startSec: c.timelineStart, endSec: c.timelineStart + c.timelineDuration,
-        x: c.x ?? 50, y: c.y ?? 5, w: c.w ?? 35, h: c.h ?? 35,
-        inPoint: c.inPoint, outPoint: c.outPoint,
-      }));
+      const overlayClips = veClips.filter(c => c.track > 0).map(c => {
+        const base = {
+          type: c.type || 'video',
+          startSec: c.timelineStart, endSec: c.timelineStart + c.timelineDuration,
+          x: c.x ?? 50, y: c.y ?? 5, w: c.w ?? 35, h: c.h ?? 35,
+        };
+        if (c.type === 'text') {
+          return {
+            ...base,
+            text:         c.text         ?? 'Text',
+            fontFamily:   c.fontFamily   ?? 'Inter, sans-serif',
+            fontWeight:   c.fontWeight   ?? '600',
+            fontSize:     c.fontSize     ?? 48,
+            color:        c.color        ?? '#ffffff',
+            bgColor:      c.bgColor      ?? '#000000',
+            bgAlpha:      c.bgAlpha      ?? 0,
+            align:        c.align        ?? 'center',
+            outlineColor: c.outlineColor ?? '#000000',
+            outlineWidth: c.outlineWidth ?? 0,
+            shadow:       !!c.shadow,
+          };
+        }
+        return { ...base, filePath: c.filePath, inPoint: c.inPoint, outPoint: c.outPoint };
+      });
 
       [$('ve-export-btn'), $('ve-btn-export-top')].forEach(b => { if (b) { b.disabled = true; b.textContent = '⏳ Exporting…'; } });
       $('ve-export-progress').style.display = 'block';
@@ -6862,7 +7141,9 @@ const PLATFORM_META = {
     async function loadProjectState(state, pathMap) {
       // pathMap: { originalPath -> extractedTempPath }
       if (!state) { computeLayout(); updateUndoRedo(); refreshClipPanel(); drawTimeline(); return; }
-      veClips = (state.clips || []).filter(c => c.type !== 'text').map(c => {
+      veClips = (state.clips || []).map(c => {
+        // Text clips have no underlying file — load them as-is
+        if (c.type === 'text') return { ...c };
         return { ...c, fileUrl: assetUrl(pathMap[c.filePath] || c.filePath), filePath: pathMap[c.filePath] || c.filePath, waveform: null, thumbnails: [] };
       });
       veAudioClips = (state.audioClips || []).map(a => ({
@@ -7241,6 +7522,14 @@ const PLATFORM_META = {
 
     // ── Wire up buttons ────────────────────────────────────────────────────────
     $('ve-btn-addclip').addEventListener('click',    () => openVeFilePicker());
+    $('ve-btn-addtext').addEventListener('click',    () => {
+      const clip = addTextClip();
+      if (clip) {
+        seekToPos(clip.timelineStart);
+        // Focus the text content textarea so the user can immediately type
+        setTimeout(() => { const cc = $('ve-text-content'); if (cc) { cc.focus(); cc.select(); } }, 50);
+      }
+    });
     $('ve-btn-fromrec').addEventListener('click',    () => openVeFromRecordings());
     $('ve-btn-export-top').addEventListener('click', doVeExport);
     $('ve-export-btn').addEventListener('click',     doVeExport);
