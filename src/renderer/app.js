@@ -14,6 +14,18 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.20.4': {
+    sections: [
+      {
+        title: 'Fix memory leak + frozen-on-refocus when window is out of focus',
+        items: [
+          '<b>Capped browser-source frame backlog</b> — when CreatorHub\'s window was out of focus, Chromium throttled the main thread to ~1 fps while the worker that processes Overlayd browser-source frames kept producing them at 30 fps. The worker→main thread message queue grew until the user clicked back in, then drained all at once — the symptom was a frozen-looking window for several seconds followed by a sudden RAM drop. Each pending message held an ArrayBuffer up to 8 MB, so a few minutes out of focus could accumulate hundreds of MB.',
+          'Fix: per-source in-flight cap of 2 messages. If a frame arrives while 2 are already pending, drop it. The next frame within a few ms supersedes anyway, so no visible difference at runtime — just no unbounded growth.',
+          'This issue predated v0.20 but became more noticeable after Overlayd sources moved into the active layer pipeline.',
+        ],
+      },
+    ],
+  },
   '0.20.3': {
     sections: [
       {

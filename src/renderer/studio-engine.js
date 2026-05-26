@@ -439,8 +439,21 @@ class StudioEngine {
       const blob = new Blob([workerCode], { type: 'application/javascript' });
       const worker = new Worker(URL.createObjectURL(blob));
 
+      // Per-source in-flight cap: when the main thread is throttled (window
+      // out of focus) the worker keeps producing frames faster than the main
+      // thread can drain them, so messages with multi-MB ArrayBuffers pile up
+      // until the user clicks back in and the queue drains all at once
+      // (frozen screen + ram-drop pattern). Capping in-flight messages per
+      // source means we drop frames at the input side and never accumulate.
+      // 2 is enough to keep the pipeline saturated without growing under
+      // throttling — the latest frame still wins because each putImageData
+      // overwrites the dirty region.
+      const MAX_PENDING_PER_SOURCE = 2;
+      const pendingFrames = new Map(); // srcId → count
+
       worker.onmessage = (e) => {
         const { srcId, buf, dx, dy, dw, dh } = e.data;
+        pendingFrames.set(srcId, Math.max(0, (pendingFrames.get(srcId) || 1) - 1));
         const s = this.sources.find(s => s._browserId === srcId);
         if (!s) return;
         const ctx = s.element.getContext('2d');
@@ -451,6 +464,9 @@ class StudioEngine {
       window.creatorhub.studio.onBrowserSourceFrame((srcId, buf, dx, dy, dw, dh) => {
         const s = this.sources.find(s => s._browserId === srcId);
         if (!s) return;
+        const pending = pendingFrames.get(srcId) || 0;
+        if (pending >= MAX_PENDING_PER_SOURCE) return; // drop frame, don't grow the queue
+        pendingFrames.set(srcId, pending + 1);
         const copy = new Uint8ClampedArray(buf).buffer;
         worker.postMessage({ buf: copy, srcId, dx, dy, dw, dh }, [copy]);
       });
