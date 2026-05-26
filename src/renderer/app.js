@@ -14,6 +14,16 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.21.1': {
+    sections: [
+      {
+        title: 'Editor fix',
+        items: [
+          '<b>Moving a clip between tracks updates immediately</b> — the finalize step after a clip-move drag was syncing the preview but not redrawing the timeline, so the clip stayed visually on its old track until you clicked somewhere else. One missing <code>drawTimeline()</code> call; pre-existing bug surfaced while testing the text overlay system.',
+        ],
+      },
+    ],
+  },
   '0.21.0': {
     sections: [
       {
@@ -6699,7 +6709,7 @@ const PLATFORM_META = {
         }
         delete veDragClip._dragOriginals;
         veDragTargetTrack = null; pushHistory(); veDragClip = null;
-        refreshClipPanel();
+        refreshClipPanel(); drawTimeline();
       }
       veDragging = null; veSnapPos = null;
     });
