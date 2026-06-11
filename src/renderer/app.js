@@ -14,6 +14,17 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.22.1': {
+    sections: [
+      {
+        title: 'Editor',
+        items: [
+          '<b>Timeline rows now match screen stacking</b> — V1 (the base layer) sits at the bottom of the video section, with V2/V3+ stacked above it, the same convention as Premiere/Resolve: higher row = in front. Audio rows stay below.',
+          '<b>Color sliders work at 0</b> — setting Brightness/Contrast/Saturation to 0% silently reset to neutral instead of going black/flat/grayscale. Classic JS falsy-zero bug; fixed.',
+        ],
+      },
+    ],
+  },
   '0.22.0': {
     sections: [
       {
@@ -5246,8 +5257,14 @@ const PLATFORM_META = {
       const mx = veAudioClips.reduce((m, a) => Math.max(m, a.audioTrack || 0), 0);
       return mx + 2;
     }
-    function videoRowY(track) { return RULER_H + 6 + track * (VID_H + TRACK_VID_GAP); }
-    function audioRowY(track) { return videoRowY(numVideoTracks() - 1) + VID_H + TRACK_GAP + track * AUD_H; }
+    // Video rows are drawn inverted so the timeline matches screen stacking:
+    // higher track number = higher row = in front. V1 (track 0, the base
+    // layer) sits at the BOTTOM of the video section, directly above audio.
+    function videoRowY(track) {
+      const visualIdx = numVideoTracks() - 1 - track;
+      return RULER_H + 6 + visualIdx * (VID_H + TRACK_VID_GAP);
+    }
+    function audioRowY(track) { return videoRowY(0) + VID_H + TRACK_GAP + track * AUD_H; }
     function totalCanvasH()   { return audioRowY(numAudioTracks()) + 8; }
     function getVideoTrackAtY(y) {
       const n = numVideoTracks();
@@ -5628,8 +5645,10 @@ const PLATFORM_META = {
           bgCtx.fillRect(LW, ry, tw(), VID_H);
           bgCtx.strokeStyle = 'rgba(255,255,255,0.04)'; bgCtx.lineWidth = 1;
           bgCtx.beginPath(); bgCtx.moveTo(LW, ry+VID_H); bgCtx.lineTo(W, ry+VID_H); bgCtx.stroke();
-          // Draw gap between video tracks (dead zone — no clip can be clicked here)
-          if (TRACK_VID_GAP > 0 && track < nVT - 1) {
+          // Draw gap between video tracks (dead zone — no clip can be clicked here).
+          // Rows are drawn inverted (V1 at bottom), so the bottom-most visual row
+          // is track 0 — every other track draws a gap below itself.
+          if (TRACK_VID_GAP > 0 && track > 0) {
             bgCtx.fillStyle = '#070b10';
             bgCtx.fillRect(0, ry + VID_H, W, TRACK_VID_GAP);
             bgCtx.strokeStyle = 'rgba(255,255,255,0.07)'; bgCtx.lineWidth = 1;
@@ -6515,7 +6534,8 @@ const PLATFORM_META = {
       el.addEventListener('input', () => {
         const c = selectedClip();
         if (!c || c.type === 'text') return;
-        c[prop] = (parseInt(el.value, 10) || 100) / 100;
+        const v = parseInt(el.value, 10);
+        c[prop] = (Number.isFinite(v) ? v : 100) / 100; // 0 is a valid value (black/gray/zero-contrast)
         const lbl = $(id + '-val'); if (lbl) lbl.textContent = el.value + '%';
         syncAllLayers();
       });
