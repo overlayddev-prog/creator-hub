@@ -14,6 +14,22 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.22.0': {
+    sections: [
+      {
+        title: 'Editor Power Pack',
+        items: [
+          '<b>Crop to Fill Canvas</b> — one click on a V1 clip crops it to fill the project canvas instead of letterboxing. Toggle back any time. Applies in preview and export.',
+          '<b>Ripple trim</b> — new ⇥ toggle in the transport bar. When on, dragging a clip\'s right edge shifts every later clip on the same track, so trims close the gap instead of leaving dead space.',
+          '<b>Chapter markers</b> — 🔖 button (or + Add in the Chapters panel) drops a marker at the playhead. Rename inline, click the timestamp to jump there. On export, a YouTube-ready chapters .txt is written next to your video (auto-adds 0:00 Intro if your first marker starts later).',
+          '<b>Per-clip color controls</b> — Brightness / Contrast / Saturation sliders on any video clip. Live in the preview, matched in the export via FFmpeg eq.',
+          '<b>LUT support</b> — load a .cube LUT onto any clip; applied at export through FFmpeg\'s built-in lut3d filter (export-only for now, preview shows a hint).',
+          '<b>Export-complete popup</b> — shows the output filename (and chapters file if any) with Open Folder and Back to Editor buttons, instead of just a toast.',
+          '<b>Multi-line text overlays now export correctly</b> — line breaks in text clips render as real line breaks in the output video (drawtext now reads from a temp textfile instead of inline escaping).',
+        ],
+      },
+    ],
+  },
   '0.21.1': {
     sections: [
       {
@@ -5143,6 +5159,8 @@ const PLATFORM_META = {
     let veHypeMarkers  = [];
     let veOvDrag       = null;
     let veIdSeq        = 0;
+    let veRippleMode   = false;  // when on, right-edge trims shift later same-track clips
+    let veChapters     = [];     // [{ time, name }] — exported as YouTube chapters .txt
     let veProjectName  = 'Untitled Project';
     let veProjectPath  = null;
     let veTimelineBg   = null;   // offscreen canvas cache for static timeline content
@@ -5328,6 +5346,15 @@ const PLATFORM_META = {
 
     function selectedClip()      { return veClips.find(c => c.id === veSelId) || null; }
     function selectedAudioClip() { return veAudioClips.find(a => a.id === veSelId) || null; }
+
+    // CSS filter string approximating the FFmpeg eq= filter used on export.
+    // Values are multipliers where 1 = neutral.
+    function eqFilterStr(clip) {
+      if (!clip) return '';
+      const b = clip.eqBright ?? 1, c = clip.eqContrast ?? 1, s = clip.eqSat ?? 1;
+      if (b === 1 && c === 1 && s === 1) return '';
+      return `brightness(${b}) contrast(${c}) saturate(${s})`;
+    }
 
     // ── Keyframe interpolation ────────────────────────────────────────────────
     // Returns the interpolated {x,y,w,h} for a V2+ clip at a given timeline position.
@@ -5573,6 +5600,16 @@ const PLATFORM_META = {
             const lbl = vd >= 3600 ? veSecsToHMS(t) : `${String(Math.floor(t/60)).padStart(2,'0')}:${String(Math.round(t%60)).padStart(2,'0')}`;
             bgCtx.fillText(lbl, Math.min(x+2,W-40), RULER_H-7);
           }
+        }
+
+        // Chapter marker flags on the ruler
+        for (const ch of veChapters) {
+          const x = timeToX(ch.time); if (x < LW || x > W) continue;
+          bgCtx.fillStyle = '#f59e0b';
+          bgCtx.fillRect(x - 0.5, 2, 1, RULER_H - 4);
+          bgCtx.beginPath();
+          bgCtx.moveTo(x, 2); bgCtx.lineTo(x + 7, 5.5); bgCtx.lineTo(x, 9);
+          bgCtx.closePath(); bgCtx.fill();
         }
 
         // Separator line
@@ -5976,6 +6013,9 @@ const PLATFORM_META = {
           v1Wrap.style.width    = pct(kPos.w, 5) + '%';
           v1Wrap.style.height   = pct(kPos.h, 5) + '%';
           v1Wrap.classList.toggle('ve-ov-selected', v1Active.id === veSelId);
+          // Per-clip crop-to-fill + color preview
+          video.style.objectFit = v1Active.fillMode === 'cover' ? 'cover' : 'contain';
+          video.style.filter    = eqFilterStr(v1Active);
         }
       }
       // ── V2+ layers ──────────────────────────────────────────────────────────
@@ -6021,6 +6061,7 @@ const PLATFORM_META = {
         {
           // ── Video clip: sync video ────────────────────────────────────────
           layer.video.style.display      = '';
+          layer.video.style.filter       = eqFilterStr(displayClip);
 
           // ── Video state sync ─────────────────────────────────────────────
           const outOfRange  = !activeClip && !!selClip;
@@ -6344,6 +6385,36 @@ const PLATFORM_META = {
       }
       // The Layer-Clip (V2+ video) panel must hide for text — text panel replaces it
       if (isText && layerPanel) layerPanel.style.display = 'none';
+
+      // ── Crop-to-fill + Color + LUT (video clips only) ───────────────────
+      const isVideoClip = clip && !isText;
+      const fillBtn = $('ve-fill-btn');
+      if (fillBtn) {
+        // Crop-to-fill only makes sense on the V1 base layer (it fills the canvas)
+        fillBtn.style.display = (isVideoClip && (clip.track || 0) === 0) ? '' : 'none';
+        fillBtn.textContent = (clip && clip.fillMode === 'cover') ? '⛶ Fit Canvas (uncrop)' : '⛶ Crop to Fill Canvas';
+        fillBtn.classList.toggle('active', !!(clip && clip.fillMode === 'cover'));
+      }
+      const colorSec = $('ve-color-section');
+      if (colorSec) {
+        colorSec.style.display = isVideoClip ? '' : 'none';
+        if (isVideoClip) {
+          const setSlider = (id, mult) => {
+            const v = Math.round((mult ?? 1) * 100);
+            const el = $(id); if (el) el.value = v;
+            const lbl = $(id + '-val'); if (lbl) lbl.textContent = v + '%';
+          };
+          setSlider('ve-eq-bright',   clip.eqBright);
+          setSlider('ve-eq-contrast', clip.eqContrast);
+          setSlider('ve-eq-sat',      clip.eqSat);
+          const lutName = $('ve-lut-name'), lutClear = $('ve-lut-clear'), lutHint = $('ve-lut-hint');
+          const hasLut = !!clip.lutPath;
+          if (lutName)  lutName.textContent = hasLut ? clip.lutPath.replace(/.*[\\/]/, '') : 'None';
+          if (lutClear) lutClear.style.display = hasLut ? '' : 'none';
+          if (lutHint)  lutHint.style.display  = hasLut ? '' : 'none';
+        }
+      }
+
       if (isText) {
         $('ve-clip-name').textContent = `Text: ${(clip.text || '').slice(0, 28)}${(clip.text || '').length > 28 ? '…' : ''}`;
         const cc = $('ve-text-content');
@@ -6423,6 +6494,130 @@ const PLATFORM_META = {
         veSelId = null;
         computeLayout(); pushHistory();
         refreshClipPanel(); drawTimeline();
+      });
+    }
+
+    // ── Crop-to-fill toggle ───────────────────────────────────────────────
+    {
+      const fillBtn = $('ve-fill-btn');
+      if (fillBtn) fillBtn.addEventListener('click', () => {
+        const c = selectedClip();
+        if (!c || c.type === 'text') return;
+        c.fillMode = c.fillMode === 'cover' ? 'contain' : 'cover';
+        pushHistory(); refreshClipPanel(); syncAllLayers();
+      });
+    }
+
+    // ── Per-clip color sliders + LUT ──────────────────────────────────────
+    function bindEqSlider(id, prop) {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        const c = selectedClip();
+        if (!c || c.type === 'text') return;
+        c[prop] = (parseInt(el.value, 10) || 100) / 100;
+        const lbl = $(id + '-val'); if (lbl) lbl.textContent = el.value + '%';
+        syncAllLayers();
+      });
+      el.addEventListener('change', () => pushHistory());
+    }
+    bindEqSlider('ve-eq-bright',   'eqBright');
+    bindEqSlider('ve-eq-contrast', 'eqContrast');
+    bindEqSlider('ve-eq-sat',      'eqSat');
+    {
+      const resetBtn = $('ve-eq-reset');
+      if (resetBtn) resetBtn.addEventListener('click', () => {
+        const c = selectedClip();
+        if (!c || c.type === 'text') return;
+        c.eqBright = 1; c.eqContrast = 1; c.eqSat = 1;
+        pushHistory(); refreshClipPanel(); syncAllLayers();
+      });
+      const lutPick = $('ve-lut-pick');
+      if (lutPick) lutPick.addEventListener('click', async () => {
+        const c = selectedClip();
+        if (!c || c.type === 'text') return;
+        const file = await window.creatorhub.app.openFileDialog({
+          filters: [{ name: 'LUT', extensions: ['cube'] }],
+        });
+        if (!file) return;
+        c.lutPath = file;
+        pushHistory(); refreshClipPanel();
+        showToast('LUT applies on export');
+      });
+      const lutClear = $('ve-lut-clear');
+      if (lutClear) lutClear.addEventListener('click', () => {
+        const c = selectedClip();
+        if (!c) return;
+        delete c.lutPath;
+        pushHistory(); refreshClipPanel();
+      });
+    }
+
+    // ── Ripple trim toggle ────────────────────────────────────────────────
+    {
+      const rippleBtn = $('ve-btn-ripple');
+      if (rippleBtn) rippleBtn.addEventListener('click', () => {
+        veRippleMode = !veRippleMode;
+        rippleBtn.classList.toggle('ripple-on', veRippleMode);
+        showToast(veRippleMode ? 'Ripple trim ON — right-edge trims shift later clips' : 'Ripple trim OFF', 1600);
+      });
+    }
+
+    // ── Chapter markers ───────────────────────────────────────────────────
+    function renderChaptersList() {
+      const list = $('ve-chapters-list');
+      if (!list) return;
+      list.innerHTML = '';
+      const sorted = [...veChapters].sort((a, b) => a.time - b.time);
+      for (const ch of sorted) {
+        const row = document.createElement('div');
+        row.className = 've-chapter-row';
+        row.innerHTML = `
+          <span class="ve-chapter-time">${veSecsToHMS(ch.time)}</span>
+          <input class="ve-chapter-name" value="${(ch.name || '').replace(/"/g, '&quot;')}" placeholder="Chapter name…">
+          <button class="ve-chapter-del" title="Remove">×</button>`;
+        row.querySelector('.ve-chapter-time').addEventListener('click', () => seekToPos(ch.time));
+        row.querySelector('.ve-chapter-name').addEventListener('input', (e) => { ch.name = e.target.value; });
+        row.querySelector('.ve-chapter-del').addEventListener('click', () => {
+          veChapters = veChapters.filter(x => x !== ch);
+          renderChaptersList(); drawTimeline();
+        });
+        list.appendChild(row);
+      }
+    }
+    function addChapterAtPlayhead() {
+      veChapters.push({ time: vePlayPos, name: `Chapter ${veChapters.length + 1}` });
+      renderChaptersList(); drawTimeline();
+      showToast(`🔖 Chapter at ${veSecsToHMS(vePlayPos)}`, 1400);
+    }
+    {
+      const mBtn = $('ve-btn-marker');
+      if (mBtn) mBtn.addEventListener('click', addChapterAtPlayhead);
+      const aBtn = $('ve-chapter-add');
+      if (aBtn) aBtn.addEventListener('click', addChapterAtPlayhead);
+    }
+
+    // ── Export-complete modal ─────────────────────────────────────────────
+    let _lastExportDir = null;
+    function showExportDone(outputPath, chaptersPath) {
+      const modal = $('ve-export-done-modal');
+      if (!modal) return;
+      _lastExportDir = outputPath.replace(/[\\/][^\\/]+$/, '');
+      $('ve-export-done-file').textContent = outputPath.replace(/.*[\\/]/, '');
+      const chRow = $('ve-export-done-chapters-row');
+      if (chRow) {
+        chRow.style.display = chaptersPath ? '' : 'none';
+        if (chaptersPath) $('ve-export-done-chapters').textContent = chaptersPath.replace(/.*[\\/]/, '');
+      }
+      modal.style.display = 'flex';
+    }
+    {
+      const close = () => { const m = $('ve-export-done-modal'); if (m) m.style.display = 'none'; };
+      $('ve-export-done-close')?.addEventListener('click', close);
+      $('ve-export-done-back')?.addEventListener('click', close);
+      $('ve-export-done-modal')?.querySelector('.studio-modal-backdrop')?.addEventListener('click', close);
+      $('ve-export-done-openfolder')?.addEventListener('click', () => {
+        if (_lastExportDir) window.creatorhub.app.openFolder(_lastExportDir);
       });
     }
 
@@ -6566,6 +6761,7 @@ const PLATFORM_META = {
         }
         computeLayout(); clampScroll();
       } else if (veDragging === 'trimR' && clip) {
+        const beforeEnd = clip.timelineStart + clip.timelineDuration;
         if (clip.type === 'text') {
           const newEnd = Math.max(clip.timelineStart + 0.1, t);
           clip.timelineDuration = newEnd - clip.timelineStart;
@@ -6574,7 +6770,22 @@ const PLATFORM_META = {
           clip.outPoint = Math.max(clip.inPoint + 0.1, Math.min(clip.fileDuration, clip.inPoint + relEnd * clip.speed));
           $('ve-out-input').value = veSecsToHMS(clip.outPoint);
         }
-        computeLayout(); clampScroll();
+        computeLayout();
+        // Ripple: shift every later clip on the same track by the trim delta,
+        // so trims close (or open) the gap instead of leaving dead space.
+        if (veRippleMode) {
+          const delta = (clip.timelineStart + clip.timelineDuration) - beforeEnd;
+          if (delta) {
+            const tr = clip.track || 0;
+            for (const c2 of veClips) {
+              if (c2 !== clip && (c2.track || 0) === tr && c2.timelineStart >= beforeEnd - 0.001) {
+                c2.timelineStart = Math.max(0, c2.timelineStart + delta);
+              }
+            }
+            computeLayout();
+          }
+        }
+        clampScroll();
       } else if (veDragging === 'audioTrimL' && aclip) {
         aclip.inPoint = Math.max(0, Math.min(aclip.outPoint - 0.1, t - aclip.timelineStart));
         computeLayout(); clampScroll();
@@ -7074,6 +7285,9 @@ const PLATFORM_META = {
         filePath: c.filePath, inPoint: c.inPoint, outPoint: c.outPoint, speed: c.speed,
         muted: c.muted || false,
         transitionIn: c.transitionIn || null,
+        fillMode: c.fillMode || 'contain',
+        eqBright: c.eqBright ?? 1, eqContrast: c.eqContrast ?? 1, eqSat: c.eqSat ?? 1,
+        lutPath: c.lutPath || null,
       }));
       const overlayClips = veClips.filter(c => c.track > 0).map(c => {
         const base = {
@@ -7097,7 +7311,11 @@ const PLATFORM_META = {
             shadow:       !!c.shadow,
           };
         }
-        return { ...base, filePath: c.filePath, inPoint: c.inPoint, outPoint: c.outPoint };
+        return {
+          ...base, filePath: c.filePath, inPoint: c.inPoint, outPoint: c.outPoint,
+          eqBright: c.eqBright ?? 1, eqContrast: c.eqContrast ?? 1, eqSat: c.eqSat ?? 1,
+          lutPath: c.lutPath || null,
+        };
       });
 
       [$('ve-export-btn'), $('ve-btn-export-top')].forEach(b => { if (b) { b.disabled = true; b.textContent = '⏳ Exporting…'; } });
@@ -7108,11 +7326,14 @@ const PLATFORM_META = {
       const result = await window.creatorhub.videoeditor.export(
         exportClips, veFormat, outputDir,
         veFadeInEn ? veFadeInDur : 0, veFadeOutEn ? veFadeOutDur : 0, overlayClips,
-        veCanvasW, veCanvasH,
+        veCanvasW, veCanvasH, veChapters,
       ).catch(e => ({ ok: false, error: e.message }));
       $('ve-export-progress').style.display = 'none';
       [$('ve-export-btn'), $('ve-btn-export-top')].forEach(b => { if (b) { b.disabled = false; b.textContent = b.id === 've-export-btn' ? '⬇ Export' : 'Export'; } });
-      if (result.ok) { showToast('Exported: ' + result.outputPath.split(/[\\/]/).pop()); addRecording(result.outputPath); }
+      if (result.ok) {
+        addRecording(result.outputPath);
+        showExportDone(result.outputPath, result.chaptersPath);
+      }
       else showToast('Export failed: ' + (result.error || 'Unknown error'));
     }
 
@@ -7122,6 +7343,7 @@ const PLATFORM_META = {
         clips: veClips.map(c => ({ ...c, waveform: null, thumbnails: [] })),
         audioClips: veAudioClips.map(a => ({ ...a, waveform: null })),
         hypeMarkers: veHypeMarkers,
+        chapters: veChapters,
         zoom: veZoom, scrollOff: veScrollOff,
         fadeInEn: veFadeInEn, fadeInDur: veFadeInDur,
         fadeOutEn: veFadeOutEn, fadeOutDur: veFadeOutDur,
@@ -7162,6 +7384,8 @@ const PLATFORM_META = {
         waveform: null,
       }));
       veHypeMarkers  = state.hypeMarkers  || [];
+      veChapters     = state.chapters     || [];
+      renderChaptersList();
       veZoom = state.zoom || 1; veScrollOff = state.scrollOff || 0;
       veFadeInEn = state.fadeInEn || false; veFadeInDur = state.fadeInDur || 0.5;
       veFadeOutEn = state.fadeOutEn || false; veFadeOutDur = state.fadeOutDur || 0.5;

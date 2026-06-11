@@ -776,6 +776,8 @@
 
               <!-- Transport -->
               <div class="ve-transport">
+                <button class="ve-transport-btn" id="ve-btn-ripple" title="Ripple trim — dragging a clip's right edge shifts everything after it">⇥</button>
+                <button class="ve-transport-btn" id="ve-btn-marker" title="Add chapter marker at playhead">🔖</button>
                 <button class="ve-transport-btn" id="ve-btn-tostart" title="To start">⏮</button>
                 <button class="ve-transport-btn" id="ve-btn-back5" title="-5s">⏪</button>
                 <button class="ve-transport-btn" id="ve-btn-prev-frame" title="Previous frame">◁</button>
@@ -851,6 +853,27 @@
                 <div style="display:flex;gap:6px;margin-top:4px;">
                   <button class="ve-sep-audio-btn" id="ve-sep-audio-btn" style="display:none;">⚟ Separate Audio</button>
                   <button class="ve-mute-btn" id="ve-mute-btn" style="display:none;">🔇 Mute Clip</button>
+                </div>
+
+                <!-- Crop to fill canvas (V1 video clips) -->
+                <button class="ve-btn ve-btn-outline" id="ve-fill-btn" style="display:none;width:100%;margin-top:6px;font-size:11px;">⛶ Crop to Fill Canvas</button>
+
+                <!-- Per-clip color controls (video clips) -->
+                <div id="ve-color-section" style="display:none;">
+                  <hr class="ve-divider" style="margin:6px 0;">
+                  <div class="ve-tools-hdr" style="display:flex;align-items:center;justify-content:space-between;">Color
+                    <button class="ve-kf-clear-btn" id="ve-eq-reset" title="Reset color">Reset</button>
+                  </div>
+                  <div class="ve-eq-row"><span class="ve-eq-label">Bright</span><input type="range" id="ve-eq-bright" min="0" max="200" value="100"><span class="ve-eq-val" id="ve-eq-bright-val">100%</span></div>
+                  <div class="ve-eq-row"><span class="ve-eq-label">Contrast</span><input type="range" id="ve-eq-contrast" min="0" max="200" value="100"><span class="ve-eq-val" id="ve-eq-contrast-val">100%</span></div>
+                  <div class="ve-eq-row"><span class="ve-eq-label">Saturate</span><input type="range" id="ve-eq-sat" min="0" max="200" value="100"><span class="ve-eq-val" id="ve-eq-sat-val">100%</span></div>
+                  <!-- LUT (.cube) — applied at export via FFmpeg lut3d -->
+                  <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+                    <button class="ve-btn ve-btn-outline" id="ve-lut-pick" style="flex:1;font-size:10px;">🎨 LUT (.cube)</button>
+                    <span class="ve-info-val" id="ve-lut-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;">None</span>
+                    <button class="ve-kf-clear-btn" id="ve-lut-clear" style="display:none;">×</button>
+                  </div>
+                  <div class="ve-ovl-hint" id="ve-lut-hint" style="display:none;">LUT applies on export (not in preview)</div>
                 </div>
                 <button id="ve-btn-delete-clip" style="display:none;width:100%;margin-top:6px;padding:7px;border-radius:8px;background:rgba(255,51,85,0.08);border:1px solid rgba(255,51,85,0.25);color:#ff3355;font-family:var(--font);font-size:11.5px;font-weight:600;cursor:pointer;">🗑 Remove Clip</button>
 
@@ -985,6 +1008,13 @@
                 <div class="ve-info-row"><span class="ve-info-label">Res</span><span class="ve-info-val" id="ve-info-dims">—</span></div>
 
                 <hr class="ve-divider">
+                <div class="ve-tools-hdr" style="display:flex;align-items:center;justify-content:space-between;">Chapters
+                  <button class="ve-kf-clear-btn" id="ve-chapter-add" title="Add chapter at playhead">+ Add</button>
+                </div>
+                <div id="ve-chapters-list"></div>
+                <div class="ve-ovl-hint" id="ve-chapters-hint">Markers export as a YouTube chapters .txt next to your video</div>
+
+                <hr class="ve-divider">
                 <div class="ve-tools-hdr">Canvas</div>
                 <select id="ve-canvas-select" class="ve-canvas-select">
                   <option value="1920x1080">1920 × 1080 — YouTube</option>
@@ -1034,6 +1064,24 @@
               <button class="ve-btn ve-btn-outline" id="ve-kf-ob-prev">← Back</button>
               <div class="ve-kf-ob-dots" id="ve-kf-ob-dots"></div>
               <button class="ve-btn ve-btn-primary" id="ve-kf-ob-next">Next →</button>
+            </div>
+          </div>
+        </div>
+        <!-- Export complete modal -->
+        <div class="studio-modal" id="ve-export-done-modal" style="display:none;">
+          <div class="studio-modal-backdrop"></div>
+          <div class="studio-modal-card" style="width:380px;">
+            <div class="studio-modal-hdr">
+              <span class="studio-modal-title">✅ Export complete</span>
+              <button class="studio-icon-btn" id="ve-export-done-close" title="Close">×</button>
+            </div>
+            <div class="studio-modal-body">
+              <div class="ve-info-row"><span class="ve-info-label">File</span><span class="ve-info-val" id="ve-export-done-file" style="word-break:break-all;">—</span></div>
+              <div class="ve-info-row" id="ve-export-done-chapters-row" style="display:none;"><span class="ve-info-label">Chapters</span><span class="ve-info-val" id="ve-export-done-chapters">—</span></div>
+            </div>
+            <div class="studio-modal-footer">
+              <button class="studio-btn" id="ve-export-done-openfolder">📂 Open Folder</button>
+              <button class="studio-btn studio-btn-primary" id="ve-export-done-back">Back to Editor</button>
             </div>
           </div>
         </div>

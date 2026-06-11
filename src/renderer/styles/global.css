@@ -2549,6 +2549,42 @@ body {
 .ve-text-bg-row > .ve-text-color-input { width: 32px; flex-shrink: 0; }
 .ve-text-bg-row > input[type="range"] { flex: 1; accent-color: var(--cyan); }
 
+/* ── Per-clip color controls ────────────────────────────────────────────── */
+.ve-eq-row { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.ve-eq-label { font-size: 10px; color: var(--muted); width: 48px; flex-shrink: 0; }
+.ve-eq-row input[type="range"] { flex: 1; accent-color: var(--cyan); }
+.ve-eq-val { font-size: 10px; color: var(--dim); width: 36px; text-align: right; font-family: var(--mono); }
+
+/* ── Chapter markers ────────────────────────────────────────────────────── */
+.ve-chapter-row {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 4px;
+}
+.ve-chapter-time {
+  font-family: var(--mono); font-size: 10px; color: var(--cyan);
+  cursor: pointer; flex-shrink: 0; width: 44px;
+}
+.ve-chapter-time:hover { text-decoration: underline; }
+.ve-chapter-name {
+  flex: 1; min-width: 0;
+  font-family: var(--font); font-size: 11px;
+  padding: 3px 6px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+}
+.ve-chapter-del {
+  width: 20px; height: 20px; flex-shrink: 0;
+  border: 1px solid var(--border); background: transparent; color: var(--dim);
+  border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1;
+}
+.ve-chapter-del:hover { color: var(--red); border-color: var(--red); }
+
+/* Ripple toggle active state */
+.ve-transport-btn.ripple-on {
+  color: #f59e0b !important;
+  border-color: rgba(245,158,11,0.5) !important;
+  background: rgba(245,158,11,0.1) !important;
+}
+
 .ve-timeline-wrap {
   height: 170px; min-height: 170px; flex-shrink: 0;
   background: var(--surface); border-top: 1px solid var(--border);

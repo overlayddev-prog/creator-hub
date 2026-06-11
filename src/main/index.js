@@ -617,7 +617,7 @@ ipcMain.handle('videoeditor:get-thumbnails', async (_e, filePath, count, duratio
 
 // ── Video Editor — multi-clip export via FFmpeg ───────────────────────────────
 // clips = [{ filePath, inPoint, outPoint, speed, textOverlays }]
-ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fadeIn, fadeOut, overlayClips, canvasW, canvasH) => {
+ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fadeIn, fadeOut, overlayClips, canvasW, canvasH, chapters) => {
   const ffmpegPath = getFFmpegPath();
   if (!clips || !clips.length) return { ok: false, error: 'No clips' };
 
@@ -627,11 +627,32 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
   const outPath = path.join(dir, `Edited-${ts}.${ext}`);
   const sendProgress = (pct) => { try { event.sender.send('export:progress', pct); } catch {} };
 
+  // YouTube chapter timestamps — written next to the output video.
+  // YouTube requires the first chapter to start at 00:00.
+  function writeChaptersFile() {
+    if (!Array.isArray(chapters) || !chapters.length) return null;
+    const fmtT = (s) => {
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+      return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+                   : `${m}:${String(sec).padStart(2,'0')}`;
+    };
+    const sorted = [...chapters].sort((a, b) => a.time - b.time);
+    const lines = [];
+    if (sorted[0].time > 0.5) lines.push('0:00 Intro');
+    for (const ch of sorted) lines.push(`${fmtT(ch.time)} ${ch.name || 'Chapter'}`);
+    const chPath = outPath.replace(/\.[^.]+$/, '') + '-chapters.txt';
+    try { fs.writeFileSync(chPath, lines.join('\n') + '\n', 'utf8'); return chPath; } catch (_) { return null; }
+  }
+
   const hasOverlays = Array.isArray(overlayClips) && overlayClips.length > 0;
   const hasCanvas   = !!(canvasW && canvasH);
   const needsEncode = fadeIn > 0 || fadeOut > 0 || hasOverlays || hasCanvas ||
     clips.length > 1 ||
-    clips.some(c => c.speed !== 1 || c.muted || (c.textOverlays && c.textOverlays.length) || c.transitionIn);
+    clips.some(c => c.speed !== 1 || c.muted || (c.textOverlays && c.textOverlays.length) || c.transitionIn ||
+                    c.fillMode === 'cover' || c.lutPath ||
+                    (c.eqBright != null && c.eqBright !== 1) ||
+                    (c.eqContrast != null && c.eqContrast !== 1) ||
+                    (c.eqSat != null && c.eqSat !== 1));
 
   if (!needsEncode && clips.length === 1) {
     // Fast path: single clip, stream copy
@@ -640,7 +661,12 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
       const proc = spawn(ffmpegPath,
         ['-ss', String(c.inPoint), '-to', String(c.outPoint), '-i', c.filePath, '-c', 'copy', outPath, '-y'],
         { stdio: ['ignore', 'ignore', 'ignore'] });
-      proc.on('close', code => { sendProgress(100); resolve(code === 0 ? { ok: true, outputPath: outPath } : { ok: false, error: `FFmpeg exited ${code}` }); });
+      proc.on('close', code => {
+        sendProgress(100);
+        resolve(code === 0
+          ? { ok: true, outputPath: outPath, chaptersPath: writeChaptersFile() }
+          : { ok: false, error: `FFmpeg exited ${code}` });
+      });
       proc.on('error', e => resolve({ ok: false, error: e.message }));
     });
   }
@@ -649,6 +675,12 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
   const inputs = [];
   const filterParts = [];
   let totalDur = 0;
+
+  // Escape a filesystem path for use inside an FFmpeg filter argument
+  // (forward slashes + escaped drive-colon, wrapped in single quotes by caller)
+  function escFilterPath(p) {
+    return String(p).replace(/\\/g, '/').replace(/:/g, '\\:');
+  }
 
   clips.forEach((c, i) => {
     inputs.push('-ss', String(c.inPoint), '-to', String(c.outPoint), '-i', c.filePath);
@@ -659,6 +691,32 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
     if (c.muted) {
       filterParts.push(`${aChain}volume=0[a${i}]`);
       aChain = `[a${i}]`;
+    }
+
+    // Crop-to-fill: scale up to cover the canvas, then center-crop to exact dims
+    if (c.fillMode === 'cover' && hasCanvas) {
+      filterParts.push(`${vChain}scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,crop=${canvasW}:${canvasH},setsar=1[vfill${i}]`);
+      vChain = `[vfill${i}]`;
+    }
+
+    // Per-clip color: brightness/contrast/saturation (renderer sends multipliers, 1 = neutral).
+    // FFmpeg eq: brightness is additive (-1..1), contrast/saturation multiplicative.
+    {
+      const b = c.eqBright ?? 1, ct = c.eqContrast ?? 1, st = c.eqSat ?? 1;
+      if (b !== 1 || ct !== 1 || st !== 1) {
+        const eqArgs = [];
+        if (b !== 1)  eqArgs.push(`brightness=${(b - 1).toFixed(3)}`);
+        if (ct !== 1) eqArgs.push(`contrast=${ct.toFixed(3)}`);
+        if (st !== 1) eqArgs.push(`saturation=${Math.max(0, Math.min(3, st)).toFixed(3)}`);
+        filterParts.push(`${vChain}eq=${eqArgs.join(':')}[veq${i}]`);
+        vChain = `[veq${i}]`;
+      }
+    }
+
+    // Per-clip LUT (.cube) via FFmpeg's built-in lut3d filter
+    if (c.lutPath) {
+      filterParts.push(`${vChain}lut3d='${escFilterPath(c.lutPath)}'[vlut${i}]`);
+      vChain = `[vlut${i}]`;
     }
 
     if (c.speed && c.speed !== 1) {
@@ -762,12 +820,15 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
   // Overlay (PiP video) and Text (drawtext) clips — both live in overlayClips.
   // Text clips don't need an extra input; they apply a drawtext filter to the
   // current video chain. Video overlays get added as extra inputs.
-  function escFFmpegText(s) {
-    return String(s || '')
-      .replace(/\\/g, '\\\\')
-      .replace(/'/g,  "\\'")
-      .replace(/:/g,  '\\:')
-      .replace(/\n/g, ' ');  // drawtext supports newlines but escaping is brittle; flatten for v1
+  // Multi-line + special-char text goes through a temp textfile= instead of
+  // inline text= — drawtext reads the file verbatim, so no escaping at all
+  // and newlines render as real line breaks.
+  const _textTmpFiles = [];
+  function writeTextTmp(s) {
+    const p = path.join(require('os').tmpdir(), `ch-drawtext-${Date.now()}-${Math.random().toString(36).slice(2,8)}.txt`);
+    fs.writeFileSync(p, String(s || ''), 'utf8');
+    _textTmpFiles.push(p);
+    return p;
   }
   function pickFontFile() {
     // Hardcoded fallbacks per OS. ffmpeg-static doesn't bundle fontconfig.
@@ -816,11 +877,12 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
         const color   = (ov.color || '#ffffff').replace('#', '0x');
         const filterArgs = [
           `fontfile=${FONTFILE}`,
-          `text='${escFFmpegText(ov.text)}'`,
+          `textfile='${escFilterPath(writeTextTmp(ov.text))}'`,
           `x=${xExpr}`,
           `y=${yExpr}`,
           `fontsize=${sizeExpr}`,
           `fontcolor=${color}`,
+          `line_spacing=6`,
         ];
         // Outline (stroke around text)
         if ((ov.outlineWidth ?? 0) > 0) {
@@ -860,8 +922,27 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
       const shifted = `[ovshift${oi}]`;
       const scaled  = `[ovscaled${oi}]`;
       filterParts.push(`[${idx}:v]setpts=PTS+${tStart}/TB${shifted}`);
+      let ovChain = scaled;
       filterParts.push(`${shifted}scale=${wExpr}:${hExpr}${scaled}`);
-      filterParts.push(`${finalV}${scaled}overlay=x=${xExpr}:y=${yExpr}:enable='between(t\\,${tStart}\\,${tEnd})'${out}`);
+      // Per-overlay color / LUT (matches what the preview shows)
+      {
+        const b = ov.eqBright ?? 1, ct = ov.eqContrast ?? 1, st = ov.eqSat ?? 1;
+        if (b !== 1 || ct !== 1 || st !== 1) {
+          const eqArgs = [];
+          if (b !== 1)  eqArgs.push(`brightness=${(b - 1).toFixed(3)}`);
+          if (ct !== 1) eqArgs.push(`contrast=${ct.toFixed(3)}`);
+          if (st !== 1) eqArgs.push(`saturation=${Math.max(0, Math.min(3, st)).toFixed(3)}`);
+          const eqOut = `[oveq${oi}]`;
+          filterParts.push(`${ovChain}eq=${eqArgs.join(':')}${eqOut}`);
+          ovChain = eqOut;
+        }
+        if (ov.lutPath) {
+          const lutOut = `[ovlut${oi}]`;
+          filterParts.push(`${ovChain}lut3d='${escFilterPath(ov.lutPath)}'${lutOut}`);
+          ovChain = lutOut;
+        }
+      }
+      filterParts.push(`${finalV}${ovChain}overlay=x=${xExpr}:y=${yExpr}:enable='between(t\\,${tStart}\\,${tEnd})'${out}`);
       finalV = out;
     });
   }
@@ -896,8 +977,11 @@ ipcMain.handle('videoeditor:export', async (event, clips, format, outputDir, fad
     });
     proc.on('close', code => {
       sendProgress(100);
-      if (code === 0) resolve({ ok: true, outputPath: outPath });
-      else {
+      for (const p of _textTmpFiles) { try { fs.unlinkSync(p); } catch (_) {} }
+      if (code === 0) {
+        const chaptersPath = writeChaptersFile();
+        resolve({ ok: true, outputPath: outPath, chaptersPath });
+      } else {
         const lastLines = stderrBuf.split('\n').slice(-10).join('\n');
         resolve({ ok: false, error: `FFmpeg exited ${code}: ${lastLines}` });
       }
