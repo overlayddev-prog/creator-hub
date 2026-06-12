@@ -18,6 +18,8 @@ let _recStream = null;
 let _recPath = null;
 // Multi-canvas recording: canvasId → { stream, path, h264, chunks, bytes }
 const _recPerCanvas = new Map();
+// Multi-track audio bus recording: name → { stream, path }
+const _recAudioTracks = new Map();
 let _recChunks = 0;
 let _recBytes = 0;
 let _recH264 = false;
@@ -252,7 +254,7 @@ contextBridge.exposeInMainWorld('creatorhub', {
         _recStream.write(buf);
       }
     },
-    recordStop: async (fmt, dir) => {
+    recordStop: async (fmt, dir, markers) => {
       console.log(`[preload] recordStop — wrote ${_recChunks} chunks, ${_recBytes} bytes total`);
       const stream = _recStream;
       _recStream = null;
@@ -262,7 +264,28 @@ contextBridge.exposeInMainWorld('creatorhub', {
       try { console.log('[preload] file size:', fs.statSync(_recPath).size); } catch(_) {}
       const tmpPath = _recPath;
       _recPath = null;
-      return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath, _recH264);
+      // Close any per-bus audio track files (multi-track recording)
+      const audioTracks = [];
+      for (const [name, ent] of _recAudioTracks) {
+        if (ent.stream && !ent.stream.destroyed) {
+          await new Promise(r => ent.stream.end(r));
+        }
+        audioTracks.push({ name, path: ent.path });
+      }
+      _recAudioTracks.clear();
+      return ipcRenderer.invoke('studio:record-stop', fmt, dir, tmpPath, _recH264, null, markers || [], audioTracks);
+    },
+
+    // ── Multi-track audio bus recording (parallel audio-only temp files) ───
+    recordAudioTrackStart: (name) => {
+      const p = path.join(os.tmpdir(), `ch-rec-audio-${name}-${Date.now()}.webm`);
+      _recAudioTracks.set(name, { stream: fs.createWriteStream(p), path: p });
+      console.log('[preload] audio track', name, '→', p);
+      return { ok: true };
+    },
+    recordAudioTrackChunk: (name, data) => {
+      const ent = _recAudioTracks.get(name);
+      if (ent && ent.stream && !ent.stream.destroyed) ent.stream.write(Buffer.from(data));
     },
 
     // ── Multi-canvas recording ──────────────────────────────────────────────
@@ -284,7 +307,7 @@ contextBridge.exposeInMainWorld('creatorhub', {
       ent.bytes += buf.length;
       ent.stream.write(buf);
     },
-    recordStopForCanvas: async (canvasId, fmt, dir) => {
+    recordStopForCanvas: async (canvasId, fmt, dir, markers) => {
       const ent = _recPerCanvas.get(canvasId);
       if (!ent) return { ok: false, error: 'No recording for canvas ' + canvasId };
       console.log(`[preload] recordStopForCanvas ${canvasId} — wrote ${ent.chunks} chunks, ${ent.bytes} bytes`);
@@ -292,7 +315,7 @@ contextBridge.exposeInMainWorld('creatorhub', {
       if (ent.stream && !ent.stream.destroyed) {
         await new Promise(r => ent.stream.end(r));
       }
-      return ipcRenderer.invoke('studio:record-stop', fmt, dir, ent.path, ent.h264, ent.name);
+      return ipcRenderer.invoke('studio:record-stop', fmt, dir, ent.path, ent.h264, ent.name, markers || []);
     },
 
     // ── Streaming (FFmpeg spawned directly in preload — no IPC for data) ────

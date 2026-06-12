@@ -14,6 +14,26 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.23.0': {
+    sections: [
+      {
+        title: 'Recorder: markers + multi-track audio',
+        items: [
+          '<b>Recording markers (F8)</b> — press <kbd>F8</kbd> while recording to drop a marker at that exact moment. Works globally — even when you\'re in-game and CreatorHub isn\'t focused. There\'s also a 🚩 Marker button in the Broadcast card while recording.',
+          '<b>Markers flow into the editor</b> — when you add that recording to an editor project, its markers import automatically as named chapter markers on the timeline (amber flags on the ruler, editable names in the Chapters panel). Drop a marker every time something cool happens, then jump straight to those moments when editing — no more scrubbing through hours of footage.',
+          '<b>Multi-track audio recording</b> — new checkbox in the Broadcast card. When on, your recording gets three audio tracks: <b>Mix</b> (everything, plays by default), <b>Mic</b> (just your mics), and <b>Desktop</b> (game/system/media/soundboard). Mute your mic flub without losing game audio, or duck music under your voice — in any editor that supports multi-track (Premiere, Resolve, etc.).',
+          'Markers are stored in a small <code>.markers.json</code> file next to the recording — keep it next to the video if you move files around.',
+        ],
+      },
+      {
+        title: 'Notes',
+        items: [
+          'Multi-track applies to single-canvas recordings (the normal case). Multi-canvas recordings still get the mixed track per canvas.',
+          'CreatorHub\'s own editor currently plays the Mix track; per-track selection inside our editor is a planned follow-up.',
+        ],
+      },
+    ],
+  },
   '0.22.1': {
     sections: [
       {
@@ -3830,6 +3850,74 @@ const PLATFORM_META = {
     else if (mediaRecorder && studioStopRec && !studioStopRec.disabled) studioStopRec.click();
   });
 
+  // ── Recording markers ──────────────────────────────────────────────────
+  // F8 (global, works while in-game) or the 🚩 button drops a marker at the
+  // current moment of the active recording. Markers are written to a
+  // <output>.markers.json sidecar at record-stop; the editor imports them
+  // as named chapter markers when the file is added to a project.
+  let recMarkers = [];
+  let recStartTs = null;
+  // Multi-track audio: extra audio-only MediaRecorders (one per bus)
+  let recAudioRecorders = [];
+
+  function recordingActive() {
+    return !!(mediaRecorder && mediaRecorder.state !== 'inactive') || multiCanvasRecords.size > 0;
+  }
+
+  function addRecordingMarker() {
+    if (!recordingActive() || recStartTs === null) {
+      showToast('Not recording — markers need an active recording');
+      return;
+    }
+    const t = (Date.now() - recStartTs) / 1000;
+    recMarkers.push({ time: t, name: `Marker ${recMarkers.length + 1}` });
+    const mm = String(Math.floor(t / 60)).padStart(2, '0');
+    const ss = String(Math.floor(t % 60)).padStart(2, '0');
+    showToast(`🚩 Marker ${recMarkers.length} @ ${mm}:${ss}`, 1500);
+  }
+
+  window.creatorhub.ipc.on('hotkey:add-marker', addRecordingMarker);
+
+  const multitrackToggle = $('studio-multitrack-audio');
+  if (multitrackToggle) {
+    multitrackToggle.checked = localStorage.getItem('ch_multitrack') === '1';
+    multitrackToggle.addEventListener('change', () => {
+      localStorage.setItem('ch_multitrack', multitrackToggle.checked ? '1' : '0');
+    });
+  }
+
+  function startAudioBusRecorders() {
+    if (!multitrackToggle || !multitrackToggle.checked) return;
+    const buses = [['mic', engine.audioDestMic], ['desktop', engine.audioDestAux]];
+    for (const [name, bus] of buses) {
+      if (!bus) continue;
+      try {
+        const rec = new MediaRecorder(bus.stream, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 192000 });
+        window.creatorhub.studio.recordAudioTrackStart(name);
+        rec.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            e.data.arrayBuffer().then(buf => window.creatorhub.studio.recordAudioTrackChunk(name, new Uint8Array(buf)));
+          }
+        };
+        rec.start(1000);
+        recAudioRecorders.push(rec);
+      } catch (e) {
+        console.error('[multitrack] failed to start bus recorder', name, e);
+      }
+    }
+  }
+
+  async function stopAudioBusRecorders() {
+    for (const rec of recAudioRecorders) {
+      try {
+        await new Promise(res => { rec.addEventListener('stop', res, { once: true }); rec.stop(); });
+      } catch (_) {}
+    }
+    recAudioRecorders = [];
+    // Give the last flushed chunks a moment to reach the preload write streams
+    await new Promise(r => setTimeout(r, 200));
+  }
+
   if (studioStartRec) {
     studioStartRec.addEventListener('click', async () => {
       if (!studioReady) { showToast('No sources added yet'); return; }
@@ -3861,6 +3949,9 @@ const PLATFORM_META = {
         videoBitsPerSecond: bps,
         audioBitsPerSecond: 192000,
       });
+      // Markers + multi-track audio buses start alongside the main recorder
+      recMarkers = []; recStartTs = Date.now();
+      startAudioBusRecorders();
       recTotalBytes = 0;
       let recChunkQueue = Promise.resolve();
       mediaRecorder._chunkQueue = () => recChunkQueue;
@@ -3916,10 +4007,12 @@ const PLATFORM_META = {
       mediaRecorder = null;
       engine.outputActive = false;
       if (stopRecClock) { stopRecClock(); stopRecClock = null; }
+      await stopAudioBusRecorders();
 
       const fmt = $('studio-rec-format').value;
       $('studio-rec-label').textContent = 'Saving…';
-      const res = await window.creatorhub.studio.recordStop(fmt, studioRecDir);
+      const res = await window.creatorhub.studio.recordStop(fmt, studioRecDir, recMarkers);
+      recMarkers = []; recStartTs = null;
 
       studioStartRec.disabled = false;
       studioStopRec.disabled  = true;
@@ -4435,6 +4528,7 @@ const PLATFORM_META = {
       return;
     }
 
+    recMarkers = []; recStartTs = Date.now();
     engine.outputActive = true;
     studioStartRec.disabled = true;
     studioStopRec.disabled  = false;
@@ -4455,7 +4549,7 @@ const PLATFORM_META = {
         await new Promise(res => { entry.recorder.addEventListener('stop', res, { once: true }); entry.recorder.stop(); });
       } catch (_) {}
       try {
-        const res = await window.creatorhub.studio.recordStopForCanvas(canvasId, fmt, studioRecDir);
+        const res = await window.creatorhub.studio.recordStopForCanvas(canvasId, fmt, studioRecDir, recMarkers);
         if (res && res.ok) {
           showToast(`Saved: ${(res.outputPath || '').replace(/.*[\\/]/, '')}`);
           if (res.outputPath && typeof addRecording === 'function') addRecording(res.outputPath);
@@ -4469,6 +4563,7 @@ const PLATFORM_META = {
       if (!multiCanvasStreams.has(canvasId)) engine.removeStreamOutput(canvasId);
     }
     multiCanvasRecords.clear();
+    recMarkers = []; recStartTs = null;
     if (!multiCanvasStreams.size) engine.outputActive = false;
   }
 
@@ -4682,6 +4777,8 @@ const PLATFORM_META = {
     if (studioEndStream)  studioEndStream.style.display  = streamActive ? ''     : 'none';
     if (studioStopRec)    studioStopRec.style.display    = recActive    ? ''     : 'none';
     if (broadcastEndRow)  broadcastEndRow.style.display  = (recActive || streamActive) ? '' : 'none';
+    const markerBtn = $('studio-add-marker');
+    if (markerBtn) markerBtn.style.display = recActive ? '' : 'none';
   }
   // Poll (cheap) every 400ms so visibility reacts to async state changes
   setInterval(updateBroadcastButtonVisibility, 400);
@@ -4820,6 +4917,18 @@ const PLATFORM_META = {
     label: 'Show keyboard shortcuts', category: 'General',
     handler: () => openHotkeyHelp(),
   });
+
+  // Marker hotkey: F8 is registered globally in the main process (works while
+  // in-game / unfocused), so this renderer action ships unbound by default —
+  // bindable in Studio Settings if the user wants an in-app combo too.
+  registerHotkey('record.marker', {
+    label: 'Drop recording marker (F8 works globally)', category: 'Recording',
+    handler: () => addRecordingMarker(),
+  });
+  {
+    const markerBtn = $('studio-add-marker');
+    if (markerBtn) markerBtn.addEventListener('click', addRecordingMarker);
+  }
 
   for (let i = 1; i <= 9; i++) {
     registerHotkey(`layer.toggle.${i}`, {
@@ -7257,6 +7366,27 @@ const PLATFORM_META = {
       seekToPos(clip.timelineStart);
       resizeCanvas(); resizeOverlay();
       loadWaveform(clip);
+
+      // Import recording markers (written by the studio's F8 / 🚩 feature)
+      // as chapter markers, offset to where this clip sits on the timeline.
+      try {
+        const buf = await window.creatorhub.app.readFile(fp + '.markers.json');
+        const data = JSON.parse(new TextDecoder().decode(buf));
+        if (data && Array.isArray(data.markers) && data.markers.length) {
+          let added = 0;
+          for (const m of data.markers) {
+            const t = clip.timelineStart + (m.time || 0);
+            // Dedupe: skip if a chapter already sits within half a second
+            if (veChapters.some(ch => Math.abs(ch.time - t) < 0.5)) continue;
+            veChapters.push({ time: t, name: m.name || 'Marker' });
+            added++;
+          }
+          if (added) {
+            renderChaptersList(); drawTimeline();
+            showToast(`🚩 Imported ${added} marker${added > 1 ? 's' : ''} from recording`);
+          }
+        }
+      } catch (_) { /* no sidecar — normal for non-CreatorHub files */ }
       loadThumbnails(clip);
     }
 

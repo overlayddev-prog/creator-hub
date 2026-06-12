@@ -61,6 +61,16 @@ class StudioEngine {
     this._silenceOsc.connect(this._silenceGain);
     this._silenceGain.connect(this.audioDest);
     this._silenceOsc.start();
+    // Separate buses for multi-track recording: mics on one, everything else
+    // (desktop/system, media, soundboard) on the other. Sources connect to
+    // their bus IN ADDITION to the master audioDest, so streaming/preview
+    // keep using the full mix while recording can capture the buses
+    // independently. The silent oscillator feeds both so their MediaRecorders
+    // never stall waiting for audio packets.
+    this.audioDestMic = this.audioCtx.createMediaStreamDestination();
+    this.audioDestAux = this.audioCtx.createMediaStreamDestination();
+    this._silenceGain.connect(this.audioDestMic);
+    this._silenceGain.connect(this.audioDestAux);
     // Monitor node — connects to speakers so user can hear the mix locally
     this._monitorGain = this.audioCtx.createGain();
     this._monitorGain.gain.value = 0; // off by default
@@ -499,6 +509,7 @@ class StudioEngine {
       gainNode.gain.value = Math.max(0, Math.min(1, volume));
       srcNode.connect(gainNode);
       gainNode.connect(this.audioDest);            // → recording / stream
+      if (this.audioDestAux) gainNode.connect(this.audioDestAux); // multi-track: soundboard → aux bus
       gainNode.connect(this.audioCtx.destination); // → speakers (always audible locally)
     } catch (e) {
       console.error('[soundboard] failed to wire audio graph', e);
@@ -597,6 +608,7 @@ class StudioEngine {
     gainNode._lastVol = 1;
     srcNode.connect(gainNode);
     gainNode.connect(this.audioDest);
+    if (this.audioDestAux) gainNode.connect(this.audioDestAux); // multi-track: media → aux bus
     gainNode.connect(this.audioCtx.destination); // play through speakers
     // Analyser tapped off the gain node (NOT from captureStream — that causes glitching)
     const analyser = this.audioCtx.createAnalyser();
@@ -661,6 +673,9 @@ class StudioEngine {
     gainNode._lastVol = 1;
     srcNode.connect(gainNode);
     gainNode.connect(this.audioDest);
+    // Multi-track bus routing: mic_* keys → mic bus, everything else → aux bus
+    const bus = (typeof id === 'string' && id.startsWith('mic')) ? this.audioDestMic : this.audioDestAux;
+    if (bus) gainNode.connect(bus);
     // Also route to monitor so user can hear when monitoring is on
     if (this._monitorGain) gainNode.connect(this._monitorGain);
     this._audioNodes.set(id, { source: srcNode, gain: gainNode, stream: ownedStream || null });

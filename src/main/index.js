@@ -297,6 +297,11 @@ app.whenReady().then(() => {
   globalShortcut.register('F9', () => {
     if (mainWin) mainWin.webContents.send('hotkey:toggle-record');
   });
+  // F8 drops a marker into the active recording — global so it works while
+  // the user is in-game / another app with CreatorHub unfocused.
+  globalShortcut.register('F8', () => {
+    if (mainWin) mainWin.webContents.send('hotkey:add-marker');
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -1008,7 +1013,7 @@ ipcMain.handle('studio:desktop-sources', async (_e, types) => {
 
 // ── Studio — recording ────────────────────────────────────────────────────────
 // Recording: preload writes chunks directly to disk, main only does FFmpeg conversion
-ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath, isH264, nameSuffix) => {
+ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath, isH264, nameSuffix, markers, audioTracks) => {
   if (!tmpPath) return { ok: false, error: 'No recording file' };
 
   const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -1017,20 +1022,38 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath, isH2
   const safeSuffix = nameSuffix ? '-' + String(nameSuffix).replace(/[<>:"/\\|?*]/g, '_').slice(0, 40) : '';
   const outPath = path.join(dir, `CreatorHub-${ts}${safeSuffix}.${ext}`);
 
+  // Multi-track audio: extra audio-only webm temp files, one per bus.
+  // Track layout: 0 = full mix (plays everywhere by default), then one
+  // track per bus (Mic, Desktop). Skip empty/missing files defensively.
+  const extraAudio = (Array.isArray(audioTracks) ? audioTracks : []).filter(t => {
+    try { return t && t.path && fs.statSync(t.path).size > 1000; } catch (_) { return false; }
+  });
+
+  const inputArgs = ['-fflags', '+genpts', '-i', tmpPath];
+  for (const t of extraAudio) inputArgs.push('-fflags', '+genpts', '-i', t.path);
+
+  const mapArgs = [];
+  if (extraAudio.length) {
+    mapArgs.push('-map', '0:v', '-map', '0:a');
+    extraAudio.forEach((_, i) => mapArgs.push('-map', `${i + 1}:a`));
+    mapArgs.push('-metadata:s:a:0', 'title=Mix');
+    extraAudio.forEach((t, i) => mapArgs.push(`-metadata:s:a:${i + 1}`, `title=${t.name.charAt(0).toUpperCase() + t.name.slice(1)}`));
+  }
+
   let args;
   if (['webm', 'mkv'].includes(ext)) {
     // Container supports the source codecs directly — just copy everything
-    args = ['-fflags', '+genpts', '-i', tmpPath, '-c', 'copy', outPath, '-y'];
+    args = [...inputArgs, ...(extraAudio.length ? mapArgs : []), '-c', 'copy', outPath, '-y'];
   } else if (isH264) {
     // MediaRecorder produced H.264 — copy video, only transcode audio to AAC
     // This is nearly instant even for multi-hour recordings
-    args = ['-fflags', '+genpts', '-i', tmpPath,
+    args = [...inputArgs, ...(extraAudio.length ? mapArgs : []),
             '-c:v', 'copy',
             '-c:a', 'aac', '-b:a', '192k',
             outPath, '-y'];
   } else {
     // VP8 source — must re-encode video to H.264 for MP4/MOV
-    args = ['-fflags', '+genpts', '-i', tmpPath,
+    args = [...inputArgs, ...(extraAudio.length ? mapArgs : []),
             '-c:v', 'libx264', '-preset', 'fast', '-crf', '20',
             '-c:a', 'aac', '-b:a', '192k',
             outPath, '-y'];
@@ -1051,7 +1074,16 @@ ipcMain.handle('studio:record-stop', async (_e, format, outputDir, tmpPath, isH2
       if (code !== 0) console.log('[FFmpeg rec] FAILED code:', code, '\nstderr:', stderrOut);
       else console.log('[FFmpeg rec] OK →', outPath);
       try { fs.unlinkSync(tmpPath); } catch(e) {}
-      if (code === 0) resolve({ ok: true, outputPath: outPath });
+      for (const t of extraAudio) { try { fs.unlinkSync(t.path); } catch (_) {} }
+      if (code === 0) {
+        // Markers sidecar — picked up by the editor when this file is added
+        if (Array.isArray(markers) && markers.length) {
+          try {
+            fs.writeFileSync(outPath + '.markers.json', JSON.stringify({ markers }, null, 2), 'utf8');
+          } catch (e) { console.log('[rec markers] write failed:', e.message); }
+        }
+        resolve({ ok: true, outputPath: outPath });
+      }
       else resolve({ ok: false, error: `FFmpeg exited ${code}` });
     });
   });

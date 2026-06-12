@@ -421,6 +421,12 @@
                 </label>
               </div>
 
+              <!-- Multi-track audio: mic + desktop as separate tracks in the file -->
+              <label class="studio-modal-toggle" style="margin-top:6px;" title="Adds separate Mic and Desktop audio tracks to the recording (track 1 stays the full mix)">
+                <input type="checkbox" id="studio-multitrack-audio">
+                <span>Multi-track audio (mic + desktop separate)</span>
+              </label>
+
               <!-- Manage destinations (still here for editing keys/adding platforms) -->
               <details class="studio-broadcast-dests">
                 <summary>Destinations</summary>
@@ -439,6 +445,7 @@
               <div class="studio-ctrl-row" id="studio-broadcast-end-row" style="display:none;">
                 <button class="studio-btn studio-btn-stop" id="studio-end-stream" style="display:none;" disabled>⏹ End stream</button>
                 <button class="studio-btn studio-btn-stop" id="studio-stop-rec"   style="display:none;" disabled>⏹ Stop recording</button>
+                <button class="studio-btn" id="studio-add-marker" style="display:none;" title="Drop a marker at this moment (F8 works globally, even while in-game)">🚩 Marker</button>
               </div>
 
               <!-- Save folder -->
