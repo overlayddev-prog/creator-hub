@@ -278,7 +278,8 @@ contextBridge.exposeInMainWorld('creatorhub', {
 
     // ── Multi-track audio bus recording (parallel audio-only temp files) ───
     recordAudioTrackStart: (name) => {
-      const p = path.join(os.tmpdir(), `ch-rec-audio-${name}-${Date.now()}.webm`);
+      const safe = String(name).replace(/[^a-z0-9_-]/gi, '_').slice(0, 32);
+      const p = path.join(os.tmpdir(), `ch-rec-audio-${safe}-${Date.now()}.webm`);
       _recAudioTracks.set(name, { stream: fs.createWriteStream(p), path: p });
       console.log('[preload] audio track', name, '→', p);
       return { ok: true };

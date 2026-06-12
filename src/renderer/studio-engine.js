@@ -61,21 +61,56 @@ class StudioEngine {
     this._silenceOsc.connect(this._silenceGain);
     this._silenceGain.connect(this.audioDest);
     this._silenceOsc.start();
-    // Separate buses for multi-track recording: mics on one, everything else
-    // (desktop/system, media, soundboard) on the other. Sources connect to
-    // their bus IN ADDITION to the master audioDest, so streaming/preview
-    // keep using the full mix while recording can capture the buses
-    // independently. The silent oscillator feeds both so their MediaRecorders
-    // never stall waiting for audio packets.
-    this.audioDestMic = this.audioCtx.createMediaStreamDestination();
-    this.audioDestAux = this.audioCtx.createMediaStreamDestination();
-    this._silenceGain.connect(this.audioDestMic);
-    this._silenceGain.connect(this.audioDestAux);
+    // Named buses for multi-track recording. Each bus is its own
+    // MediaStreamAudioDestinationNode; sources connect to ONE bus in addition
+    // to the master audioDest, so streaming/preview keep the full mix while
+    // recording can capture each bus as a separate audio track. Users can
+    // create custom buses ("Music", "Game", …) and reassign sources.
+    // The silent oscillator feeds every bus so their MediaRecorders never
+    // stall waiting for audio packets.
+    this._buses = new Map(); // name → MediaStreamAudioDestinationNode
+    this.ensureBus('Mic');
+    this.ensureBus('Desktop');
     // Monitor node — connects to speakers so user can hear the mix locally
     this._monitorGain = this.audioCtx.createGain();
     this._monitorGain.gain.value = 0; // off by default
     this._monitorGain.connect(this.audioCtx.destination);
     this._monitoring = false;
+  }
+
+  // ── Audio buses (multi-track recording) ──────────────────────────────────
+  ensureBus(name) {
+    if (!this._buses) this._buses = new Map();
+    let bus = this._buses.get(name);
+    if (!bus) {
+      bus = this.audioCtx.createMediaStreamDestination();
+      this._buses.set(name, bus);
+      if (this._silenceGain) this._silenceGain.connect(bus);
+    }
+    return bus;
+  }
+
+  // Move a source's gain node to a different bus (disconnects from the old one).
+  assignSourceToBus(key, busName) {
+    const node = this._audioNodes.get(key);
+    if (!node || !node.gain) return;
+    if (node._busName && this._buses.has(node._busName)) {
+      try { node.gain.disconnect(this._buses.get(node._busName)); } catch (_) {}
+    }
+    const bus = this.ensureBus(busName);
+    node.gain.connect(bus);
+    node._busName = busName;
+  }
+
+  getBusNames() { return this._buses ? [...this._buses.keys()] : []; }
+  getBus(name)  { return this._buses ? this._buses.get(name) : null; }
+  // Buses that currently have at least one source routed to them
+  getActiveBusNames() {
+    const active = new Set();
+    for (const node of this._audioNodes.values()) {
+      if (node._busName) active.add(node._busName);
+    }
+    return [...active];
   }
 
   setMonitor(enabled) {
@@ -509,7 +544,7 @@ class StudioEngine {
       gainNode.gain.value = Math.max(0, Math.min(1, volume));
       srcNode.connect(gainNode);
       gainNode.connect(this.audioDest);            // → recording / stream
-      if (this.audioDestAux) gainNode.connect(this.audioDestAux); // multi-track: soundboard → aux bus
+      gainNode.connect(this.ensureBus('Desktop')); // multi-track: soundboard → Desktop bus
       gainNode.connect(this.audioCtx.destination); // → speakers (always audible locally)
     } catch (e) {
       console.error('[soundboard] failed to wire audio graph', e);
@@ -608,13 +643,13 @@ class StudioEngine {
     gainNode._lastVol = 1;
     srcNode.connect(gainNode);
     gainNode.connect(this.audioDest);
-    if (this.audioDestAux) gainNode.connect(this.audioDestAux); // multi-track: media → aux bus
+    gainNode.connect(this.ensureBus('Desktop')); // multi-track: media defaults to Desktop bus
     gainNode.connect(this.audioCtx.destination); // play through speakers
     // Analyser tapped off the gain node (NOT from captureStream — that causes glitching)
     const analyser = this.audioCtx.createAnalyser();
     analyser.fftSize = 32;
     gainNode.connect(analyser);
-    this._audioNodes.set(key, { source: srcNode, gain: gainNode, stream: null, _audioEl: audio });
+    this._audioNodes.set(key, { source: srcNode, gain: gainNode, stream: null, _audioEl: audio, _busName: 'Desktop' });
     return { key, audio, analyser };
   }
 
@@ -673,12 +708,14 @@ class StudioEngine {
     gainNode._lastVol = 1;
     srcNode.connect(gainNode);
     gainNode.connect(this.audioDest);
-    // Multi-track bus routing: mic_* keys → mic bus, everything else → aux bus
-    const bus = (typeof id === 'string' && id.startsWith('mic')) ? this.audioDestMic : this.audioDestAux;
-    if (bus) gainNode.connect(bus);
+    // Default bus routing: mic_* keys → Mic bus, everything else → Desktop.
+    // The renderer can reassign afterwards via assignSourceToBus().
+    const busName = (typeof id === 'string' && id.startsWith('mic')) ? 'Mic' : 'Desktop';
+    const bus = this.ensureBus(busName);
+    gainNode.connect(bus);
     // Also route to monitor so user can hear when monitoring is on
     if (this._monitorGain) gainNode.connect(this._monitorGain);
-    this._audioNodes.set(id, { source: srcNode, gain: gainNode, stream: ownedStream || null });
+    this._audioNodes.set(id, { source: srcNode, gain: gainNode, stream: ownedStream || null, _busName: busName });
   }
 
   removeAudioSource(key) {

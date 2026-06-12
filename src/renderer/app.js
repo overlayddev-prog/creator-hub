@@ -14,6 +14,25 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.24.0': {
+    sections: [
+      {
+        title: 'Custom audio tracks',
+        items: [
+          '<b>Build your own recording tracks</b> — every audio source in the Audio panel now has a track dropdown. Pick which track it records to, or choose <i>+ New track…</i> and type a name ("Music", "Game", "Discord" — whatever fits your setup).',
+          '<b>Named tracks in the file</b> — with multi-track audio on, each named track becomes its own titled audio track in the recording: Mix first (plays everywhere), then your custom tracks with their names. Editors like Premiere/Resolve show the names directly.',
+          '<b>Assignments persist</b> — mic→track assignments and your custom track list survive restarts.',
+          'Soundboard sounds and media files default to the Desktop track; mics default to Mic. Reassign any source from its dropdown.',
+        ],
+      },
+      {
+        title: 'Coming next',
+        items: [
+          '<b>Named detach in our editor</b> — "Separate Audio" will split a multi-track recording into its named tracks on the timeline (A1 "Mic", A2 "Music", …) so you can edit each independently inside CreatorHub.',
+        ],
+      },
+    ],
+  },
   '0.23.0': {
     sections: [
       {
@@ -3694,6 +3713,27 @@ const PLATFORM_META = {
   }
 
   // ── Audio device picker ───────────────────────────────────────────────────
+  // ── Audio buses (custom named recording tracks) ───────────────────────────
+  // Bus list + per-source assignments persist in localStorage. Mic assignments
+  // are keyed by device id so they survive restarts; media keys are per-session.
+  let audioBuses = ['Mic', 'Desktop'];
+  try {
+    const saved = JSON.parse(localStorage.getItem('ch_audio_buses') || 'null');
+    if (Array.isArray(saved) && saved.length) audioBuses = [...new Set(['Mic', 'Desktop', ...saved])];
+  } catch (_) {}
+  let audioBusAssign = {};
+  try { audioBusAssign = JSON.parse(localStorage.getItem('ch_audio_bus_assign') || '{}'); } catch (_) {}
+  function saveAudioBuses() {
+    localStorage.setItem('ch_audio_buses', JSON.stringify(audioBuses));
+    localStorage.setItem('ch_audio_bus_assign', JSON.stringify(audioBusAssign));
+  }
+  function assignSourceBus(key, busName) {
+    if (!audioBuses.includes(busName)) audioBuses.push(busName);
+    audioBusAssign[key] = busName;
+    saveAudioBuses();
+    engine.assignSourceToBus(key, busName);
+  }
+
   function addAudioTrackUI(key, name, analyser) {
     const tracksEl = $('studio-audio-tracks');
     tracksEl.querySelector('.studio-audio-empty')?.remove();
@@ -3709,9 +3749,61 @@ const PLATFORM_META = {
           ${Array(10).fill('<div class="studio-meter-bar"></div>').join('')}
         </div>
       </div>
+      <select class="studio-bus-select" title="Recording track (multi-track audio)"></select>
       <input type="range" class="studio-vol" min="0" max="100" value="80">
       <button class="studio-mute-btn" title="Mute">🔊</button>
       <button class="studio-rm-btn" title="Remove">✕</button>`;
+
+    // Bus selector: existing buses + "new track" creator. Applies the saved
+    // assignment (falling back to the engine's default routing by key prefix).
+    const busSel = row.querySelector('.studio-bus-select');
+    const currentBus = audioBusAssign[key] || (key.startsWith('mic') ? 'Mic' : 'Desktop');
+    if (audioBusAssign[key]) engine.assignSourceToBus(key, audioBusAssign[key]);
+    function rebuildBusOptions() {
+      busSel.innerHTML = '';
+      for (const b of audioBuses) {
+        const opt = document.createElement('option');
+        opt.value = b; opt.textContent = '🎚 ' + b;
+        busSel.appendChild(opt);
+      }
+      const newOpt = document.createElement('option');
+      newOpt.value = '__new__'; newOpt.textContent = '+ New track…';
+      busSel.appendChild(newOpt);
+      busSel.value = audioBusAssign[key] || currentBus;
+    }
+    rebuildBusOptions();
+    busSel.addEventListener('change', () => {
+      if (busSel.value === '__new__') {
+        // Inline name entry: swap the select for a text input until commit
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'studio-input studio-bus-new';
+        input.placeholder = 'Track name…';
+        input.maxLength = 24;
+        busSel.replaceWith(input);
+        input.focus();
+        const commit = () => {
+          const newName = input.value.trim();
+          input.replaceWith(busSel);
+          if (newName && newName !== '__new__') {
+            assignSourceBus(key, newName);
+            // Refresh every row's dropdown so the new bus shows everywhere
+            document.querySelectorAll('#studio-audio-tracks .studio-bus-select').forEach(s => {
+              const evt = new Event('rebuild'); s.dispatchEvent(evt);
+            });
+          }
+          rebuildBusOptions();
+        };
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') { input.value = ''; commit(); }
+        });
+        input.addEventListener('blur', commit);
+        return;
+      }
+      assignSourceBus(key, busSel.value);
+    });
+    busSel.addEventListener('rebuild', rebuildBusOptions);
     let lastVol = 0.8;
     engine.setVolume(key, lastVol); // sync initial slider position with gain
     row.querySelector('.studio-vol').addEventListener('input', function () {
@@ -3888,8 +3980,12 @@ const PLATFORM_META = {
 
   function startAudioBusRecorders() {
     if (!multitrackToggle || !multitrackToggle.checked) return;
-    const buses = [['mic', engine.audioDestMic], ['desktop', engine.audioDestAux]];
-    for (const [name, bus] of buses) {
+    // Record every bus that has at least one source routed to it, plus
+    // 'Desktop' always (soundboard triggers are transient and route there).
+    const busNames = new Set(engine.getActiveBusNames());
+    busNames.add('Desktop');
+    for (const name of busNames) {
+      const bus = engine.getBus(name);
       if (!bus) continue;
       try {
         const rec = new MediaRecorder(bus.stream, { mimeType: 'audio/webm;codecs=opus', audioBitsPerSecond: 192000 });
