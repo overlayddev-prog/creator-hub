@@ -90,17 +90,22 @@ class StudioEngine {
     return bus;
   }
 
-  // Move a source's gain node to a different bus (disconnects from the old one).
-  assignSourceToBus(key, busName) {
+  // Route a source to any number of buses (replaces its previous routing).
+  // An empty array means the source only lives in the master mix.
+  assignSourceToBuses(key, busNames) {
     const node = this._audioNodes.get(key);
     if (!node || !node.gain) return;
-    if (node._busName && this._buses.has(node._busName)) {
-      try { node.gain.disconnect(this._buses.get(node._busName)); } catch (_) {}
+    const current = node._busNames || (node._busName ? new Set([node._busName]) : new Set());
+    for (const old of current) {
+      if (this._buses.has(old)) { try { node.gain.disconnect(this._buses.get(old)); } catch (_) {} }
     }
-    const bus = this.ensureBus(busName);
-    node.gain.connect(bus);
-    node._busName = busName;
+    const next = new Set(busNames || []);
+    for (const name of next) node.gain.connect(this.ensureBus(name));
+    node._busNames = next;
+    delete node._busName;
   }
+  // Back-compat single-bus form
+  assignSourceToBus(key, busName) { this.assignSourceToBuses(key, [busName]); }
 
   getBusNames() { return this._buses ? [...this._buses.keys()] : []; }
   getBus(name)  { return this._buses ? this._buses.get(name) : null; }
@@ -108,7 +113,8 @@ class StudioEngine {
   getActiveBusNames() {
     const active = new Set();
     for (const node of this._audioNodes.values()) {
-      if (node._busName) active.add(node._busName);
+      if (node._busNames) for (const b of node._busNames) active.add(b);
+      else if (node._busName) active.add(node._busName);
     }
     return [...active];
   }

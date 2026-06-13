@@ -14,6 +14,19 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.25.0': {
+    sections: [
+      {
+        title: 'One source → multiple audio tracks',
+        items: [
+          '<b>Route any audio source to several tracks at once</b> — the track picker in the Audio panel is now a checklist. Put your mic in both "Mic" and a combined "Voice+Game" track, send game audio to both "Game" and a stream-safe mix, whatever you need.',
+          '<b>Create tracks inline</b> — type a name in the "+ New track…" box at the bottom of the picker and it\'s added and checked.',
+          '<b>"Mix only" option</b> — uncheck every track and a source still lands in the main Mix (track 1), just not broken out separately.',
+          'The button shows your selection at a glance: a track name, "×N" for several, or "Mix only". Assignments persist across restarts; older single-track assignments from v0.24.0 carry over automatically.',
+        ],
+      },
+    ],
+  },
   '0.24.0': {
     sections: [
       {
@@ -3727,12 +3740,32 @@ const PLATFORM_META = {
     localStorage.setItem('ch_audio_buses', JSON.stringify(audioBuses));
     localStorage.setItem('ch_audio_bus_assign', JSON.stringify(audioBusAssign));
   }
-  function assignSourceBus(key, busName) {
-    if (!audioBuses.includes(busName)) audioBuses.push(busName);
-    audioBusAssign[key] = busName;
-    saveAudioBuses();
-    engine.assignSourceToBus(key, busName);
+  // Assignments are arrays — one source can record to several tracks at once
+  // (e.g. mic in both "Mic" and a combined "Voice+Game"). Legacy string values
+  // from v0.24.0 are migrated on read.
+  function getSourceBuses(key) {
+    let a = audioBusAssign[key];
+    if (typeof a === 'string') a = [a];
+    if (a === undefined) a = [key.startsWith('mic') ? 'Mic' : 'Desktop']; // default
+    return Array.isArray(a) ? a : [];
   }
+  function setSourceBuses(key, busNames) {
+    for (const b of busNames) if (!audioBuses.includes(b)) audioBuses.push(b);
+    audioBusAssign[key] = [...busNames];
+    saveAudioBuses();
+    engine.assignSourceToBuses(key, busNames);
+  }
+
+  // One popover at a time
+  let _busPopover = null;
+  function closeBusPopover() {
+    if (_busPopover) { _busPopover.remove(); _busPopover = null; }
+  }
+  document.addEventListener('mousedown', (e) => {
+    if (_busPopover && !_busPopover.contains(e.target) && !e.target.classList.contains('studio-bus-btn')) {
+      closeBusPopover();
+    }
+  });
 
   function addAudioTrackUI(key, name, analyser) {
     const tracksEl = $('studio-audio-tracks');
@@ -3749,61 +3782,69 @@ const PLATFORM_META = {
           ${Array(10).fill('<div class="studio-meter-bar"></div>').join('')}
         </div>
       </div>
-      <select class="studio-bus-select" title="Recording track (multi-track audio)"></select>
+      <button class="studio-bus-btn" title="Recording tracks (multi-track audio)"></button>
       <input type="range" class="studio-vol" min="0" max="100" value="80">
       <button class="studio-mute-btn" title="Mute">🔊</button>
       <button class="studio-rm-btn" title="Remove">✕</button>`;
 
-    // Bus selector: existing buses + "new track" creator. Applies the saved
-    // assignment (falling back to the engine's default routing by key prefix).
-    const busSel = row.querySelector('.studio-bus-select');
-    const currentBus = audioBusAssign[key] || (key.startsWith('mic') ? 'Mic' : 'Desktop');
-    if (audioBusAssign[key]) engine.assignSourceToBus(key, audioBusAssign[key]);
-    function rebuildBusOptions() {
-      busSel.innerHTML = '';
-      for (const b of audioBuses) {
-        const opt = document.createElement('option');
-        opt.value = b; opt.textContent = '🎚 ' + b;
-        busSel.appendChild(opt);
-      }
-      const newOpt = document.createElement('option');
-      newOpt.value = '__new__'; newOpt.textContent = '+ New track…';
-      busSel.appendChild(newOpt);
-      busSel.value = audioBusAssign[key] || currentBus;
+    // Track button + checkbox popover: a source can record to several tracks
+    // at once. Applies the saved assignment on add.
+    const busBtn = row.querySelector('.studio-bus-btn');
+    engine.assignSourceToBuses(key, getSourceBuses(key));
+    function updateBusBtn() {
+      const b = getSourceBuses(key);
+      busBtn.textContent = b.length === 0 ? '🎚 Mix only' : b.length === 1 ? '🎚 ' + b[0] : `🎚 ×${b.length}`;
+      busBtn.title = 'Recording tracks: ' + (b.length ? b.join(', ') : 'Mix only') + ' — click to change';
     }
-    rebuildBusOptions();
-    busSel.addEventListener('change', () => {
-      if (busSel.value === '__new__') {
-        // Inline name entry: swap the select for a text input until commit
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'studio-input studio-bus-new';
-        input.placeholder = 'Track name…';
-        input.maxLength = 24;
-        busSel.replaceWith(input);
-        input.focus();
-        const commit = () => {
-          const newName = input.value.trim();
-          input.replaceWith(busSel);
-          if (newName && newName !== '__new__') {
-            assignSourceBus(key, newName);
-            // Refresh every row's dropdown so the new bus shows everywhere
-            document.querySelectorAll('#studio-audio-tracks .studio-bus-select').forEach(s => {
-              const evt = new Event('rebuild'); s.dispatchEvent(evt);
-            });
-          }
-          rebuildBusOptions();
-        };
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') { input.value = ''; commit(); }
-        });
-        input.addEventListener('blur', commit);
-        return;
+    updateBusBtn();
+    busBtn.addEventListener('click', () => {
+      if (_busPopover) { closeBusPopover(); return; }
+      const pop = document.createElement('div');
+      pop.className = 'studio-bus-pop';
+      const sel = new Set(getSourceBuses(key));
+      function commit() {
+        setSourceBuses(key, [...sel]);
+        updateBusBtn();
       }
-      assignSourceBus(key, busSel.value);
+      function buildRows() {
+        pop.innerHTML = '';
+        const hint = document.createElement('div');
+        hint.className = 'studio-bus-pop-hint';
+        hint.textContent = 'Record this source to:';
+        pop.appendChild(hint);
+        for (const b of audioBuses) {
+          const lbl = document.createElement('label');
+          lbl.className = 'studio-bus-pop-row';
+          lbl.innerHTML = `<input type="checkbox" ${sel.has(b) ? 'checked' : ''}><span>${b}</span>`;
+          lbl.querySelector('input').addEventListener('change', (e) => {
+            if (e.target.checked) sel.add(b); else sel.delete(b);
+            commit();
+          });
+          pop.appendChild(lbl);
+        }
+        // New-track creator row
+        const newRow = document.createElement('div');
+        newRow.className = 'studio-bus-pop-row studio-bus-pop-new';
+        newRow.innerHTML = `<input type="text" class="studio-input" placeholder="+ New track…" maxlength="24">`;
+        const input = newRow.querySelector('input');
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            const name = input.value.trim();
+            if (name) {
+              if (!audioBuses.includes(name)) audioBuses.push(name);
+              sel.add(name);
+              commit();
+              buildRows(); // re-render with the new bus listed + checked
+            }
+          }
+          if (e.key === 'Escape') closeBusPopover();
+        });
+        pop.appendChild(newRow);
+      }
+      buildRows();
+      row.appendChild(pop);
+      _busPopover = pop;
     });
-    busSel.addEventListener('rebuild', rebuildBusOptions);
     let lastVol = 0.8;
     engine.setVolume(key, lastVol); // sync initial slider position with gain
     row.querySelector('.studio-vol').addEventListener('input', function () {

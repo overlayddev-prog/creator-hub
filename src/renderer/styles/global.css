@@ -2579,18 +2579,44 @@ body {
 .ve-chapter-del:hover { color: var(--red); border-color: var(--red); }
 
 /* ── Audio bus selector (multi-track recording) ─────────────────────────── */
-.studio-bus-select {
+.studio-bus-btn {
   font-family: var(--font); font-size: 10px;
-  max-width: 86px;
-  padding: 3px 4px;
+  max-width: 92px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 3px 6px;
   border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--surface2);
   color: var(--cyan);
   cursor: pointer;
 }
-.studio-bus-select:hover { border-color: var(--cyan); }
-.studio-bus-new { max-width: 86px; font-size: 10px; padding: 3px 6px; }
+.studio-bus-btn:hover { border-color: var(--cyan); }
+/* Row needs relative positioning so the popover anchors to it */
+.studio-track { position: relative; }
+.studio-bus-pop {
+  position: absolute; right: 8px; top: 100%; z-index: 50;
+  margin-top: 4px;
+  min-width: 150px;
+  background: var(--surface2);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  padding: 6px;
+}
+.studio-bus-pop-hint {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(232,237,245,0.45);
+  padding: 2px 4px 6px;
+}
+.studio-bus-pop-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 4px;
+  font-size: 12px; color: var(--text);
+  cursor: pointer; border-radius: 4px;
+}
+.studio-bus-pop-row:hover { background: rgba(255,255,255,0.04); }
+.studio-bus-pop-row input[type="checkbox"] { accent-color: var(--cyan); }
+.studio-bus-pop-new { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 8px; }
+.studio-bus-pop-new input { width: 100%; font-size: 11px; padding: 4px 6px; }
 
 /* Ripple toggle active state */
 .ve-transport-btn.ripple-on {
