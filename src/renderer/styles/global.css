@@ -2678,12 +2678,13 @@ body {
   font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
   color: var(--muted);
 }
-.gfx-field input {
+.gfx-field input, .gfx-field select {
   padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
   background: var(--surface2); color: var(--text); font-family: var(--font); font-size: 12px;
 }
 .gfx-field input[type="color"] { height: 30px; padding: 2px; cursor: pointer; }
-.gfx-field input:focus { outline: 1px solid var(--cyan); border-color: var(--cyan); }
+.gfx-field select { cursor: pointer; }
+.gfx-field input:focus, .gfx-field select:focus { outline: 1px solid var(--cyan); border-color: var(--cyan); }
 
 .ve-timeline-wrap {
   height: 170px; min-height: 170px; flex-shrink: 0;

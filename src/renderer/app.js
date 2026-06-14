@@ -14,6 +14,18 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.26.1': {
+    sections: [
+      {
+        title: 'Graphics: Goal Bar upgrades',
+        items: [
+          '<b>Bar or Ring</b> — new Shape toggle on the Goal Bar preset. Ring draws a circular progress dial with the count in the middle.',
+          '<b>Start value</b> — pick a number to animate <i>from</i> as well as the current value, so the bar/ring sweeps from (say) 72 → 84 with the number counting up, instead of always filling from zero.',
+          'Graphics presets can now change size based on their settings (the Ring renders as a square), and the customizer supports dropdown options.',
+        ],
+      },
+    ],
+  },
   '0.26.0': {
     sections: [
       {
@@ -892,6 +904,11 @@ function gfxResolveParams(preset, overrides) {
   for (const f of preset.params) p[f.key] = (overrides && overrides[f.key] != null) ? overrides[f.key] : f.default;
   return p;
 }
+// Some presets change shape/size based on params (e.g. Goal Bar bar vs ring).
+function gfxSize(preset, params) {
+  if (typeof preset.size === 'function') { const s = preset.size(params); if (s && s.w && s.h) return s; }
+  return { w: preset.w, h: preset.h };
+}
 
 const GRAPHICS_PRESETS = [
   {
@@ -920,31 +937,74 @@ const GRAPHICS_PRESETS = [
   },
   {
     id: 'goal-bar', name: 'Goal Bar', category: 'Widgets', w: 640, h: 130,
+    size(p) { return p && p.shape === 'ring' ? { w: 300, h: 300 } : { w: 640, h: 130 }; },
     params: [
       { key: 'label',  label: 'Label',   type: 'text',   default: 'Follower Goal' },
-      { key: 'current',label: 'Current', type: 'number', default: 72 },
+      { key: 'shape',  label: 'Shape',   type: 'select', default: 'bar',
+        options: [{ value: 'bar', label: 'Bar' }, { value: 'ring', label: 'Ring' }] },
+      { key: 'start',  label: 'Start at', type: 'number', default: 72 },
+      { key: 'current',label: 'Current', type: 'number', default: 84 },
       { key: 'target', label: 'Target',  type: 'number', default: 100 },
       { key: 'accent', label: 'Fill',    type: 'color',  default: '#00e5ff' },
     ],
     build(p, preview) {
-      const pctVal = Math.max(0, Math.min(100, Math.round((Number(p.current) / Math.max(1, Number(p.target))) * 100)));
-      const fillAnim = preview ? `fillLoop 5s ease-in-out infinite` : `fillIn 1.3s cubic-bezier(.2,.8,.2,1) forwards`;
+      const tgt   = Math.max(1, Number(p.target) || 1);
+      const start = Math.max(0, Number(p.start) || 0);
+      const cur   = Math.max(0, Number(p.current) || 0);
+      const accent = gfxEsc(p.accent);
+      const loop = preview ? 'true' : 'false';
+      const common = `var sV=${start},cV=${cur},tgt=${tgt},loop=${loop};
+        function ease(k){return 1-Math.pow(1-k,3);}
+        function pct(v){return Math.max(0,Math.min(100,v/tgt*100));}`;
+      if (p.shape === 'ring') {
+        // 300x300 ring; r=120, C=2πr
+        return `<!doctype html><html><head><meta charset="utf8"><style>
+          html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+          .c{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+          svg{transform:rotate(-90deg)}
+          .bg{fill:none;stroke:rgba(255,255,255,.12);stroke-width:20}
+          .fg{fill:none;stroke:${accent};stroke-width:20;stroke-linecap:round;filter:drop-shadow(0 0 8px ${accent}aa)}
+          .ctr{position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px}
+          .num{font-size:46px;font-weight:900;color:#fff;line-height:1}
+          .lab{font-size:15px;font-weight:700;color:${accent};text-align:center;max-width:200px}
+        </style></head><body><div class="c">
+          <svg width="300" height="300" viewBox="0 0 300 300">
+            <circle class="bg" cx="150" cy="150" r="120"></circle>
+            <circle class="fg" id="fg" cx="150" cy="150" r="120"></circle>
+          </svg>
+          <div class="ctr"><div class="num" id="num">0</div><div class="lab">${gfxEsc(p.label)}</div></div>
+        </div><script>
+          ${common}
+          var C=2*Math.PI*120,fg=document.getElementById('fg'),num=document.getElementById('num');
+          fg.style.strokeDasharray=C;
+          function run(){var t0=performance.now(),dur=1400;function f(t){var k=Math.min(1,(t-t0)/dur),e=ease(k);
+            var v=sV+(cV-sV)*e;fg.style.strokeDashoffset=C*(1-pct(v)/100);num.textContent=Math.round(v).toLocaleString();
+            if(k<1)requestAnimationFrame(f);}requestAnimationFrame(f);}
+          run();if(loop)setInterval(run,4500);
+        </script></body></html>`;
+      }
+      // Bar (default) 640x130
       return `<!doctype html><html><head><meta charset="utf8"><style>
         html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
         .box{position:absolute;left:20px;right:20px;bottom:24px;padding:14px 18px;border-radius:12px;
              background:rgba(10,14,20,.82);box-shadow:0 8px 30px rgba(0,0,0,.5)}
         .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
         .lab{font-size:19px;font-weight:800;color:#fff}
-        .num{font-size:16px;font-weight:700;color:${gfxEsc(p.accent)}}
+        .num{font-size:16px;font-weight:700;color:${accent}}
         .track{height:16px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden}
-        .fill{height:100%;width:${pctVal}%;border-radius:8px;background:linear-gradient(90deg,${gfxEsc(p.accent)},#fff3);
-              box-shadow:0 0 16px ${gfxEsc(p.accent)}99;transform-origin:left;animation:${fillAnim}}
-        @keyframes fillIn{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-        @keyframes fillLoop{0%{transform:scaleX(0)}55%,90%{transform:scaleX(1)}100%{transform:scaleX(0)}}
+        .fill{height:100%;width:0%;border-radius:8px;background:linear-gradient(90deg,${accent},#fff3);box-shadow:0 0 16px ${accent}99}
       </style></head><body><div class="box">
-        <div class="row"><span class="lab">${gfxEsc(p.label)}</span><span class="num">${gfxEsc(p.current)} / ${gfxEsc(p.target)} · ${pctVal}%</span></div>
-        <div class="track"><div class="fill"></div></div>
-      </div></body></html>`;
+        <div class="row"><span class="lab">${gfxEsc(p.label)}</span><span class="num" id="num"></span></div>
+        <div class="track"><div class="fill" id="fill"></div></div>
+      </div><script>
+        ${common}
+        var fill=document.getElementById('fill'),num=document.getElementById('num');
+        function run(){var t0=performance.now(),dur=1400;function f(t){var k=Math.min(1,(t-t0)/dur),e=ease(k);
+          var v=sV+(cV-sV)*e,pv=pct(v);fill.style.width=pv+'%';
+          num.textContent=Math.round(v).toLocaleString()+' / '+tgt.toLocaleString()+' · '+Math.round(pv)+'%';
+          if(k<1)requestAnimationFrame(f);}requestAnimationFrame(f);}
+        run();if(loop)setInterval(run,4500);
+      </script></body></html>`;
     },
   },
   {
@@ -2270,14 +2330,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const list = GRAPHICS_PRESETS.filter(p => gfxFilterCat === 'all' || p.category === gfxFilterCat);
     for (const preset of list) {
       const params = gfxResolveParams(preset);
+      const sz = gfxSize(preset, params);
       const card = document.createElement('div');
       card.className = 'gfx-card';
       // Live looping preview in an iframe, scaled to fit the card stage (300 wide, 168 tall)
-      const scale = Math.min(284 / preset.w, 150 / preset.h).toFixed(3);
+      const scale = Math.min(284 / sz.w, 150 / sz.h).toFixed(3);
       card.innerHTML = `
         <div class="gfx-card-stage">
           <iframe class="gfx-card-frame" frameborder="0" scrolling="no"
-            style="width:${preset.w}px;height:${preset.h}px;transform:translate(-50%,-50%) scale(${scale});"></iframe>
+            style="width:${sz.w}px;height:${sz.h}px;transform:translate(-50%,-50%) scale(${scale});"></iframe>
         </div>
         <div class="gfx-card-meta">
           <span class="gfx-card-name">${preset.name}</span>
@@ -2315,16 +2376,21 @@ document.addEventListener('DOMContentLoaded', () => {
         input = `<input type="color" id="${id}" value="${gfxEsc(gfxEditParams[f.key])}">`;
       } else if (f.type === 'number') {
         input = `<input type="number" id="${id}" value="${gfxEsc(gfxEditParams[f.key])}">`;
+      } else if (f.type === 'select') {
+        input = `<select id="${id}">${f.options.map(o =>
+          `<option value="${gfxEsc(o.value)}" ${gfxEditParams[f.key] === o.value ? 'selected' : ''}>${gfxEsc(o.label)}</option>`).join('')}</select>`;
       } else {
         input = `<input type="text" id="${id}" value="${gfxEsc(gfxEditParams[f.key])}">`;
       }
       row.innerHTML = `<span class="gfx-field-label">${f.label}</span>${input}`;
       fields.appendChild(row);
-      const el = row.querySelector('input');
-      el.addEventListener('input', () => {
+      const el = row.querySelector('input, select');
+      const onChange = () => {
         gfxEditParams[f.key] = f.type === 'number' ? Number(el.value) : el.value;
         updateGfxPreview();
-      });
+      };
+      el.addEventListener('input', onChange);
+      el.addEventListener('change', onChange);
     }
     updateGfxPreview();
     $('gfx-modal').style.display = 'flex';
@@ -2333,12 +2399,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!gfxEditing) return;
     const frame = $('gfx-modal-frame');
     const stage = frame.parentElement;
+    const sz = gfxSize(gfxEditing, gfxEditParams);
     const sw = stage.clientWidth || 600, sh = stage.clientHeight || 220;
-    const scale = Math.min((sw - 24) / gfxEditing.w, (sh - 24) / gfxEditing.h, 1.5);
+    const scale = Math.min((sw - 24) / sz.w, (sh - 24) / sz.h, 1.5);
     frame.style.position = 'absolute';
     frame.style.left = '50%'; frame.style.top = '50%';
-    frame.style.width  = gfxEditing.w + 'px';
-    frame.style.height = gfxEditing.h + 'px';
+    frame.style.width  = sz.w + 'px';
+    frame.style.height = sz.h + 'px';
     frame.style.transform = `translate(-50%,-50%) scale(${scale.toFixed(3)})`;
     frame.srcdoc = gfxEditing.build(gfxEditParams, true);
   }
@@ -2353,6 +2420,7 @@ document.addEventListener('DOMContentLoaded', () => {
     closeGfxCustomizer();
     // Build the real (play-once) HTML as a data URL browser source
     const html = preset.build(params, false);
+    const sz = gfxSize(preset, params);
     const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
     const label = preset.name + (params.title ? ' · ' + params.title : params.label ? ' · ' + params.label : '');
     // Jump to the studio and add it as a sized browser source. initStudio
@@ -2362,7 +2430,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tryAdd = (attempt = 0) => {
       if (!_studioAddGraphic && attempt < 40) { setTimeout(() => tryAdd(attempt + 1), 100); return; }
       if (!_studioAddGraphic) { showToast('Open the studio first, then add'); return; }
-      _studioAddGraphic(dataUrl, label, preset.w, preset.h)
+      _studioAddGraphic(dataUrl, label, sz.w, sz.h)
         .then(() => showToast(`Added "${preset.name}" — drag to position`))
         .catch(e => { console.error('[graphics] add failed', e); showToast('Could not add graphic: ' + e.message); });
     };
