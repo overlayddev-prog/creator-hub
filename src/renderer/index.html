@@ -576,6 +576,7 @@
             ⏺ Recordings <span class="assets-tab-count" id="assets-count-recordings">0</span>
           </button>
           <button class="assets-tab" data-assets-tab="transitions">Transitions <span class="assets-tab-count" id="assets-count-transitions">0</span></button>
+          <button class="assets-tab" data-assets-tab="graphics" data-accent="cyan">✨ Graphics <span class="assets-tab-count" id="assets-count-graphics">0</span></button>
         </div>
 
         <!-- Filterbar -->
@@ -636,6 +637,37 @@
             </div>
             <div class="assets-grid" id="te-unified-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"></div>
             <div class="te-saved-empty" id="te-saved-empty" style="display:none; text-align:center; padding:40px 0; color:rgba(232,237,245,0.25); font-size:13px;">No transitions yet</div>
+          </div>
+
+          <!-- Graphics tab content -->
+          <div id="assets-graphics-wrap" style="display:none; flex:1; flex-direction:column; overflow-y:auto; padding:14px 18px;">
+            <div class="gfx-filter-pills" id="gfx-filter-pills">
+              <button class="gfx-pill active" data-gfx-cat="all">All</button>
+              <button class="gfx-pill" data-gfx-cat="Animations">Animations</button>
+              <button class="gfx-pill" data-gfx-cat="Widgets">Widgets</button>
+            </div>
+            <div class="gfx-grid" id="gfx-grid"></div>
+          </div>
+        </div>
+
+        <!-- Graphics customizer modal -->
+        <div class="studio-modal" id="gfx-modal" style="display:none;">
+          <div class="studio-modal-backdrop"></div>
+          <div class="studio-modal-card gfx-modal-card">
+            <div class="studio-modal-hdr">
+              <span class="studio-modal-title" id="gfx-modal-title">Customize</span>
+              <button class="studio-icon-btn" id="gfx-modal-close" title="Close">×</button>
+            </div>
+            <div class="studio-modal-body gfx-modal-body">
+              <div class="gfx-modal-preview">
+                <iframe id="gfx-modal-frame" frameborder="0" scrolling="no"></iframe>
+              </div>
+              <div class="gfx-modal-fields" id="gfx-modal-fields"></div>
+            </div>
+            <div class="studio-modal-footer">
+              <button class="studio-btn" id="gfx-modal-cancel">Cancel</button>
+              <button class="studio-btn studio-btn-primary" id="gfx-modal-add">+ Add to Studio</button>
+            </div>
           </div>
         </div>
 

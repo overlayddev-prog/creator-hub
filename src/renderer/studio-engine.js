@@ -460,12 +460,18 @@ class StudioEngine {
     return src;
   }
 
-  async addBrowserSource(url, name) {
+  async addBrowserSource(url, name, opts) {
     const id = this._id++;
+    // Browser sources usually render at full canvas resolution (overlays that
+    // cover the screen). Graphics presets pass an explicit { w, h } so their
+    // offscreen window matches the graphic's own viewport and the element can
+    // be moved/resized as a compact layer.
+    const bw = (opts && opts.w) ? opts.w : this.outW;
+    const bh = (opts && opts.h) ? opts.h : this.outH;
     // OffscreenCanvas as the drawable element — atomic frame updates, no flicker
-    const offscreen = new OffscreenCanvas(this.outW, this.outH);
+    const offscreen = new OffscreenCanvas(bw, bh);
     const src = new StudioSource(id, name, 'browser', offscreen);
-    src.width = this.outW;  src.height = this.outH;
+    src.width = bw;  src.height = bh;
     src._browserId  = id;
     src._browserUrl = url;
     src._hasFrame   = false;
@@ -522,7 +528,7 @@ class StudioEngine {
         worker.postMessage({ buf: copy, srcId, dx, dy, dw, dh }, [copy]);
       });
     }
-    await window.creatorhub.studio.browserSourceCreate(id, url, this.outW, this.outH);
+    await window.creatorhub.studio.browserSourceCreate(id, url, bw, bh);
     this._pushTop(src);
     return src;
   }

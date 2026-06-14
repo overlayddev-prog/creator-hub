@@ -14,6 +14,26 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.26.0': {
+    sections: [
+      {
+        title: 'New: Graphics',
+        items: [
+          '<b>Graphics tab in Assets</b> — a gallery of animated, customizable presets you can drop straight onto your stream. Each one shows a live looping preview.',
+          '<b>Starter pack</b>: <i>Lower Third</i> (name + subtitle slide-in), <i>Goal Bar</i> (animated fill with current/target), <i>Count-Up Stat</i> (number counts up), <i>Countdown Timer</i> (starting-soon / BRB), <i>Typewriter Title</i> (text types out), and <i>Webcam Frame</i> (pulsing border with a LIVE tag).',
+          '<b>Customize, then add</b> — click a preset to edit its text, numbers, and colors with a live preview, then "+ Add to Studio" drops it onto your active canvas as a movable, resizable layer.',
+          '<b>Animations vs Widgets</b> — filter pills split decorative motion (lower third, typewriter, frame) from functional, data-style widgets (goal bar, counters, timer).',
+        ],
+      },
+      {
+        title: 'Notes',
+        items: [
+          'Graphics render through the same browser-source pipeline as overlays, so they show up in both recordings and streams.',
+          'This is the foundation — more presets (and eventually editable/savable custom graphics + preset packs) build on this.',
+        ],
+      },
+    ],
+  },
   '0.25.0': {
     sections: [
       {
@@ -856,6 +876,174 @@ const PATCH_NOTES = {
     ],
   },
 };
+
+// ── Graphics presets ───────────────────────────────────────────────────────
+// Each preset generates a self-contained HTML document (transparent bg, sized
+// to its content) driven by user params. Rendered as a browser source in the
+// studio, or live-previewed in an iframe in the Graphics tab. `preview:true`
+// loops the animation so the gallery/customizer shows continuous motion.
+function gfxEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+function gfxResolveParams(preset, overrides) {
+  const p = {};
+  for (const f of preset.params) p[f.key] = (overrides && overrides[f.key] != null) ? overrides[f.key] : f.default;
+  return p;
+}
+
+const GRAPHICS_PRESETS = [
+  {
+    id: 'lower-third', name: 'Lower Third', category: 'Animations', w: 820, h: 200,
+    params: [
+      { key: 'title',    label: 'Name',     type: 'text',  default: 'Your Name' },
+      { key: 'subtitle', label: 'Subtitle', type: 'text',  default: 'Creator · Streamer' },
+      { key: 'accent',   label: 'Accent',   type: 'color', default: '#00e5ff' },
+    ],
+    build(p, preview) {
+      const anim = preview ? 'lt 5s ease-in-out infinite' : 'ltIn 0.7s cubic-bezier(.2,.9,.3,1) forwards';
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .wrap{position:absolute;left:24px;bottom:30px}
+        .bar{display:inline-flex;flex-direction:column;gap:4px;padding:14px 26px 14px 22px;border-radius:10px;
+             background:rgba(10,14,20,.82);border-left:5px solid ${gfxEsc(p.accent)};
+             box-shadow:0 8px 30px rgba(0,0,0,.5);transform-origin:left center;animation:${anim}}
+        .t{font-size:34px;font-weight:800;color:#fff;letter-spacing:.3px;line-height:1}
+        .s{font-size:18px;font-weight:600;color:${gfxEsc(p.accent)};letter-spacing:.5px}
+        @keyframes ltIn{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:none}}
+        @keyframes lt{0%{opacity:0;transform:translateX(-40px)}12%,86%{opacity:1;transform:none}100%{opacity:0;transform:translateX(-40px)}}
+      </style></head><body><div class="wrap"><div class="bar">
+        <div class="t">${gfxEsc(p.title)}</div><div class="s">${gfxEsc(p.subtitle)}</div>
+      </div></div></body></html>`;
+    },
+  },
+  {
+    id: 'goal-bar', name: 'Goal Bar', category: 'Widgets', w: 640, h: 130,
+    params: [
+      { key: 'label',  label: 'Label',   type: 'text',   default: 'Follower Goal' },
+      { key: 'current',label: 'Current', type: 'number', default: 72 },
+      { key: 'target', label: 'Target',  type: 'number', default: 100 },
+      { key: 'accent', label: 'Fill',    type: 'color',  default: '#00e5ff' },
+    ],
+    build(p, preview) {
+      const pctVal = Math.max(0, Math.min(100, Math.round((Number(p.current) / Math.max(1, Number(p.target))) * 100)));
+      const fillAnim = preview ? `fillLoop 5s ease-in-out infinite` : `fillIn 1.3s cubic-bezier(.2,.8,.2,1) forwards`;
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .box{position:absolute;left:20px;right:20px;bottom:24px;padding:14px 18px;border-radius:12px;
+             background:rgba(10,14,20,.82);box-shadow:0 8px 30px rgba(0,0,0,.5)}
+        .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+        .lab{font-size:19px;font-weight:800;color:#fff}
+        .num{font-size:16px;font-weight:700;color:${gfxEsc(p.accent)}}
+        .track{height:16px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden}
+        .fill{height:100%;width:${pctVal}%;border-radius:8px;background:linear-gradient(90deg,${gfxEsc(p.accent)},#fff3);
+              box-shadow:0 0 16px ${gfxEsc(p.accent)}99;transform-origin:left;animation:${fillAnim}}
+        @keyframes fillIn{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+        @keyframes fillLoop{0%{transform:scaleX(0)}55%,90%{transform:scaleX(1)}100%{transform:scaleX(0)}}
+      </style></head><body><div class="box">
+        <div class="row"><span class="lab">${gfxEsc(p.label)}</span><span class="num">${gfxEsc(p.current)} / ${gfxEsc(p.target)} · ${pctVal}%</span></div>
+        <div class="track"><div class="fill"></div></div>
+      </div></body></html>`;
+    },
+  },
+  {
+    id: 'count-up', name: 'Count-Up Stat', category: 'Widgets', w: 480, h: 240,
+    params: [
+      { key: 'label',  label: 'Label',  type: 'text',   default: 'SUBSCRIBERS' },
+      { key: 'value',  label: 'Value',  type: 'number', default: 1280 },
+      { key: 'prefix', label: 'Prefix', type: 'text',   default: '' },
+      { key: 'suffix', label: 'Suffix', type: 'text',   default: '' },
+      { key: 'accent', label: 'Color',  type: 'color',  default: '#00e5ff' },
+    ],
+    build(p, preview) {
+      const val = Number(p.value) || 0;
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+        .n{font-size:84px;font-weight:900;color:${gfxEsc(p.accent)};line-height:1;text-shadow:0 4px 24px ${gfxEsc(p.accent)}66}
+        .l{font-size:22px;font-weight:800;letter-spacing:3px;color:#fff}
+      </style></head><body><div class="c">
+        <div class="n" id="n">0</div><div class="l">${gfxEsc(p.label)}</div>
+      </div><script>
+        var pre=${JSON.stringify(String(p.prefix||''))},suf=${JSON.stringify(String(p.suffix||''))},target=${val},loop=${preview?'true':'false'};
+        var el=document.getElementById('n');
+        function run(){var t0=performance.now(),dur=1500;function f(t){var k=Math.min(1,(t-t0)/dur);var e=1-Math.pow(1-k,3);
+          el.textContent=pre+Math.round(target*e).toLocaleString()+suf;if(k<1)requestAnimationFrame(f);}requestAnimationFrame(f);}
+        run();if(loop)setInterval(run,4500);
+      </script></body></html>`;
+    },
+  },
+  {
+    id: 'countdown', name: 'Countdown Timer', category: 'Widgets', w: 480, h: 240,
+    params: [
+      { key: 'minutes', label: 'Minutes', type: 'number', default: 5 },
+      { key: 'label',   label: 'Label',   type: 'text',   default: 'STARTING SOON' },
+      { key: 'done',    label: 'At zero',  type: 'text',   default: "LET'S GO" },
+      { key: 'accent',  label: 'Color',   type: 'color',  default: '#00e5ff' },
+    ],
+    build(p, preview) {
+      const secs = Math.max(0, Math.round(Number(p.minutes) * 60)) || 0;
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+        .t{font-size:80px;font-weight:900;color:${gfxEsc(p.accent)};line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 4px 24px ${gfxEsc(p.accent)}66}
+        .l{font-size:22px;font-weight:800;letter-spacing:3px;color:#fff}
+      </style></head><body><div class="c">
+        <div class="t" id="t">0:00</div><div class="l" id="l">${gfxEsc(p.label)}</div>
+      </div><script>
+        var total=${secs},doneTxt=${JSON.stringify(String(p.done||''))},lbl=${JSON.stringify(String(p.label||''))},loop=${preview?'true':'false'};
+        var tEl=document.getElementById('t'),lEl=document.getElementById('l'),iv=null;
+        function fmt(s){var m=Math.floor(s/60);return m+':'+String(s%60).padStart(2,'0');}
+        function run(){var s=total;tEl.textContent=fmt(s);lEl.textContent=lbl;if(iv)clearInterval(iv);
+          iv=setInterval(function(){s--;if(s<=0){tEl.textContent=fmt(0);lEl.textContent=doneTxt;clearInterval(iv);}else tEl.textContent=fmt(s);},1000);}
+        run();if(loop)setInterval(run,(total+2)*1000>8000?6000:(total+2)*1000);
+      </script></body></html>`;
+    },
+  },
+  {
+    id: 'typewriter', name: 'Typewriter Title', category: 'Animations', w: 1000, h: 200,
+    params: [
+      { key: 'text',   label: 'Text',  type: 'text',   default: 'Welcome to the stream' },
+      { key: 'accent', label: 'Color', type: 'color',  default: '#ffffff' },
+      { key: 'size',   label: 'Size',  type: 'number', default: 56 },
+    ],
+    build(p, preview) {
+      const size = Math.max(12, Math.min(160, Number(p.size) || 56));
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .c{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:0 30px}
+        .tw{font-size:${size}px;font-weight:800;color:${gfxEsc(p.accent)};white-space:nowrap;border-right:3px solid ${gfxEsc(p.accent)};
+            text-shadow:0 2px 16px rgba(0,0,0,.5)}
+        .cur{animation:blink 1s step-end infinite}
+        @keyframes blink{50%{border-color:transparent}}
+      </style></head><body><div class="c"><span class="tw cur" id="tw"></span></div><script>
+        var full=${JSON.stringify(String(p.text||''))},loop=${preview?'true':'false'},el=document.getElementById('tw');
+        function run(){el.textContent='';var i=0;var iv=setInterval(function(){el.textContent=full.slice(0,++i);if(i>=full.length)clearInterval(iv);},55);}
+        run();if(loop)setInterval(run,4500);
+      </script></body></html>`;
+    },
+  },
+  {
+    id: 'cam-frame', name: 'Webcam Frame', category: 'Animations', w: 480, h: 360,
+    params: [
+      { key: 'accent', label: 'Color',   type: 'color', default: '#00e5ff' },
+      { key: 'label',  label: 'Tag',     type: 'text',  default: 'LIVE' },
+    ],
+    build(p, preview) {
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .f{position:absolute;inset:10px;border:4px solid ${gfxEsc(p.accent)};border-radius:14px;
+           box-shadow:0 0 22px ${gfxEsc(p.accent)}88,inset 0 0 18px ${gfxEsc(p.accent)}44;animation:pulse 2.4s ease-in-out infinite}
+        .tag{position:absolute;top:18px;left:18px;display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;
+             background:${gfxEsc(p.accent)};color:#06121a;font-weight:900;font-size:14px;letter-spacing:1.5px}
+        .dot{width:8px;height:8px;border-radius:50%;background:#06121a;animation:blink 1.2s step-end infinite}
+        @keyframes pulse{50%{box-shadow:0 0 34px ${gfxEsc(p.accent)},inset 0 0 26px ${gfxEsc(p.accent)}66}}
+        @keyframes blink{50%{opacity:.2}}
+      </style></head><body><div class="f"></div><div class="tag"><span class="dot"></span>${gfxEsc(p.label)}</div></body></html>`;
+    },
+  },
+];
 
 function showPatchNotes(version) {
   const notes = PATCH_NOTES[version];
@@ -1796,6 +1984,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sort = $('assets-sort').value;
     const isRecordings = assetsTab === 'recordings';
     const isTransitions = assetsTab === 'transitions';
+    const isGraphics = assetsTab === 'graphics';
 
     // Update counts
     const counts = { images: 0, videos: 0, audio: 0 };
@@ -1803,15 +1992,21 @@ document.addEventListener('DOMContentLoaded', () => {
     ['images','videos','audio'].forEach(k => { $('assets-count-' + k).textContent = counts[k] || 0; });
     const recBadge = $('assets-count-recordings');
     if (recBadge) recBadge.textContent = recordingsLib.length;
+    const gfxBadge = $('assets-count-graphics');
+    if (gfxBadge) gfxBadge.textContent = GRAPHICS_PRESETS.length;
 
     // Show/hide panels
     $('assets-transitions-wrap').style.display = isTransitions ? 'flex' : 'none';
     const recWrap = $('assets-recordings-wrap');
     if (recWrap) recWrap.style.display = isRecordings ? 'flex' : 'none';
-    $('assets-grid-wrap').style.display = (isTransitions || isRecordings) ? 'none' : '';
+    const gfxWrap = $('assets-graphics-wrap');
+    if (gfxWrap) gfxWrap.style.display = isGraphics ? 'flex' : 'none';
+    const special = isTransitions || isRecordings || isGraphics;
+    $('assets-grid-wrap').style.display = special ? 'none' : '';
     const filterbarEl = document.querySelector('.assets-filterbar');
-    if (filterbarEl) filterbarEl.style.display = (isTransitions || isRecordings) ? 'none' : '';
+    if (filterbarEl) filterbarEl.style.display = special ? 'none' : '';
 
+    if (isGraphics) { renderGraphicsGallery(); return; }
     if (isTransitions) { renderAllTransitions(); return; }
 
     if (isRecordings) {
@@ -2064,6 +2259,114 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.assets-tab').forEach(t => t.classList.toggle('active', t === tab));
       renderAssets();
     });
+  });
+
+  // ── Graphics gallery + customizer ──────────────────────────────────────
+  let gfxFilterCat = 'all';
+  function renderGraphicsGallery() {
+    const grid = $('gfx-grid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    const list = GRAPHICS_PRESETS.filter(p => gfxFilterCat === 'all' || p.category === gfxFilterCat);
+    for (const preset of list) {
+      const params = gfxResolveParams(preset);
+      const card = document.createElement('div');
+      card.className = 'gfx-card';
+      // Live looping preview in an iframe, scaled to fit the card stage (300 wide, 168 tall)
+      const scale = Math.min(284 / preset.w, 150 / preset.h).toFixed(3);
+      card.innerHTML = `
+        <div class="gfx-card-stage">
+          <iframe class="gfx-card-frame" frameborder="0" scrolling="no"
+            style="width:${preset.w}px;height:${preset.h}px;transform:translate(-50%,-50%) scale(${scale});"></iframe>
+        </div>
+        <div class="gfx-card-meta">
+          <span class="gfx-card-name">${preset.name}</span>
+          <span class="gfx-card-cat">${preset.category}</span>
+        </div>`;
+      const frame = card.querySelector('.gfx-card-frame');
+      frame.srcdoc = preset.build(params, true);
+      card.addEventListener('click', () => openGfxCustomizer(preset));
+      grid.appendChild(card);
+    }
+  }
+
+  document.querySelectorAll('.gfx-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      gfxFilterCat = pill.dataset.gfxCat;
+      document.querySelectorAll('.gfx-pill').forEach(p => p.classList.toggle('active', p === pill));
+      renderGraphicsGallery();
+    });
+  });
+
+  let gfxEditing = null;     // current preset
+  let gfxEditParams = null;  // working params copy
+  function openGfxCustomizer(preset) {
+    gfxEditing = preset;
+    gfxEditParams = gfxResolveParams(preset);
+    $('gfx-modal-title').textContent = 'Customize · ' + preset.name;
+    const fields = $('gfx-modal-fields');
+    fields.innerHTML = '';
+    for (const f of preset.params) {
+      const row = document.createElement('label');
+      row.className = 'gfx-field';
+      const id = 'gfxf-' + f.key;
+      let input;
+      if (f.type === 'color') {
+        input = `<input type="color" id="${id}" value="${gfxEsc(gfxEditParams[f.key])}">`;
+      } else if (f.type === 'number') {
+        input = `<input type="number" id="${id}" value="${gfxEsc(gfxEditParams[f.key])}">`;
+      } else {
+        input = `<input type="text" id="${id}" value="${gfxEsc(gfxEditParams[f.key])}">`;
+      }
+      row.innerHTML = `<span class="gfx-field-label">${f.label}</span>${input}`;
+      fields.appendChild(row);
+      const el = row.querySelector('input');
+      el.addEventListener('input', () => {
+        gfxEditParams[f.key] = f.type === 'number' ? Number(el.value) : el.value;
+        updateGfxPreview();
+      });
+    }
+    updateGfxPreview();
+    $('gfx-modal').style.display = 'flex';
+  }
+  function updateGfxPreview() {
+    if (!gfxEditing) return;
+    const frame = $('gfx-modal-frame');
+    const stage = frame.parentElement;
+    const sw = stage.clientWidth || 600, sh = stage.clientHeight || 220;
+    const scale = Math.min((sw - 24) / gfxEditing.w, (sh - 24) / gfxEditing.h, 1.5);
+    frame.style.position = 'absolute';
+    frame.style.left = '50%'; frame.style.top = '50%';
+    frame.style.width  = gfxEditing.w + 'px';
+    frame.style.height = gfxEditing.h + 'px';
+    frame.style.transform = `translate(-50%,-50%) scale(${scale.toFixed(3)})`;
+    frame.srcdoc = gfxEditing.build(gfxEditParams, true);
+  }
+  function closeGfxCustomizer() { $('gfx-modal').style.display = 'none'; gfxEditing = null; }
+  $('gfx-modal-close').addEventListener('click', closeGfxCustomizer);
+  $('gfx-modal-cancel').addEventListener('click', closeGfxCustomizer);
+  $('gfx-modal').querySelector('.studio-modal-backdrop').addEventListener('click', closeGfxCustomizer);
+
+  $('gfx-modal-add').addEventListener('click', async () => {
+    if (!gfxEditing) return;
+    const preset = gfxEditing, params = { ...gfxEditParams };
+    closeGfxCustomizer();
+    // Build the real (play-once) HTML as a data URL browser source
+    const html = preset.build(params, false);
+    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+    const label = preset.name + (params.title ? ' · ' + params.title : params.label ? ' · ' + params.label : '');
+    // Jump to the studio and add it as a sized browser source. initStudio
+    // runs on a 100ms delay from switchModule, so wait for _studioAddGraphic.
+    switchModule('recstream');
+    showToast('Adding graphic to studio…');
+    const tryAdd = (attempt = 0) => {
+      if (!_studioAddGraphic && attempt < 40) { setTimeout(() => tryAdd(attempt + 1), 100); return; }
+      if (!_studioAddGraphic) { showToast('Open the studio first, then add'); return; }
+      _studioAddGraphic(dataUrl, label, preset.w, preset.h)
+        .then(() => showToast(`Added "${preset.name}" — drag to position`))
+        .catch(e => { console.error('[graphics] add failed', e); showToast('Could not add graphic: ' + e.message); });
+    };
+    tryAdd();
   });
 
   $('assets-search').addEventListener('input', renderAssets);
@@ -2550,6 +2853,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let studioActiveCanvasId = 0;
   let studioCanvasIdCounter = 0;
   let _saveScenes = null; // set inside initStudio, used by canvas helpers
+  let _studioAddGraphic = null; // set inside initStudio; used by the Graphics tab
   let _captureCanvasesForTab = null; // set inside initStudio, used in outer scene helpers
   let _applyCanvasesFromTab = null;  // same
 
@@ -2657,6 +2961,20 @@ const PLATFORM_META = {
       await window.creatorhub.scenes.save(serializeScenes());
     }
     _saveScenes = saveScenes;
+    // Exposed for the Graphics tab: add a preset as a sized browser source
+    _studioAddGraphic = async (dataUrl, label, gw, gh) => {
+      const src = await engine.addBrowserSource(dataUrl, label, { w: gw, h: gh });
+      const canvas = getActiveCanvas();
+      const cw = canvas ? canvas.resW : 1920, ch = canvas ? canvas.resH : 1080;
+      const w = Math.min(gw, cw), h = Math.round(w * (gh / gw));
+      engine.setTransform(src.id, { x: Math.round((cw - w) / 2), y: Math.round(ch - h - 40), width: w, height: h });
+      addSourceToActiveCanvas(src.id);
+      renderLayerList();
+      renderMultiview();
+      selectSource(src.id);
+      saveScenes();
+      return src;
+    };
     _captureCanvasesForTab = captureCanvasesForTab;
     _applyCanvasesFromTab = applyCanvasesFromTab;
 

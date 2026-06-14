@@ -2625,6 +2625,66 @@ body {
   background: rgba(245,158,11,0.1) !important;
 }
 
+/* ── Graphics tab ───────────────────────────────────────────────────────── */
+.gfx-filter-pills { display: flex; gap: 8px; margin-bottom: 16px; }
+.gfx-pill {
+  padding: 6px 14px; border-radius: 16px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.gfx-pill:hover { border-color: var(--cyan); color: var(--text); }
+.gfx-pill.active { background: var(--cyan); color: #06121a; border-color: var(--cyan); }
+.gfx-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px;
+}
+.gfx-card {
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  background: var(--surface2); cursor: pointer; transition: border-color 0.15s, transform 0.1s;
+}
+.gfx-card:hover { border-color: var(--cyan); transform: translateY(-2px); }
+.gfx-card-stage {
+  height: 168px; position: relative; overflow: hidden;
+  background:
+    linear-gradient(45deg, #1a2230 25%, transparent 25%, transparent 75%, #1a2230 75%) 0 0 / 20px 20px,
+    linear-gradient(45deg, #1a2230 25%, #141a24 25%, #141a24 75%, #1a2230 75%) 10px 10px / 20px 20px;
+  display: flex; align-items: center; justify-content: center;
+}
+.gfx-card-frame {
+  border: 0; pointer-events: none;
+  position: absolute; left: 50%; top: 50%; transform-origin: center center;
+}
+.gfx-card-meta {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-top: 1px solid var(--border);
+}
+.gfx-card-name { font-size: 13px; font-weight: 700; color: var(--text); }
+.gfx-card-cat { font-size: 10px; font-weight: 600; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Graphics customizer modal */
+.gfx-modal-card { width: 640px; max-width: 92vw; }
+.gfx-modal-body { display: flex; flex-direction: column; gap: 14px; }
+.gfx-modal-preview {
+  height: 220px; border-radius: 10px; position: relative; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    linear-gradient(45deg, #1a2230 25%, transparent 25%, transparent 75%, #1a2230 75%) 0 0 / 22px 22px,
+    linear-gradient(45deg, #1a2230 25%, #141a24 25%, #141a24 75%, #1a2230 75%) 11px 11px / 22px 22px;
+}
+.gfx-modal-preview iframe { border: 0; transform-origin: center center; }
+.gfx-modal-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.gfx-field { display: flex; flex-direction: column; gap: 4px; }
+.gfx-field-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--muted);
+}
+.gfx-field input {
+  padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text); font-family: var(--font); font-size: 12px;
+}
+.gfx-field input[type="color"] { height: 30px; padding: 2px; cursor: pointer; }
+.gfx-field input:focus { outline: 1px solid var(--cyan); border-color: var(--cyan); }
+
 .ve-timeline-wrap {
   height: 170px; min-height: 170px; flex-shrink: 0;
   background: var(--surface); border-top: 1px solid var(--border);
