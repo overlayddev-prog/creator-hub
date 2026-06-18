@@ -2674,6 +2674,7 @@ body {
 .gfx-modal-preview iframe { border: 0; transform-origin: center center; }
 .gfx-modal-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
 .gfx-field { display: flex; flex-direction: column; gap: 4px; }
+.gfx-field-full { grid-column: 1 / -1; }
 .gfx-field-label {
   font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
   color: var(--muted);

@@ -1124,6 +1124,82 @@ ipcMain.handle('studio:browser-source-destroy', (_e, id) => {
   browserSourceWins.delete(id);
 });
 
+// ── Bake a graphic (HTML) to a transparent webm for editor use ───────────────
+// Renders the graphic in an offscreen transparent window, samples frames at a
+// fixed fps, and encodes a VP9 alpha webm. The editor then uses it as a normal
+// overlay clip (preview via <video>, export via FFmpeg overlay — both honor
+// the alpha channel).
+ipcMain.handle('graphics:bake', async (event, html, w, h, durationSec, fps) => {
+  const os = require('os');
+  fps = fps || 24; durationSec = durationSec || 4;
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const sendProgress = (pct) => { try { event.sender.send('graphics:bake-progress', pct); } catch {} };
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ch-gfx-'));
+  const win = new BrowserWindow({
+    width: Math.max(2, Math.round(w)), height: Math.max(2, Math.round(h)),
+    show: false, transparent: true, backgroundColor: '#00000000',
+    webPreferences: { offscreen: true, contextIsolation: true, nodeIntegration: false },
+  });
+  win.webContents.setFrameRate(fps);
+  let latest = null;
+  win.webContents.on('paint', (_evt, _dirty, image) => { latest = image; });
+
+  try {
+    await new Promise((res, rej) => {
+      win.webContents.once('did-finish-load', res);
+      win.webContents.once('did-fail-load', (_e, _c, desc) => rej(new Error('Graphic load failed: ' + desc)));
+      win.loadURL(html.startsWith('data:') ? html : 'data:text/html;charset=utf-8,' + encodeURIComponent(html));
+    });
+    // Wait for the first painted frame (up to 3s)
+    const t0 = Date.now();
+    while (!latest && Date.now() - t0 < 3000) await sleep(30);
+    if (!latest) throw new Error('Graphic did not render');
+
+    const total = Math.round(durationSec * fps);
+    const interval = 1000 / fps;
+    for (let i = 0; i < total; i++) {
+      const tick = Date.now();
+      const png = latest.toPNG();
+      fs.writeFileSync(path.join(tmpDir, 'f' + String(i).padStart(4, '0') + '.png'), png);
+      sendProgress(Math.round((i / total) * 70));
+      const elapsed = Date.now() - tick;
+      await sleep(Math.max(0, interval - elapsed));
+    }
+  } catch (e) {
+    try { win.destroy(); } catch (_) {}
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+    return { ok: false, error: e.message };
+  }
+  try { win.destroy(); } catch (_) {}
+
+  const outDir = path.join(app.getPath('userData'), 'graphics');
+  fs.mkdirSync(outDir, { recursive: true });
+  const outPath = path.join(outDir, 'gfx-' + Date.now() + '.webm');
+  const ffmpegPath = getFFmpegPath();
+  const args = [
+    '-framerate', String(fps), '-i', path.join(tmpDir, 'f%04d.png'),
+    '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p',
+    '-deadline', 'realtime', '-cpu-used', '6', '-b:v', '4M', '-an',
+    outPath, '-y',
+  ];
+  const result = await new Promise(resolve => {
+    const proc = spawn(ffmpegPath, args);
+    let err = '';
+    proc.stderr.on('data', d => {
+      err += d.toString();
+      const m = d.toString().match(/frame=\s*(\d+)/);
+      if (m) sendProgress(Math.min(99, 70 + Math.round((parseInt(m[1]) / (durationSec * fps)) * 30)));
+    });
+    proc.on('close', code => resolve(code === 0
+      ? { ok: true, path: outPath, w, h, duration: durationSec }
+      : { ok: false, error: 'FFmpeg bake failed: ' + err.split('\n').slice(-6).join('\n') }));
+    proc.on('error', e => resolve({ ok: false, error: e.message }));
+  });
+  try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+  sendProgress(100);
+  return result;
+});
+
 // ── Projects — .editor file format ───────────────────────────────────────────
 // Format: "EDIT" (4 bytes) + uint32 header length LE (4 bytes) + JSON header + binary media blobs
 // Header JSON: { name, version, thumbnail, state, files:[{originalPath, size, ext}] }

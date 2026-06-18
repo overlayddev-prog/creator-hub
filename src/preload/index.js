@@ -210,6 +210,8 @@ contextBridge.exposeInMainWorld('creatorhub', {
     getThumbnails: (filePath, count, duration) =>
       ipcRenderer.invoke('videoeditor:get-thumbnails', filePath, count, duration),
     onProgress:    (cb) => ipcRenderer.on('export:progress', (_e, pct) => cb(pct)),
+    bakeGraphic:   (html, w, h, dur, fps) => ipcRenderer.invoke('graphics:bake', html, w, h, dur, fps),
+    onBakeProgress:(cb) => ipcRenderer.on('graphics:bake-progress', (_e, pct) => cb(pct)),
   },
 
   // ── Projects (.editor file persistence) ───────────────────────────────────

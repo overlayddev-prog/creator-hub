@@ -14,6 +14,28 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.27.0': {
+    sections: [
+      {
+        title: 'Graphics in the editor + 5 new presets',
+        items: [
+          '<b>Use graphics in the video editor</b> — new "✨ Graphic" button in the editor toolbar. Pick a preset, customize it, and it bakes to a transparent clip dropped onto a V2+ layer. Drag, resize, trim, and z-order it like any overlay; it renders in the preview and the final export with full transparency.',
+          '<b>New: Social Handle</b> — animated platform + @handle pill (Twitch/YouTube/X/Instagram/TikTok/Discord/Kick).',
+          '<b>New: Alert Toast</b> — icon + title + message popup with a bounce.',
+          '<b>New: Stat Card</b> — clean card with a counting-up value, label, and sublabel.',
+          '<b>New: Scrolling Ticker</b> — bottom news-banner with a label chip and scrolling text.',
+          '<b>New: Now Playing</b> — song title + artist with an animated equalizer.',
+        ],
+      },
+      {
+        title: 'Notes',
+        items: [
+          'Baking a graphic for the editor takes a few seconds (it renders the animation to a transparent VP9 clip). Studio use is still instant (live browser source).',
+          'Baked graphics are ~5 seconds long; trim or place them where you want on the timeline.',
+        ],
+      },
+    ],
+  },
   '0.26.1': {
     sections: [
       {
@@ -1103,6 +1125,129 @@ const GRAPHICS_PRESETS = [
       </style></head><body><div class="f"></div><div class="tag"><span class="dot"></span>${gfxEsc(p.label)}</div></body></html>`;
     },
   },
+  {
+    id: 'social-handle', name: 'Social Handle', category: 'Animations', w: 560, h: 96,
+    params: [
+      { key: 'platform', label: 'Platform', type: 'select', default: 'Twitch',
+        options: ['Twitch','YouTube','X','Instagram','TikTok','Discord','Kick'].map(v => ({ value: v, label: v })) },
+      { key: 'handle', label: 'Handle', type: 'text',  default: 'yourname' },
+      { key: 'accent', label: 'Accent', type: 'color', default: '#9146ff' },
+    ],
+    build(p, preview) {
+      const icons = { Twitch:'🟣', YouTube:'▶️', X:'✖️', Instagram:'📸', TikTok:'🎵', Discord:'💬', Kick:'🟢' };
+      const ic = icons[p.platform] || '🔗';
+      const anim = preview ? 'sh 5s ease-in-out infinite' : 'shIn .6s cubic-bezier(.2,.9,.3,1) forwards';
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .pill{position:absolute;left:20px;bottom:20px;display:inline-flex;align-items:center;gap:12px;padding:12px 22px;border-radius:40px;
+          background:rgba(10,14,20,.86);box-shadow:0 8px 30px rgba(0,0,0,.5);border:2px solid ${gfxEsc(p.accent)};animation:${anim}}
+        .ic{font-size:26px}.txt{display:flex;flex-direction:column;line-height:1.1}
+        .pf{font-size:13px;font-weight:700;color:${gfxEsc(p.accent)};letter-spacing:.5px;text-transform:uppercase}
+        .hd{font-size:24px;font-weight:800;color:#fff}
+        @keyframes shIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+        @keyframes sh{0%{opacity:0;transform:translateY(24px)}14%,86%{opacity:1;transform:none}100%{opacity:0;transform:translateY(24px)}}
+      </style></head><body><div class="pill"><span class="ic">${ic}</span><span class="txt">
+        <span class="pf">${gfxEsc(p.platform)}</span><span class="hd">@${gfxEsc(p.handle)}</span></span></div></body></html>`;
+    },
+  },
+  {
+    id: 'alert-toast', name: 'Alert Toast', category: 'Animations', w: 560, h: 150,
+    params: [
+      { key: 'icon',    label: 'Icon',    type: 'text',  default: '🎉' },
+      { key: 'title',   label: 'Title',   type: 'text',  default: 'New Follower!' },
+      { key: 'message', label: 'Message', type: 'text',  default: 'Thanks for the support' },
+      { key: 'accent',  label: 'Accent',  type: 'color', default: '#00e5ff' },
+    ],
+    build(p, preview) {
+      const anim = preview ? 'to 5s ease-in-out infinite' : 'toIn .7s cubic-bezier(.2,1.3,.4,1) forwards';
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .t{position:absolute;left:20px;right:20px;top:20px;display:flex;align-items:center;gap:16px;padding:18px 22px;border-radius:14px;
+          background:rgba(10,14,20,.88);box-shadow:0 10px 36px rgba(0,0,0,.55);border-left:6px solid ${gfxEsc(p.accent)};animation:${anim}}
+        .ic{font-size:44px;filter:drop-shadow(0 2px 8px ${gfxEsc(p.accent)}88)}
+        .b{display:flex;flex-direction:column;gap:3px}
+        .ti{font-size:25px;font-weight:900;color:#fff}
+        .ms{font-size:16px;font-weight:600;color:${gfxEsc(p.accent)}}
+        @keyframes toIn{from{opacity:0;transform:translateY(-30px) scale(.96)}to{opacity:1;transform:none}}
+        @keyframes to{0%{opacity:0;transform:translateY(-30px) scale(.96)}14%,84%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-30px) scale(.96)}}
+      </style></head><body><div class="t"><span class="ic">${gfxEsc(p.icon)}</span><span class="b">
+        <span class="ti">${gfxEsc(p.title)}</span><span class="ms">${gfxEsc(p.message)}</span></span></div></body></html>`;
+    },
+  },
+  {
+    id: 'stat-card', name: 'Stat Card', category: 'Widgets', w: 320, h: 200,
+    params: [
+      { key: 'value',    label: 'Value',    type: 'number', default: 1280 },
+      { key: 'label',    label: 'Label',    type: 'text',   default: 'Followers' },
+      { key: 'sublabel', label: 'Sublabel', type: 'text',   default: '+24 today' },
+      { key: 'accent',   label: 'Accent',   type: 'color',  default: '#00e5ff' },
+    ],
+    build(p, preview) {
+      const val = Number(p.value) || 0;
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .card{position:absolute;inset:14px;border-radius:16px;padding:20px;display:flex;flex-direction:column;justify-content:center;gap:4px;
+          background:linear-gradient(150deg,rgba(16,22,32,.94),rgba(10,14,20,.94));box-shadow:0 10px 34px rgba(0,0,0,.5);
+          border:1px solid ${gfxEsc(p.accent)}44}
+        .n{font-size:56px;font-weight:900;color:${gfxEsc(p.accent)};line-height:1;text-shadow:0 3px 18px ${gfxEsc(p.accent)}55}
+        .l{font-size:19px;font-weight:800;color:#fff}
+        .s{font-size:14px;font-weight:600;color:rgba(232,237,245,.55)}
+        .bar{height:4px;border-radius:2px;background:${gfxEsc(p.accent)};margin-top:10px;transform-origin:left;animation:gw 1.2s ease-out forwards}
+        @keyframes gw{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+      </style></head><body><div class="card">
+        <div class="n" id="n">0</div><div class="l">${gfxEsc(p.label)}</div><div class="s">${gfxEsc(p.sublabel)}</div><div class="bar"></div>
+      </div><script>
+        var target=${val},loop=${preview?'true':'false'},el=document.getElementById('n');
+        function run(){var t0=performance.now();function f(t){var k=Math.min(1,(t-t0)/1300),e=1-Math.pow(1-k,3);
+          el.textContent=Math.round(target*e).toLocaleString();if(k<1)requestAnimationFrame(f);}requestAnimationFrame(f);}
+        run();if(loop)setInterval(run,4500);
+      </script></body></html>`;
+    },
+  },
+  {
+    id: 'ticker', name: 'Scrolling Ticker', category: 'Widgets', w: 1280, h: 64,
+    params: [
+      { key: 'chip', label: 'Chip',  type: 'text',  default: 'NEWS' },
+      { key: 'text', label: 'Text',  type: 'text',  default: 'Welcome to the stream · Drop a follow · New video out now · Thanks for watching' },
+      { key: 'accent', label: 'Accent', type: 'color', default: '#00e5ff' },
+    ],
+    build(p, preview) {
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .bar{position:absolute;left:0;right:0;bottom:0;height:52px;display:flex;align-items:center;background:rgba(10,14,20,.9);
+          border-top:2px solid ${gfxEsc(p.accent)}}
+        .chip{flex-shrink:0;align-self:stretch;display:flex;align-items:center;padding:0 20px;background:${gfxEsc(p.accent)};
+          color:#06121a;font-weight:900;font-size:18px;letter-spacing:1.5px}
+        .track{flex:1;overflow:hidden;white-space:nowrap;position:relative}
+        .move{display:inline-block;padding-left:100%;font-size:20px;font-weight:700;color:#fff;animation:scroll 18s linear infinite}
+        @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+      </style></head><body><div class="bar"><div class="chip">${gfxEsc(p.chip)}</div>
+        <div class="track"><span class="move">${gfxEsc(p.text)}</span></div></div></body></html>`;
+    },
+  },
+  {
+    id: 'now-playing', name: 'Now Playing', category: 'Widgets', w: 480, h: 110,
+    params: [
+      { key: 'title',  label: 'Title',  type: 'text',  default: 'Song Title' },
+      { key: 'artist', label: 'Artist', type: 'text',  default: 'Artist Name' },
+      { key: 'accent', label: 'Accent', type: 'color', default: '#00e5ff' },
+    ],
+    build(p, preview) {
+      const bars = [0,1,2,3,4].map(i => `<span class="eb" style="animation-delay:${i*0.13}s"></span>`).join('');
+      return `<!doctype html><html><head><meta charset="utf8"><style>
+        html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+        .np{position:absolute;inset:14px;display:flex;align-items:center;gap:16px;padding:0 20px;border-radius:14px;
+          background:rgba(10,14,20,.88);box-shadow:0 8px 28px rgba(0,0,0,.5);border:1px solid ${gfxEsc(p.accent)}44}
+        .eq{display:flex;align-items:flex-end;gap:3px;height:34px}
+        .eb{width:5px;height:100%;background:${gfxEsc(p.accent)};border-radius:2px;animation:eq .8s ease-in-out infinite alternate}
+        .b{display:flex;flex-direction:column;gap:2px;min-width:0}
+        .ti{font-size:21px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .ar{font-size:15px;font-weight:600;color:${gfxEsc(p.accent)}}
+        @keyframes eq{from{height:18%}to{height:100%}}
+      </style></head><body><div class="np"><div class="eq">${bars}</div><div class="b">
+        <span class="ti">${gfxEsc(p.title)}</span><span class="ar">${gfxEsc(p.artist)}</span></div></div></body></html>`;
+    },
+  },
 ];
 
 function showPatchNotes(version) {
@@ -1441,6 +1586,8 @@ async function pollHype() {
 
 // Exposed so outer-scope functions (showMainApp) can call it after DOMContentLoaded wires it up
 let _switchModule = null;
+let _openGfxCustomizer = null;   // set in the assets block; opens the graphics customizer
+let _editorAddGraphicClip = null; // set in initVideoEditor; adds a baked graphic webm as an overlay clip
 
 // ── Dashboard countUp helper ──────────────────────────────────────────────────
 function dashCountUp(el, target) {
@@ -2361,12 +2508,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let gfxEditing = null;     // current preset
   let gfxEditParams = null;  // working params copy
-  function openGfxCustomizer(preset) {
+  let gfxMode = 'studio';    // 'studio' | 'editor'
+  function openGfxCustomizer(preset, mode) {
     gfxEditing = preset;
+    gfxMode = mode || 'studio';
     gfxEditParams = gfxResolveParams(preset);
     $('gfx-modal-title').textContent = 'Customize · ' + preset.name;
+    $('gfx-modal-add').textContent = gfxMode === 'editor' ? '+ Add to Editor' : '+ Add to Studio';
     const fields = $('gfx-modal-fields');
     fields.innerHTML = '';
+
+    // In editor mode there's no gallery to pick from — show a preset switcher
+    if (gfxMode === 'editor') {
+      const sw = document.createElement('label');
+      sw.className = 'gfx-field gfx-field-full';
+      sw.innerHTML = `<span class="gfx-field-label">Preset</span>
+        <select id="gfx-preset-switch">${GRAPHICS_PRESETS.map(pr =>
+          `<option value="${pr.id}" ${pr.id === preset.id ? 'selected' : ''}>${gfxEsc(pr.name)}</option>`).join('')}</select>`;
+      fields.appendChild(sw);
+      sw.querySelector('select').addEventListener('change', (e) => {
+        const np = GRAPHICS_PRESETS.find(x => x.id === e.target.value);
+        if (np) openGfxCustomizer(np, 'editor');
+      });
+    }
+
     for (const f of preset.params) {
       const row = document.createElement('label');
       row.className = 'gfx-field';
@@ -2410,21 +2575,38 @@ document.addEventListener('DOMContentLoaded', () => {
     frame.srcdoc = gfxEditing.build(gfxEditParams, true);
   }
   function closeGfxCustomizer() { $('gfx-modal').style.display = 'none'; gfxEditing = null; }
+  _openGfxCustomizer = openGfxCustomizer; // exposed for the editor's "+ Graphic" button
   $('gfx-modal-close').addEventListener('click', closeGfxCustomizer);
   $('gfx-modal-cancel').addEventListener('click', closeGfxCustomizer);
   $('gfx-modal').querySelector('.studio-modal-backdrop').addEventListener('click', closeGfxCustomizer);
 
   $('gfx-modal-add').addEventListener('click', async () => {
     if (!gfxEditing) return;
-    const preset = gfxEditing, params = { ...gfxEditParams };
-    closeGfxCustomizer();
-    // Build the real (play-once) HTML as a data URL browser source
-    const html = preset.build(params, false);
+    const preset = gfxEditing, params = { ...gfxEditParams }, mode = gfxMode;
     const sz = gfxSize(preset, params);
-    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
     const label = preset.name + (params.title ? ' · ' + params.title : params.label ? ' · ' + params.label : '');
-    // Jump to the studio and add it as a sized browser source. initStudio
-    // runs on a 100ms delay from switchModule, so wait for _studioAddGraphic.
+    closeGfxCustomizer();
+
+    if (mode === 'editor') {
+      // Bake the graphic to a transparent webm, then hand off to the editor
+      if (!_editorAddGraphicClip) { showToast('Open a project first'); return; }
+      const html = preset.build(params, false);
+      showToast('Baking graphic… this takes a few seconds');
+      try {
+        const res = await window.creatorhub.videoeditor.bakeGraphic(html, sz.w, sz.h, 5, 24);
+        if (!res || !res.ok) { showToast('Bake failed: ' + (res && res.error || 'unknown')); return; }
+        await _editorAddGraphicClip(res.path, label);
+        showToast(`Added "${preset.name}" to timeline`);
+      } catch (e) {
+        console.error('[graphics] bake failed', e);
+        showToast('Bake failed: ' + e.message);
+      }
+      return;
+    }
+
+    // Studio: add the play-once HTML as a sized browser source
+    const html = preset.build(params, false);
+    const dataUrl = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
     switchModule('recstream');
     showToast('Adding graphic to studio…');
     const tryAdd = (attempt = 0) => {
@@ -7911,6 +8093,7 @@ const PLATFORM_META = {
         }
       } catch (_) { /* no sidecar — normal for non-CreatorHub files */ }
       loadThumbnails(clip);
+      return clip;
     }
 
     async function openVeFilePicker() {
@@ -8438,6 +8621,18 @@ const PLATFORM_META = {
       }
     });
     $('ve-btn-fromrec').addEventListener('click',    () => openVeFromRecordings());
+    const addGfxBtn = $('ve-btn-addgfx');
+    if (addGfxBtn) addGfxBtn.addEventListener('click', () => {
+      if (!_openGfxCustomizer) { showToast('Graphics not ready'); return; }
+      _openGfxCustomizer(GRAPHICS_PRESETS[0], 'editor');
+    });
+    // Exposed for the graphics customizer: add a baked graphic webm to V2+
+    _editorAddGraphicClip = async (webmPath, label) => {
+      // Reuse the standard clip loader, dropped onto a free V2+ track at the playhead
+      const clip = await addClipFromFile(webmPath, 1);
+      if (clip) { clip._graphicLabel = label; clip.fileName = label || clip.fileName; drawTimeline(); refreshClipPanel(); }
+      return clip;
+    };
     $('ve-btn-export-top').addEventListener('click', doVeExport);
     $('ve-export-btn').addEventListener('click',     doVeExport);
     $('ve-btn-save').addEventListener('click',       saveProject);
