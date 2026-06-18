@@ -578,6 +578,44 @@ ipcMain.handle('assets:get-metadata', async (_e, filePath, category) => {
 });
 
 // ── Video Editor — thumbnail extraction ───────────────────────────────────────
+// List audio tracks in a file (multi-track recordings carry titled streams).
+// Parses `ffmpeg -i` stderr since ffmpeg-static has no ffprobe.
+ipcMain.handle('videoeditor:audio-tracks', async (_e, filePath) => {
+  const ffmpegPath = getFFmpegPath();
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegPath, ['-i', filePath]);
+    let err = '';
+    proc.stderr.on('data', d => { err += d.toString(); });
+    proc.on('close', () => {
+      const lines = err.split('\n');
+      const tracks = [];
+      let cur = null;
+      for (const line of lines) {
+        const sm = line.match(/Stream #\d+:(\d+)[^:]*:\s*(\w+):/);
+        if (sm) { if (sm[2] === 'Audio') { cur = { title: null }; tracks.push(cur); } else { cur = null; } continue; }
+        if (cur) { const tm = line.match(/^\s*title\s*:\s*(.+?)\s*$/i); if (tm) cur.title = tm[1].trim(); }
+      }
+      resolve({ ok: true, tracks: tracks.map((t, i) => ({ index: i, title: t.title || ('Track ' + (i + 1)) })) });
+    });
+    proc.on('error', e => resolve({ ok: false, error: e.message, tracks: [] }));
+  });
+});
+
+// Extract one audio stream (by audio-stream index) to a standalone AAC file.
+ipcMain.handle('videoeditor:extract-audio', async (_e, filePath, audioIndex, title) => {
+  const os = require('os');
+  const ffmpegPath = getFFmpegPath();
+  const safe = String(title || 'track').replace(/[^a-z0-9_-]/gi, '_').slice(0, 24);
+  const out = path.join(os.tmpdir(), `ch-aud-${safe}-${Date.now()}.m4a`);
+  return new Promise(resolve => {
+    const proc = spawn(ffmpegPath, ['-i', filePath, '-map', `0:a:${audioIndex}`, '-c:a', 'aac', '-b:a', '192k', out, '-y']);
+    let err = '';
+    proc.stderr.on('data', d => { err += d.toString(); });
+    proc.on('close', code => resolve(code === 0 ? { ok: true, path: out } : { ok: false, error: err.split('\n').slice(-4).join('\n') }));
+    proc.on('error', e => resolve({ ok: false, error: e.message }));
+  });
+});
+
 ipcMain.handle('videoeditor:get-thumbnails', async (_e, filePath, count, duration) => {
   const ffmpegPath = getFFmpegPath();
   const os = require('os');

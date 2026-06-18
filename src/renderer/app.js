@@ -14,6 +14,24 @@ let recordingsLib = [];
 
 // ── Patch Notes ───────────────────────────────────────────────────────────────
 const PATCH_NOTES = {
+  '0.28.0': {
+    sections: [
+      {
+        title: 'Multi-track audio in the editor',
+        items: [
+          '<b>Separate Audio now splits every track</b> — drop a multi-track recording (made with the Multi-track audio option) into the editor, select it, and hit <i>Separate Audio</i>. Instead of one mixed track you get a separate, named audio clip per track (Mic, Desktop, Music, …) — each with its own volume, mute, and trim. This is the piece that makes multi-track recording pay off inside CreatorHub.',
+          'Single-track recordings still detach as one clip, exactly as before.',
+        ],
+      },
+      {
+        title: 'Graphics: Backing toggle',
+        items: [
+          '<b>Panel or None</b> — most graphics now have a Backing option. Set it to <i>None</i> to drop the dark panel and show just the text/elements with a legibility shadow — much cleaner when layering a graphic over your own overlays or busy footage.',
+          'Applies to Lower Third, Goal Bar, Social Handle, Alert Toast, Stat Card, and Now Playing.',
+        ],
+      },
+    ],
+  },
   '0.27.0': {
     sections: [
       {
@@ -931,6 +949,13 @@ function gfxSize(preset, params) {
   if (typeof preset.size === 'function') { const s = preset.size(params); if (s && s.w && s.h) return s; }
   return { w: preset.w, h: preset.h };
 }
+// Shared "Backing" toggle: when p.bg === 'none' the dark panel is dropped
+// (transparent, no shadow) and text gets a strong shadow for legibility over
+// busy footage — handy when layered with other overlays.
+const GFX_BG_PARAM = { key: 'bg', label: 'Backing', type: 'select', default: 'panel',
+  options: [{ value: 'panel', label: 'Panel' }, { value: 'none', label: 'None' }] };
+function gfxPanel(p, panelCss) { return p.bg === 'none' ? 'background:transparent;box-shadow:none' : panelCss; }
+function gfxTxtShadow(p) { return p.bg === 'none' ? 'text-shadow:0 2px 6px rgba(0,0,0,.9),0 0 3px rgba(0,0,0,.95)' : ''; }
 
 const GRAPHICS_PRESETS = [
   {
@@ -939,6 +964,7 @@ const GRAPHICS_PRESETS = [
       { key: 'title',    label: 'Name',     type: 'text',  default: 'Your Name' },
       { key: 'subtitle', label: 'Subtitle', type: 'text',  default: 'Creator · Streamer' },
       { key: 'accent',   label: 'Accent',   type: 'color', default: '#00e5ff' },
+      GFX_BG_PARAM,
     ],
     build(p, preview) {
       const anim = preview ? 'lt 5s ease-in-out infinite' : 'ltIn 0.7s cubic-bezier(.2,.9,.3,1) forwards';
@@ -946,10 +972,10 @@ const GRAPHICS_PRESETS = [
         html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
         .wrap{position:absolute;left:24px;bottom:30px}
         .bar{display:inline-flex;flex-direction:column;gap:4px;padding:14px 26px 14px 22px;border-radius:10px;
-             background:rgba(10,14,20,.82);border-left:5px solid ${gfxEsc(p.accent)};
-             box-shadow:0 8px 30px rgba(0,0,0,.5);transform-origin:left center;animation:${anim}}
-        .t{font-size:34px;font-weight:800;color:#fff;letter-spacing:.3px;line-height:1}
-        .s{font-size:18px;font-weight:600;color:${gfxEsc(p.accent)};letter-spacing:.5px}
+             ${gfxPanel(p, 'background:rgba(10,14,20,.82);box-shadow:0 8px 30px rgba(0,0,0,.5)')};border-left:5px solid ${gfxEsc(p.accent)};
+             transform-origin:left center;animation:${anim}}
+        .t{font-size:34px;font-weight:800;color:#fff;letter-spacing:.3px;line-height:1;${gfxTxtShadow(p)}}
+        .s{font-size:18px;font-weight:600;color:${gfxEsc(p.accent)};letter-spacing:.5px;${gfxTxtShadow(p)}}
         @keyframes ltIn{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:none}}
         @keyframes lt{0%{opacity:0;transform:translateX(-40px)}12%,86%{opacity:1;transform:none}100%{opacity:0;transform:translateX(-40px)}}
       </style></head><body><div class="wrap"><div class="bar">
@@ -968,6 +994,7 @@ const GRAPHICS_PRESETS = [
       { key: 'current',label: 'Current', type: 'number', default: 84 },
       { key: 'target', label: 'Target',  type: 'number', default: 100 },
       { key: 'accent', label: 'Fill',    type: 'color',  default: '#00e5ff' },
+      GFX_BG_PARAM,
     ],
     build(p, preview) {
       const tgt   = Math.max(1, Number(p.target) || 1);
@@ -1009,10 +1036,10 @@ const GRAPHICS_PRESETS = [
       return `<!doctype html><html><head><meta charset="utf8"><style>
         html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
         .box{position:absolute;left:20px;right:20px;bottom:24px;padding:14px 18px;border-radius:12px;
-             background:rgba(10,14,20,.82);box-shadow:0 8px 30px rgba(0,0,0,.5)}
+             ${gfxPanel(p, 'background:rgba(10,14,20,.82);box-shadow:0 8px 30px rgba(0,0,0,.5)')}}
         .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
-        .lab{font-size:19px;font-weight:800;color:#fff}
-        .num{font-size:16px;font-weight:700;color:${accent}}
+        .lab{font-size:19px;font-weight:800;color:#fff;${gfxTxtShadow(p)}}
+        .num{font-size:16px;font-weight:700;color:${accent};${gfxTxtShadow(p)}}
         .track{height:16px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden}
         .fill{height:100%;width:0%;border-radius:8px;background:linear-gradient(90deg,${accent},#fff3);box-shadow:0 0 16px ${accent}99}
       </style></head><body><div class="box">
@@ -1132,6 +1159,7 @@ const GRAPHICS_PRESETS = [
         options: ['Twitch','YouTube','X','Instagram','TikTok','Discord','Kick'].map(v => ({ value: v, label: v })) },
       { key: 'handle', label: 'Handle', type: 'text',  default: 'yourname' },
       { key: 'accent', label: 'Accent', type: 'color', default: '#9146ff' },
+      GFX_BG_PARAM,
     ],
     build(p, preview) {
       const icons = { Twitch:'🟣', YouTube:'▶️', X:'✖️', Instagram:'📸', TikTok:'🎵', Discord:'💬', Kick:'🟢' };
@@ -1140,10 +1168,10 @@ const GRAPHICS_PRESETS = [
       return `<!doctype html><html><head><meta charset="utf8"><style>
         html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
         .pill{position:absolute;left:20px;bottom:20px;display:inline-flex;align-items:center;gap:12px;padding:12px 22px;border-radius:40px;
-          background:rgba(10,14,20,.86);box-shadow:0 8px 30px rgba(0,0,0,.5);border:2px solid ${gfxEsc(p.accent)};animation:${anim}}
+          ${gfxPanel(p, 'background:rgba(10,14,20,.86);box-shadow:0 8px 30px rgba(0,0,0,.5)')};border:2px solid ${gfxEsc(p.accent)};animation:${anim}}
         .ic{font-size:26px}.txt{display:flex;flex-direction:column;line-height:1.1}
-        .pf{font-size:13px;font-weight:700;color:${gfxEsc(p.accent)};letter-spacing:.5px;text-transform:uppercase}
-        .hd{font-size:24px;font-weight:800;color:#fff}
+        .pf{font-size:13px;font-weight:700;color:${gfxEsc(p.accent)};letter-spacing:.5px;text-transform:uppercase;${gfxTxtShadow(p)}}
+        .hd{font-size:24px;font-weight:800;color:#fff;${gfxTxtShadow(p)}}
         @keyframes shIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
         @keyframes sh{0%{opacity:0;transform:translateY(24px)}14%,86%{opacity:1;transform:none}100%{opacity:0;transform:translateY(24px)}}
       </style></head><body><div class="pill"><span class="ic">${ic}</span><span class="txt">
@@ -1157,17 +1185,18 @@ const GRAPHICS_PRESETS = [
       { key: 'title',   label: 'Title',   type: 'text',  default: 'New Follower!' },
       { key: 'message', label: 'Message', type: 'text',  default: 'Thanks for the support' },
       { key: 'accent',  label: 'Accent',  type: 'color', default: '#00e5ff' },
+      GFX_BG_PARAM,
     ],
     build(p, preview) {
       const anim = preview ? 'to 5s ease-in-out infinite' : 'toIn .7s cubic-bezier(.2,1.3,.4,1) forwards';
       return `<!doctype html><html><head><meta charset="utf8"><style>
         html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
         .t{position:absolute;left:20px;right:20px;top:20px;display:flex;align-items:center;gap:16px;padding:18px 22px;border-radius:14px;
-          background:rgba(10,14,20,.88);box-shadow:0 10px 36px rgba(0,0,0,.55);border-left:6px solid ${gfxEsc(p.accent)};animation:${anim}}
+          ${gfxPanel(p, 'background:rgba(10,14,20,.88);box-shadow:0 10px 36px rgba(0,0,0,.55)')};border-left:6px solid ${gfxEsc(p.accent)};animation:${anim}}
         .ic{font-size:44px;filter:drop-shadow(0 2px 8px ${gfxEsc(p.accent)}88)}
         .b{display:flex;flex-direction:column;gap:3px}
-        .ti{font-size:25px;font-weight:900;color:#fff}
-        .ms{font-size:16px;font-weight:600;color:${gfxEsc(p.accent)}}
+        .ti{font-size:25px;font-weight:900;color:#fff;${gfxTxtShadow(p)}}
+        .ms{font-size:16px;font-weight:600;color:${gfxEsc(p.accent)};${gfxTxtShadow(p)}}
         @keyframes toIn{from{opacity:0;transform:translateY(-30px) scale(.96)}to{opacity:1;transform:none}}
         @keyframes to{0%{opacity:0;transform:translateY(-30px) scale(.96)}14%,84%{opacity:1;transform:none}100%{opacity:0;transform:translateY(-30px) scale(.96)}}
       </style></head><body><div class="t"><span class="ic">${gfxEsc(p.icon)}</span><span class="b">
@@ -1181,17 +1210,18 @@ const GRAPHICS_PRESETS = [
       { key: 'label',    label: 'Label',    type: 'text',   default: 'Followers' },
       { key: 'sublabel', label: 'Sublabel', type: 'text',   default: '+24 today' },
       { key: 'accent',   label: 'Accent',   type: 'color',  default: '#00e5ff' },
+      GFX_BG_PARAM,
     ],
     build(p, preview) {
       const val = Number(p.value) || 0;
       return `<!doctype html><html><head><meta charset="utf8"><style>
         html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
         .card{position:absolute;inset:14px;border-radius:16px;padding:20px;display:flex;flex-direction:column;justify-content:center;gap:4px;
-          background:linear-gradient(150deg,rgba(16,22,32,.94),rgba(10,14,20,.94));box-shadow:0 10px 34px rgba(0,0,0,.5);
+          ${gfxPanel(p, 'background:linear-gradient(150deg,rgba(16,22,32,.94),rgba(10,14,20,.94));box-shadow:0 10px 34px rgba(0,0,0,.5)')};
           border:1px solid ${gfxEsc(p.accent)}44}
         .n{font-size:56px;font-weight:900;color:${gfxEsc(p.accent)};line-height:1;text-shadow:0 3px 18px ${gfxEsc(p.accent)}55}
-        .l{font-size:19px;font-weight:800;color:#fff}
-        .s{font-size:14px;font-weight:600;color:rgba(232,237,245,.55)}
+        .l{font-size:19px;font-weight:800;color:#fff;${gfxTxtShadow(p)}}
+        .s{font-size:14px;font-weight:600;color:rgba(232,237,245,.55);${gfxTxtShadow(p)}}
         .bar{height:4px;border-radius:2px;background:${gfxEsc(p.accent)};margin-top:10px;transform-origin:left;animation:gw 1.2s ease-out forwards}
         @keyframes gw{from{transform:scaleX(0)}to{transform:scaleX(1)}}
       </style></head><body><div class="card">
@@ -1231,18 +1261,19 @@ const GRAPHICS_PRESETS = [
       { key: 'title',  label: 'Title',  type: 'text',  default: 'Song Title' },
       { key: 'artist', label: 'Artist', type: 'text',  default: 'Artist Name' },
       { key: 'accent', label: 'Accent', type: 'color', default: '#00e5ff' },
+      GFX_BG_PARAM,
     ],
     build(p, preview) {
       const bars = [0,1,2,3,4].map(i => `<span class="eb" style="animation-delay:${i*0.13}s"></span>`).join('');
       return `<!doctype html><html><head><meta charset="utf8"><style>
         html,body{margin:0;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
         .np{position:absolute;inset:14px;display:flex;align-items:center;gap:16px;padding:0 20px;border-radius:14px;
-          background:rgba(10,14,20,.88);box-shadow:0 8px 28px rgba(0,0,0,.5);border:1px solid ${gfxEsc(p.accent)}44}
+          ${gfxPanel(p, 'background:rgba(10,14,20,.88);box-shadow:0 8px 28px rgba(0,0,0,.5)')};border:1px solid ${gfxEsc(p.accent)}44}
         .eq{display:flex;align-items:flex-end;gap:3px;height:34px}
         .eb{width:5px;height:100%;background:${gfxEsc(p.accent)};border-radius:2px;animation:eq .8s ease-in-out infinite alternate}
         .b{display:flex;flex-direction:column;gap:2px;min-width:0}
-        .ti{font-size:21px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .ar{font-size:15px;font-weight:600;color:${gfxEsc(p.accent)}}
+        .ti{font-size:21px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${gfxTxtShadow(p)}}
+        .ar{font-size:15px;font-weight:600;color:${gfxEsc(p.accent)};${gfxTxtShadow(p)}}
         @keyframes eq{from{height:18%}to{height:100%}}
       </style></head><body><div class="np"><div class="eq">${bars}</div><div class="b">
         <span class="ti">${gfxEsc(p.title)}</span><span class="ar">${gfxEsc(p.artist)}</span></div></div></body></html>`;
@@ -8467,16 +8498,14 @@ const PLATFORM_META = {
     });
 
     // ── Separate audio ─────────────────────────────────────────────────────────
-    $('ve-sep-audio-btn').addEventListener('click', () => {
-      const clip = selectedClip(); if (!clip || clip.audioDetached) return;
-      clip.audioDetached = true;
-      // Find first empty audio track
+    function addSeparatedAudioClip(clip, opts) {
+      // opts: { filePath, fileUrl, fileName } — defaults to the clip's own file
       const usedTracks = new Set(veAudioClips.map(a => a.audioTrack || 0));
       let audioTrack = 0;
       while (usedTracks.has(audioTrack)) audioTrack++;
       const aclip = {
         id: genId(), sourceClipId: clip.id,
-        filePath: clip.filePath, fileName: clip.fileName, fileUrl: clip.fileUrl,
+        filePath: opts.filePath, fileName: opts.fileName, fileUrl: opts.fileUrl,
         fileDuration: clip.fileDuration, audioTrack,
         timelineStart: clip.timelineStart, timelineDuration: clip.timelineDuration,
         inPoint: clip.inPoint, outPoint: clip.outPoint,
@@ -8484,8 +8513,45 @@ const PLATFORM_META = {
       };
       veAudioClips.push(aclip);
       loadWaveform(aclip);
+      return aclip;
+    }
+
+    $('ve-sep-audio-btn').addEventListener('click', async () => {
+      const clip = selectedClip(); if (!clip || clip.audioDetached) return;
+      const sepBtn = $('ve-sep-audio-btn');
+      // Probe for multiple named audio tracks (CreatorHub multi-track recordings)
+      let tracks = [];
+      try {
+        const probe = await window.creatorhub.videoeditor.audioTracks(clip.filePath);
+        if (probe && probe.ok) tracks = probe.tracks || [];
+      } catch (_) {}
+
+      if (tracks.length > 1) {
+        clip.audioDetached = true;
+        sepBtn.disabled = true; sepBtn.textContent = '⚟ Separating…';
+        let placed = [];
+        for (const t of tracks) {
+          try {
+            const ex = await window.creatorhub.videoeditor.extractAudio(clip.filePath, t.index, t.title);
+            if (ex && ex.ok) {
+              addSeparatedAudioClip(clip, { filePath: ex.path, fileUrl: assetUrl(ex.path), fileName: t.title });
+              placed.push(t.title);
+            }
+          } catch (e) { console.error('[sep-audio] extract failed', t, e); }
+        }
+        sepBtn.disabled = false; sepBtn.textContent = '⚟ Separate Audio';
+        computeLayout(); pushHistory(); refreshClipPanel(); drawTimeline();
+        showToast(placed.length
+          ? `Separated ${placed.length} tracks: ${placed.join(', ')}`
+          : 'Could not extract audio tracks');
+        return;
+      }
+
+      // Single-track file — detach the one mixed track (original behavior)
+      clip.audioDetached = true;
+      const aclip = addSeparatedAudioClip(clip, { filePath: clip.filePath, fileUrl: clip.fileUrl, fileName: clip.fileName });
       computeLayout(); pushHistory(); refreshClipPanel(); drawTimeline();
-      showToast(`Audio from "${clip.fileName}" separated to A${audioTrack+1}`);
+      showToast(`Audio from "${clip.fileName}" separated to A${(aclip.audioTrack || 0) + 1}`);
     });
 
     // ── Layer clip panel buttons ────────────────────────────────────────────────

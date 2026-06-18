@@ -212,6 +212,8 @@ contextBridge.exposeInMainWorld('creatorhub', {
     onProgress:    (cb) => ipcRenderer.on('export:progress', (_e, pct) => cb(pct)),
     bakeGraphic:   (html, w, h, dur, fps) => ipcRenderer.invoke('graphics:bake', html, w, h, dur, fps),
     onBakeProgress:(cb) => ipcRenderer.on('graphics:bake-progress', (_e, pct) => cb(pct)),
+    audioTracks:   (fp) => ipcRenderer.invoke('videoeditor:audio-tracks', fp),
+    extractAudio:  (fp, idx, title) => ipcRenderer.invoke('videoeditor:extract-audio', fp, idx, title),
   },
 
   // ── Projects (.editor file persistence) ───────────────────────────────────
